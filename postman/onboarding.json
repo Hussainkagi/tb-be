@@ -1,0 +1,773 @@
+{
+  "info": {
+    "name": "HRMS-B API",
+    "description": "Complete API documentation for HRMS multi-company platform. Covers auth, company registration, user management, employee invites, OTP verification, and company switching.",
+    "_postman_id": "hrms-b-api-collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "company_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Company",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"email\": \"john@acme.com\",\n  \"phone\": \"+971501234567\",\n  \"password\": \"StrongPass@123\",\n  \"company_name\": \"Acme Corp\",\n  \"company_code\": \"ACME\",\n  \"company_email\": \"hr@acme.com\",\n  \"company_phone\": \"+97141234567\",\n  \"country\": \"UAE\",\n  \"timezone\": \"Asia/Dubai\",\n  \"currency\": \"AED\",\n  \"logo_url\": null\n}"
+            },
+            "description": "Registers a new company and creates an Admin user in one call. Sends OTP to email for verification."
+          },
+          "response": [
+            {
+              "name": "201 — Success",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Company registered. OTP sent to email for verification.\",\n  \"data\": {\n    \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"username\": \"AC0001\",\n    \"was_existing_user\": false\n  }\n}"
+            },
+            {
+              "name": "400 — Company code taken",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Company code already taken\"\n}"
+            },
+            {
+              "name": "400 — Weak password",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Password must be at least 8 characters\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Verify Email OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/auth/verify-otp",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "verify-otp"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otp\": \"847291\",\n  \"user_id\": \"{{user_id}}\",\n  \"company_id\": \"{{company_id}}\"\n}"
+            },
+            "description": "Verifies the 6-digit OTP sent to email after company registration. OTP expires in 10 minutes."
+          },
+          "response": [
+            {
+              "name": "200 — Verified",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Email verified successfully\"\n}"
+            },
+            {
+              "name": "400 — Invalid / expired OTP",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid or expired OTP\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success) {",
+                  "  pm.collectionVariables.set('access_token', res.data.access_token);",
+                  "  pm.collectionVariables.set('user_id', res.data.user.user_id);",
+                  "  pm.collectionVariables.set('company_id', res.data.user.company_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"AC0001\",\n  \"password\": \"StrongPass@123\"\n}"
+            },
+            "description": "Login using company-scoped username (e.g. AC0001) and password. Auto-saves access_token, user_id, company_id to collection variables."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n      \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"username\": \"AC0001\",\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john@acme.com\",\n      \"role\": \"0\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"branch_id\": null\n    }\n  }\n}"
+            },
+            {
+              "name": "401 — Invalid credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid username or password\"\n}"
+            },
+            {
+              "name": "401 — Account locked",
+              "status": "Unauthorized",
+              "code": 401,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Account locked due to too many failed attempts. Reset your password.\"\n}"
+            },
+            {
+              "name": "401 — Password not set",
+              "status": "Unauthorized",
+              "code": 401,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Password not set. Please check your invite email.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            },
+            "body": { "mode": "raw", "raw": "{}" },
+            "description": "Clears the refresh token from DB. Requires valid JWT."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Logged out successfully\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/auth/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "forgot-password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@acme.com\",\n  \"company_id\": \"{{company_id}}\"\n}"
+            },
+            "description": "Sends a password reset link to the user's email for the given company. Always returns 200 to prevent email enumeration."
+          },
+          "response": [
+            {
+              "name": "200 — Always (email enumeration safe)",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"If this account exists, a reset link has been sent\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/auth/reset-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "reset-password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"a3f9c2e1b4d7...\",\n  \"password\": \"NewStrongPass@456\"\n}"
+            },
+            "description": "Resets the password using the token from the reset email link. Token expires in 1 hour."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Password reset successfully. You can now log in.\"\n}"
+            },
+            {
+              "name": "400 — Invalid token",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid or expired reset link\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Set Password (Invite)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/auth/set-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "set-password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"b7e3a1f2c9d4...\",\n  \"password\": \"MyFirstPass@789\"\n}"
+            },
+            "description": "Employee sets their password using the token from the invite email. Token expires in 48 hours."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Password set successfully. You can now log in.\"\n}"
+            },
+            {
+              "name": "400 — Invalid token",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid or expired invite link\"\n}"
+            },
+            {
+              "name": "400 — Already set",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Password already set for this company account\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "My Companies (Switcher List)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/my-companies",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "my-companies"]
+            },
+            "description": "Returns all companies the logged-in user belongs to. Used to populate the company switcher UI."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uc-uuid-001\",\n      \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"username\": \"AC0001\",\n      \"role\": \"0\",\n      \"is_active\": true,\n      \"company_name\": \"Acme Corp\",\n      \"company_code\": \"ACME\",\n      \"logo_url\": null\n    },\n    {\n      \"id\": \"uc-uuid-002\",\n      \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n      \"username\": \"GL0001\",\n      \"role\": \"2\",\n      \"is_active\": true,\n      \"company_name\": \"Globex Ltd\",\n      \"company_code\": \"GLOB\",\n      \"logo_url\": \"https://cdn.example.com/globex.png\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Switch Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/switch-company",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "switch-company"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000003\"\n}"
+            },
+            "description": "Re-issues a new JWT scoped to the selected company. No re-login required. Use when user belongs to multiple companies."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Switched company successfully\",\n  \"data\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_name\": \"Globex Ltd\",\n    \"role\": \"2\"\n  }\n}"
+            },
+            {
+              "name": "400 — Not a member",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"User does not belong to this company\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Company",
+      "item": [
+        {
+          "name": "Get All Companies",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies",
+              "host": ["{{base_url}}"],
+              "path": ["companies"]
+            },
+            "description": "Admin only. Returns all active companies on the platform."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"company_name\": \"Acme Corp\",\n      \"company_code\": \"ACME\",\n      \"email\": \"hr@acme.com\",\n      \"phone\": \"+97141234567\",\n      \"country\": \"UAE\",\n      \"timezone\": \"Asia/Dubai\",\n      \"currency\": \"AED\",\n      \"plan\": \"trial\",\n      \"plan_expires_at\": null,\n      \"is_active\": true,\n      \"logo_url\": null,\n      \"created_at\": \"2026-05-10T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Company by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}"]
+            },
+            "description": "Admin only. Fetch a single company by UUID."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"company_name\": \"Acme Corp\",\n    \"company_code\": \"ACME\",\n    \"email\": \"hr@acme.com\",\n    \"country\": \"UAE\",\n    \"timezone\": \"Asia/Dubai\",\n    \"currency\": \"AED\",\n    \"plan\": \"trial\",\n    \"is_active\": true\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Company not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Company by Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/code/ACME",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "code", "ACME"]
+            },
+            "description": "Admin only. Fetch a company by its unique company_code."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"company_name\": \"Acme Corp\",\n    \"company_code\": \"ACME\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Company",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_name\": \"Acme Corporation\",\n  \"phone\": \"+97141239999\",\n  \"logo_url\": \"https://cdn.example.com/acme.png\"\n}"
+            },
+            "description": "Admin only. Update company details. Only pass fields to be updated."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Company updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"company_name\": \"Acme Corporation\",\n    \"updated_at\": \"2026-05-10T09:30:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Company Plan",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/plan",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "plan"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"pro\",\n  \"plan_expires_at\": \"2027-05-10T00:00:00.000Z\"\n}"
+            },
+            "description": "Admin only. Update company subscription plan. Plans: trial | basic | pro | enterprise."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Company plan updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"plan\": \"pro\",\n    \"plan_expires_at\": \"2027-05-10T00:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Company",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "deactivate"]
+            },
+            "description": "Admin only. Disables a company without deleting it. Users lose access."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Company deactivated successfully\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Company",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}"]
+            },
+            "description": "Admin only. Soft deletes a company (sets deleted_at). All historical data is preserved."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Company deleted successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            },
+            "description": "Admin only. Returns all non-deleted users across the platform."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john@acme.com\",\n      \"phone\": \"+971501234567\",\n      \"is_active\": true,\n      \"last_login_at\": \"2026-05-10T08:45:00.000Z\",\n      \"created_at\": \"2026-05-10T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            },
+            "description": "Self or Admin. Employee can only fetch their own profile."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john@acme.com\",\n    \"phone\": \"+971501234567\",\n    \"is_active\": true,\n    \"last_login_at\": \"2026-05-10T08:45:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"User not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Jonathan\",\n  \"phone\": \"+971509999999\"\n}"
+            },
+            "description": "Self or Admin. Update identity fields only. Password cannot be changed here — use reset-password."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"User updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"first_name\": \"Jonathan\",\n    \"phone\": \"+971509999999\",\n    \"updated_at\": \"2026-05-10T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            },
+            "description": "Admin only. Soft deletes a user globally across all companies."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"User deleted successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Company Users",
+      "item": [
+        {
+          "name": "Get All Users in Company",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "users"]
+            },
+            "description": "Admin or Manager. Lists all active users within the company. validateTenant ensures you can only access your own company."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uc-uuid-001\",\n      \"username\": \"AC0001\",\n      \"role\": \"0\",\n      \"is_active\": true,\n      \"is_invited\": false,\n      \"invite_accepted_at\": null,\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"email\": \"john@acme.com\",\n      \"phone\": \"+971501234567\"\n    },\n    {\n      \"id\": \"uc-uuid-003\",\n      \"username\": \"AC0002\",\n      \"role\": \"2\",\n      \"is_active\": true,\n      \"is_invited\": true,\n      \"invite_accepted_at\": null,\n      \"first_name\": \"Jane\",\n      \"last_name\": \"Smith\",\n      \"email\": \"jane@acme.com\",\n      \"phone\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Invite Employee",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/users/invite",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "users", "invite"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Smith\",\n  \"email\": \"jane@acme.com\",\n  \"phone\": \"+971507654321\",\n  \"role\": \"2\",\n  \"branch_id\": null,\n  \"company_code\": \"ACME\"\n}"
+            },
+            "description": "Admin or Manager. Invites a user to the company. If the email already exists in the system, the existing user is reused — no duplicate created. Sends a password-set link valid for 48 hours."
+          },
+          "response": [
+            {
+              "name": "201 — Invited",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee invited. Password-set link sent to email.\",\n  \"data\": {\n    \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000005\",\n    \"username\": \"AC0002\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\"\n  }\n}"
+            },
+            {
+              "name": "400 — Already a member",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"User is already a member of this company\"\n}"
+            },
+            {
+              "name": "400 — Cannot invite as Admin",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot invite a user as Admin. Use company registration.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate User from Company",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/users/uc-uuid-003/deactivate",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "users", "uc-uuid-003", "deactivate"]
+            },
+            "description": "Admin only. Removes a user's access from a company without deleting them globally. Their user record and data remain intact."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"User removed from company successfully\",\n  \"data\": {\n    \"id\": \"uc-uuid-003\",\n    \"is_active\": false\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Record not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "OTP",
+      "item": [
+        {
+          "name": "Delete Expired OTPs",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/otp/expired",
+              "host": ["{{base_url}}"],
+              "path": ["otp", "expired"]
+            },
+            "description": "Admin only. Cleans up expired OTP records from the database. Call periodically via cron job or manually."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Expired OTPs cleaned up successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
