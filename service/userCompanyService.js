@@ -387,35 +387,35 @@ const UserCompanyService = {
     },
 
     // ── FORGOT PASSWORD ───────────────────────────────────────────────────────
-    async forgotPassword(email, company_id) {
+    // Uses username — globally unique, maps directly to user + company context.
+    // User knows their username from welcome/invite email.
+    async forgotPassword(username) {
         try {
-            const user = await UserModel.findByEmail(email);
+            const uc = await UserCompanyModel.findByUsername(username);
 
-            // Always return same message to prevent email enumeration
-            if (!user) {
-                return { success: true, message: "If this account exists, a reset link has been sent" };
-            }
-
-            const uc = await UserCompanyModel.findByUserAndCompany(user.id, company_id);
+            // Always return same message to prevent enumeration
             if (!uc || !uc.is_active) {
                 return { success: true, message: "If this account exists, a reset link has been sent" };
             }
 
-            const company = await CompanyModel.findById(company_id);
+            const [user, company] = await Promise.all([
+                UserModel.findById(uc.user_id),
+                CompanyModel.findById(uc.company_id),
+            ]);
 
             const token = generateSecureToken();
             const expires_at = new Date(Date.now() + RESET_EXPIRY_HOURS * 60 * 60 * 1000);
 
             await OtpModel.create({
-                user_id: user.id,
-                company_id: company.id,
+                user_id: uc.user_id,
+                company_id: uc.company_id,
                 type: "password_reset",
                 token,
                 expires_at,
             });
 
             await sendEmail({
-                to: email,
+                to: user.email,
                 subject: "Reset your password — HRMS",
                 html: passwordResetTemplate({
                     first_name: user.first_name,

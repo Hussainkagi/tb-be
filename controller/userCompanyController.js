@@ -127,11 +127,8 @@ const UserCompanyController = {
     // ── FORGOT PASSWORD ───────────────────────────────────────────────────────
     async forgotPassword(req, res) {
         try {
-            const { email, company_id } = req.body;
-            const result = await UserCompanyService.forgotPassword(
-                email,
-                company_id
-            );
+            const { username } = req.body;
+            const result = await UserCompanyService.forgotPassword(username);
             // Always 200 to prevent email enumeration
             return res.status(200).json(result);
         } catch (error) {
