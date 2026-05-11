@@ -85,14 +85,12 @@ const UserCompany = {
         return result.rows;
     },
 
-    // Used by username generator in service
-    async findLastUsernameByPrefix(prefix) {
+    // Used by username generator — fetches last assigned username globally
+    async findLastUsername() {
         const result = await db.query(
             `SELECT username FROM user_companies
-             WHERE username LIKE $1
              ORDER BY username DESC
-             LIMIT 1`,
-            [`${prefix}%`]
+             LIMIT 1`
         );
         return result.rows[0];
     },

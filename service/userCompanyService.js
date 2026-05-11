@@ -20,14 +20,16 @@ const INVITE_EXPIRY_HOURS = 48;
 const RESET_EXPIRY_HOURS = 1;
 
 // ── Username generator ────────────────────────────────────────────────────────
-async function generateUsername(prefix) {
-    const last = await UserCompanyModel.findLastUsernameByPrefix(prefix);
+async function generateUsername() {
+    const last = await UserCompanyModel.findLastUsername();
 
-    if (!last) return `${prefix}0001`;
+    if (!last) return "AA0001";
 
-    const lastSeq = parseInt(last.username.slice(2), 10);
-    if (lastSeq < 9999) {
-        return `${prefix}${String(lastSeq + 1).padStart(4, "0")}`;
+    const prefix = last.username.slice(0, 2);
+    const seq = parseInt(last.username.slice(2), 10);
+
+    if (seq < 9999) {
+        return `${prefix}${String(seq + 1).padStart(4, "0")}`;
     }
 
     const first = prefix.charCodeAt(0);
@@ -36,7 +38,7 @@ async function generateUsername(prefix) {
     if (second < 90) return String.fromCharCode(first) + String.fromCharCode(second + 1) + "0001";
     if (first < 90) return String.fromCharCode(first + 1) + "A0001";
 
-    throw new Error("Username pool exhausted for this prefix");
+    throw new Error("Username pool exhausted (ZZ9999 reached)");
 }
 
 // ── OTP helpers ───────────────────────────────────────────────────────────────
@@ -91,8 +93,7 @@ const UserCompanyService = {
             }
 
             // 6. Generate username + hash password
-            const prefix = company_code.slice(0, 2).toUpperCase();
-            const username = await generateUsername(prefix);
+            const username = await generateUsername();
             const password_hash = await hashPassword(password);
 
             // 7. Link user to company as Admin
@@ -217,8 +218,7 @@ const UserCompanyService = {
             }
 
             // 5. Generate username (no password yet)
-            const prefix = invited_by_company_code.slice(0, 2).toUpperCase();
-            const username = await generateUsername(prefix);
+            const username = await generateUsername();
 
             // 6. Create user_companies row with NULL password_hash
             const userCompany = await UserCompanyModel.create({
@@ -544,3 +544,48 @@ const UserCompanyService = {
 };
 
 module.exports = UserCompanyService;
+
+//:TODO Once Teambook Reaches 6.7Million users inshallah, implement 3-letter prefix logic in generateUsername() to expand pool from 676k to 175 million usernames.
+
+// async function generateUsername() {
+//     const last = await UserCompanyModel.findLastUsername();
+
+//     if (!last) return "AA0001";
+
+//     const username = last.username;
+
+//     // Detect if we're already on 3-letter prefix
+//     const isThreeLetter = username.length === 7; // AAA0001
+    
+//     if (isThreeLetter) {
+//         const prefix = username.slice(0, 3);
+//         const seq    = parseInt(username.slice(3), 10);
+
+//         if (seq < 9999) return `${prefix}${String(seq + 1).padStart(4, "0")}`;
+
+//         const a = prefix.charCodeAt(0);
+//         const b = prefix.charCodeAt(1);
+//         const c = prefix.charCodeAt(2);
+
+//         if (c < 90) return String.fromCharCode(a) + String.fromCharCode(b) + String.fromCharCode(c + 1) + "0001";
+//         if (b < 90) return String.fromCharCode(a) + String.fromCharCode(b + 1) + "A0001";
+//         if (a < 90) return String.fromCharCode(a + 1) + "AA0001";
+
+//         throw new Error("Username pool exhausted (ZZZ9999 reached — 175 million users)");
+//     }
+
+//     // 2-letter prefix logic (current)
+//     const prefix = username.slice(0, 2);
+//     const seq    = parseInt(username.slice(2), 10);
+
+//     if (seq < 9999) return `${prefix}${String(seq + 1).padStart(4, "0")}`;
+
+//     const first  = prefix.charCodeAt(0);
+//     const second = prefix.charCodeAt(1);
+
+//     if (second < 90) return String.fromCharCode(first) + String.fromCharCode(second + 1) + "0001";
+//     if (first  < 90) return String.fromCharCode(first + 1) + "A0001";
+
+//     // ZZ9999 reached — seamlessly roll over to 3-letter chain
+//     return "AAA0001";
+// }
