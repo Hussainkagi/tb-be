@@ -120,8 +120,57 @@ const passwordResetTemplate = ({ first_name, company_name, reset_link, expires_h
 </div>
 `;
 
+const welcomeTemplate = ({ first_name, company_name, username, login_url }) => `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9; border-radius: 8px; overflow: hidden;">
+ 
+  <div style="background: #1a1a2e; padding: 28px 32px;">
+    <h1 style="color: #ffffff; margin: 0; font-size: 20px;">${company_name}</h1>
+    <p style="color: #a0a0b0; margin: 4px 0 0; font-size: 13px;">HRMS Platform</p>
+  </div>
+ 
+  <div style="padding: 32px;">
+    <h2 style="color: #1a1a2e; margin-top: 0;">Welcome aboard, ${first_name}! 🎉</h2>
+    <p style="color: #333;">
+      Your email has been verified and your company <strong>${company_name}</strong>
+      is now active on HRMS.
+    </p>
+    <p style="color: #333;">Your login username is:</p>
+ 
+    <div style="text-align: center; margin: 28px 0;">
+      <div style="display: inline-block; background: #1a1a2e; color: #ffffff;
+                  font-size: 28px; font-weight: bold; letter-spacing: 8px;
+                  padding: 16px 40px; border-radius: 8px;">
+        ${username}
+      </div>
+      <p style="color: #888; font-size: 12px; margin-top: 10px;">
+        This username is unique to your company account. Keep it safe.
+      </p>
+    </div>
+ 
+    <p style="color: #333;">Use this username along with your password to log in.</p>
+ 
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${login_url}"
+         style="display: inline-block; background: #1a1a2e; color: #fff;
+                padding: 12px 32px; border-radius: 6px; text-decoration: none;
+                font-weight: bold; font-size: 15px;">
+        Go to Login
+      </a>
+    </div>
+  </div>
+ 
+  <div style="background: #f0f0f0; padding: 16px 32px; text-align: center;">
+    <p style="color: #888; font-size: 12px; margin: 0;">
+      This is an automated message. Please do not reply to this email.
+    </p>
+  </div>
+ 
+</div>
+`;
+
 module.exports = {
     registrationOtpTemplate,
     inviteEmployeeTemplate,
     passwordResetTemplate,
+    welcomeTemplate
 };

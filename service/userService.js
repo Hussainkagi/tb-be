@@ -1,6 +1,5 @@
 const UserModel = require("../models/userModel");
 const { hashPassword, comparePassword } = require("../utils/password");
-const { generateToken } = require("../utils/jwt");
 const crypto = require("crypto");
 
 const MAX_FAILED_ATTEMPTS = 5;

@@ -3,12 +3,13 @@ const UserCompanyModel = require("../models/userCompanyModel");
 const CompanyModel = require("../models/companyModel");
 const OtpModel = require("../models/otpTypeModel");
 const { hashPassword, comparePassword } = require("../utils/password");
-const { generateToken, generateRefreshToken } = require("../utils/jwt");
+const { generateAccessToken, generateRefreshToken } = require("../utils/jwt");
 const { sendEmail } = require("../utils/mailer");
 const {
     registrationOtpTemplate,
     inviteEmployeeTemplate,
     passwordResetTemplate,
+    welcomeTemplate
 } = require("../utils/emailTemplates");
 const { Role } = require("../enums/roles");
 const crypto = require("crypto");
@@ -158,6 +159,25 @@ const UserCompanyService = {
 
             await OtpModel.markVerified(record.id);
 
+            // Fetch user + company + username to send welcome email
+            const [user, company, uc] = await Promise.all([
+                UserModel.findById(user_id),
+                CompanyModel.findById(record.company_id),
+                UserCompanyModel.findByUserAndCompany(user_id, record.company_id),
+            ]);
+
+            // Send welcome email with username — non-blocking (don't fail verification if email fails)
+            sendEmail({
+                to: user.email,
+                subject: `Welcome to ${company.company_name} — Your login username`,
+                html: welcomeTemplate({
+                    first_name: user.first_name,
+                    company_name: company.company_name,
+                    username: uc.username,
+                    login_url: `${process.env.FRONTEND_URL}/login`,
+                }),
+            }).catch(err => console.error("[Mailer] Welcome email failed:", err.message));
+
             return { success: true, message: "Email verified successfully" };
         } catch (error) {
             return { success: false, message: error.message, error };
@@ -277,7 +297,14 @@ const UserCompanyService = {
             await UserCompanyModel.setPassword(uc.id, password_hash);
             await OtpModel.markVerified(record.id);
 
-            return { success: true, message: "Password set successfully. You can now log in." };
+            return {
+                success: true,
+                message: "Password set successfully. You can now log in.",
+                data: {
+                    username: uc.username,
+                    company_id: uc.company_id,
+                },
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
@@ -331,7 +358,7 @@ const UserCompanyService = {
                 username: uc.username,
             };
 
-            const accessToken = generateToken(payload);
+            const accessToken = generateAccessToken(payload);
             const refreshToken = generateRefreshToken(payload);
 
             await UserModel.setRefreshToken(uc.user_id, refreshToken);
@@ -457,7 +484,7 @@ const UserCompanyService = {
                 username: target.username,
             };
 
-            const accessToken = generateToken(payload);
+            const accessToken = generateAccessToken(payload);
             const refreshToken = generateRefreshToken(payload);
 
             await UserModel.setRefreshToken(user_id, refreshToken);
