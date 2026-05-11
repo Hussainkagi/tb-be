@@ -19,7 +19,7 @@ const authorizeRoles = (...allowedRoles) => {
             });
         }
 
-        const userRole = req.user.role;
+        const userRole = parseInt(req.user.role, 10);
 
         if (!allowedRoles.includes(userRole)) {
             const allowed = allowedRoles.map((r) => RoleLabel[r]).join(", ");

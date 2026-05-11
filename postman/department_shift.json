@@ -1,0 +1,841 @@
+{
+  "info": {
+    "name": "HRMS - Departments & Shifts",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "API documentation for the HRMS Departments and Shifts modules. All routes are scoped under /api/companies/:company_id/branches/:branch_id."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "11111111-1111-1111-1111-111111111111",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "22222222-2222-2222-2222-222222222222",
+      "type": "string"
+    },
+    {
+      "key": "department_id",
+      "value": "33333333-3333-3333-3333-333333333333",
+      "type": "string"
+    },
+    {
+      "key": "shift_id",
+      "value": "44444444-4444-4444-4444-444444444444",
+      "type": "string"
+    },
+    { "key": "token", "value": "YOUR_JWT_TOKEN_HERE", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Departments",
+      "item": [
+        {
+          "name": "Create Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"department_name\": \"Engineering\"\n}"
+            },
+            "description": "Create a new department under a specific branch. Requires Admin role."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Department created successfully\",\n  \"data\": {\n    \"id\": \"33333333-3333-3333-3333-333333333333\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"department_name\": \"Engineering\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Duplicate Name",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Department name already exists in this branch\"\n}"
+            },
+            {
+              "name": "400 Company/Branch Invalid",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch not found or does not belong to this company\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Admins only.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Departments by Branch",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments"
+              ]
+            },
+            "description": "Retrieve all active departments under a specific branch. Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"33333333-3333-3333-3333-333333333333\",\n      \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n      \"department_name\": \"Engineering\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-15T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"55555555-5555-5555-5555-555555555555\",\n      \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n      \"department_name\": \"Human Resources\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-15T08:05:00.000Z\",\n      \"updated_at\": \"2025-01-15T08:05:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Departments by Company",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments/company",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments",
+                "company"
+              ]
+            },
+            "description": "Retrieve all active departments across the entire company (all branches). Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"33333333-3333-3333-3333-333333333333\",\n      \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n      \"department_name\": \"Engineering\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-15T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Department by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments/{{department_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments",
+                "{{department_id}}"
+              ]
+            },
+            "description": "Retrieve a single department by its UUID. Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"33333333-3333-3333-3333-333333333333\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"department_name\": \"Engineering\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Department not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Department",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments/{{department_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments",
+                "{{department_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"department_name\": \"Software Engineering\"\n}"
+            },
+            "description": "Update a department's details. Note: company_id and branch_id cannot be changed. Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Department updated successfully\",\n  \"data\": {\n    \"id\": \"33333333-3333-3333-3333-333333333333\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"department_name\": \"Software Engineering\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T09:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Duplicate Name",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Department name already exists in this branch\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Department not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Department",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments/{{department_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments",
+                "{{department_id}}",
+                "deactivate"
+              ]
+            },
+            "description": "Set a department's is_active flag to false. Does not delete the record. Requires Admin role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Department deactivated successfully\",\n  \"data\": {\n    \"id\": \"33333333-3333-3333-3333-333333333333\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"department_name\": \"Engineering\",\n    \"is_active\": false,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Department not found\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Admins only.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Department (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/departments/{{department_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "departments",
+                "{{department_id}}"
+              ]
+            },
+            "description": "Soft-delete a department by setting deleted_at timestamp. The record remains in the database. Requires Admin role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Department deleted successfully\",\n  \"data\": {\n    \"id\": \"33333333-3333-3333-3333-333333333333\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"department_name\": \"Engineering\",\n    \"is_active\": true,\n    \"deleted_at\": \"2025-01-15T11:00:00.000Z\",\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Department not found\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Admins only.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Shifts",
+      "item": [
+        {
+          "name": "Create Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shift_name\": \"Morning Shift\",\n  \"start_time\": \"08:00:00\",\n  \"end_time\": \"16:00:00\",\n  \"late_grace_minutes\": 10,\n  \"half_day_hours\": 4.00,\n  \"working_hours\": 8.00,\n  \"is_night_shift\": false\n}"
+            },
+            "description": "Create a new shift under a specific branch. start_time and end_time are required. Other fields default to 0/false if omitted. Requires Admin role."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Shift created successfully\",\n  \"data\": {\n    \"id\": \"44444444-4444-4444-4444-444444444444\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"shift_name\": \"Morning Shift\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"16:00:00\",\n    \"late_grace_minutes\": 10,\n    \"half_day_hours\": \"4.00\",\n    \"working_hours\": \"8.00\",\n    \"is_night_shift\": false,\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Duplicate Name",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift name already exists in this branch\"\n}"
+            },
+            {
+              "name": "400 Company/Branch Invalid",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Company not found or inactive\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Admins only.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Shifts by Branch",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts"
+              ]
+            },
+            "description": "Retrieve all active shifts for a specific branch, ordered by start_time. Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"44444444-4444-4444-4444-444444444444\",\n      \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n      \"shift_name\": \"Morning Shift\",\n      \"start_time\": \"08:00:00\",\n      \"end_time\": \"16:00:00\",\n      \"late_grace_minutes\": 10,\n      \"half_day_hours\": \"4.00\",\n      \"working_hours\": \"8.00\",\n      \"is_night_shift\": false,\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-15T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"66666666-6666-6666-6666-666666666666\",\n      \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n      \"shift_name\": \"Night Shift\",\n      \"start_time\": \"22:00:00\",\n      \"end_time\": \"06:00:00\",\n      \"late_grace_minutes\": 15,\n      \"half_day_hours\": \"4.00\",\n      \"working_hours\": \"8.00\",\n      \"is_night_shift\": true,\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-15T08:10:00.000Z\",\n      \"updated_at\": \"2025-01-15T08:10:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Shifts by Company",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts/company",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts",
+                "company"
+              ]
+            },
+            "description": "Retrieve all active shifts across the entire company (all branches). Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"44444444-4444-4444-4444-444444444444\",\n      \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n      \"shift_name\": \"Morning Shift\",\n      \"start_time\": \"08:00:00\",\n      \"end_time\": \"16:00:00\",\n      \"late_grace_minutes\": 10,\n      \"half_day_hours\": \"4.00\",\n      \"working_hours\": \"8.00\",\n      \"is_night_shift\": false,\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-15T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Shift by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts/{{shift_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts",
+                "{{shift_id}}"
+              ]
+            },
+            "description": "Retrieve a single shift by its UUID. Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"44444444-4444-4444-4444-444444444444\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"shift_name\": \"Morning Shift\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"16:00:00\",\n    \"late_grace_minutes\": 10,\n    \"half_day_hours\": \"4.00\",\n    \"working_hours\": \"8.00\",\n    \"is_night_shift\": false,\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Shift Timing",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts/{{shift_id}}/timing",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts",
+                "{{shift_id}}",
+                "timing"
+              ]
+            },
+            "description": "Retrieve timing-only data for a shift (used by the attendance service). Only returns active (non-deleted, is_active=true) shifts. Accessible to all authenticated employees."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"44444444-4444-4444-4444-444444444444\",\n    \"shift_name\": \"Morning Shift\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"16:00:00\",\n    \"late_grace_minutes\": 10,\n    \"half_day_hours\": \"4.00\",\n    \"working_hours\": \"8.00\",\n    \"is_night_shift\": false\n  }\n}"
+            },
+            {
+              "name": "404 Not Found / Inactive",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift not found or inactive\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Shift",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts/{{shift_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts",
+                "{{shift_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shift_name\": \"Early Morning Shift\",\n  \"start_time\": \"07:00:00\",\n  \"end_time\": \"15:00:00\",\n  \"late_grace_minutes\": 5\n}"
+            },
+            "description": "Update a shift's details. Note: company_id and branch_id cannot be changed. Only send fields you want to update. Requires Manager role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Shift updated successfully\",\n  \"data\": {\n    \"id\": \"44444444-4444-4444-4444-444444444444\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"shift_name\": \"Early Morning Shift\",\n    \"start_time\": \"07:00:00\",\n    \"end_time\": \"15:00:00\",\n    \"late_grace_minutes\": 5,\n    \"half_day_hours\": \"4.00\",\n    \"working_hours\": \"8.00\",\n    \"is_night_shift\": false,\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T09:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Duplicate Name",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift name already exists in this branch\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Token missing or invalid.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Shift",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts/{{shift_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts",
+                "{{shift_id}}",
+                "deactivate"
+              ]
+            },
+            "description": "Set a shift's is_active flag to false. Inactive shifts will not be returned by the /timing endpoint. Requires Admin role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Shift deactivated successfully\",\n  \"data\": {\n    \"id\": \"44444444-4444-4444-4444-444444444444\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"shift_name\": \"Morning Shift\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"16:00:00\",\n    \"late_grace_minutes\": 10,\n    \"half_day_hours\": \"4.00\",\n    \"working_hours\": \"8.00\",\n    \"is_night_shift\": false,\n    \"is_active\": false,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift not found\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Admins only.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Shift (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/shifts/{{shift_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "shifts",
+                "{{shift_id}}"
+              ]
+            },
+            "description": "Soft-delete a shift by setting the deleted_at timestamp. The record remains in the database but is excluded from all queries. Requires Admin role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Shift deleted successfully\",\n  \"data\": {\n    \"id\": \"44444444-4444-4444-4444-444444444444\",\n    \"company_id\": \"11111111-1111-1111-1111-111111111111\",\n    \"branch_id\": \"22222222-2222-2222-2222-222222222222\",\n    \"shift_name\": \"Morning Shift\",\n    \"start_time\": \"08:00:00\",\n    \"end_time\": \"16:00:00\",\n    \"late_grace_minutes\": 10,\n    \"half_day_hours\": \"4.00\",\n    \"working_hours\": \"8.00\",\n    \"is_night_shift\": false,\n    \"is_active\": true,\n    \"deleted_at\": \"2025-01-15T11:00:00.000Z\",\n    \"created_at\": \"2025-01-15T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-15T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Shift not found\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Admins only.\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

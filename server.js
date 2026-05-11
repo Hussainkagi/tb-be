@@ -72,7 +72,14 @@ app.use("/api/user-companies", UserCompanyRoutes);
 const OtpTypeRoutes = require("./routes/otpTypeRoute");
 app.use("/api/otps", OtpTypeRoutes);
 
+const BranchRoutes = require("./routes/branchRoute");
+app.use("/api/companies/:company_id/branches", BranchRoutes);
 
+const DepartmentRoutes = require("./routes/departmentRoute");
+app.use("/api/companies/:company_id/branches/:branch_id/departments", DepartmentRoutes);
+
+const ShiftRoutes = require("./routes/shiftRoute");
+app.use("/api/companies/:company_id/branches/:branch_id/shifts", ShiftRoutes);
 
 
 // 404 handler

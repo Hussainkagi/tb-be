@@ -1,0 +1,259 @@
+{
+  "info": {
+    "name": "HRMS-B — Branches",
+    "description": "Branch module API. All routes scoped under /api/companies/:company_id/branches. Includes geofence endpoint for attendance check-in/out.",
+    "_postman_id": "hrms-branches-collection-v2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "company_id", "value": "", "type": "string" },
+    { "key": "branch_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Branches",
+      "item": [
+        {
+          "name": "Create Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "branches"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branch_name\": \"Dubai HQ\",\n  \"branch_code\": \"DXB\",\n  \"manager_name\": \"Ahmed Al Mansouri\",\n  \"is_head_office\": true,\n  \"country\": \"UAE\",\n  \"state\": \"Dubai\",\n  \"city\": \"Dubai\",\n  \"address\": \"Office 501, Business Bay Tower, Sheikh Zayed Road\",\n  \"phone\": \"+97141234567\",\n  \"email\": \"dubai@acme.com\",\n  \"latitude\": 25.18540000,\n  \"longitude\": 55.26950000,\n  \"attendance_radius\": 100\n}"
+            },
+            "description": "Admin only. Creates a branch under the company. latitude + longitude are required for geofence-based attendance check-in/out. attendance_radius is in meters (default 100m)."
+          },
+          "response": [
+            {
+              "name": "201 — Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Branch created successfully\",\n  \"data\": {\n    \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"branch_name\": \"Dubai HQ\",\n    \"branch_code\": \"DXB\",\n    \"manager_name\": \"Ahmed Al Mansouri\",\n    \"is_head_office\": true,\n    \"country\": \"UAE\",\n    \"state\": \"Dubai\",\n    \"city\": \"Dubai\",\n    \"address\": \"Office 501, Business Bay Tower, Sheikh Zayed Road\",\n    \"phone\": \"+97141234567\",\n    \"email\": \"dubai@acme.com\",\n    \"latitude\": \"25.18540000\",\n    \"longitude\": \"55.26950000\",\n    \"attendance_radius\": 100,\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2026-05-11T14:00:00.000Z\",\n    \"updated_at\": \"2026-05-11T14:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 — Duplicate branch code",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch code already exists in this company\"\n}"
+            },
+            {
+              "name": "400 — Company inactive",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Company not found or inactive\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get All Branches (by Company)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "branches"]
+            },
+            "description": "Admin or Manager. Returns all active branches ordered by head office first, then name. validateTenant ensures you can only access your own company."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n      \"branch_name\": \"Dubai HQ\",\n      \"branch_code\": \"DXB\",\n      \"manager_name\": \"Ahmed Al Mansouri\",\n      \"is_head_office\": true,\n      \"country\": \"UAE\",\n      \"state\": \"Dubai\",\n      \"city\": \"Dubai\",\n      \"latitude\": \"25.18540000\",\n      \"longitude\": \"55.26950000\",\n      \"attendance_radius\": 100,\n      \"is_active\": true\n    },\n    {\n      \"id\": \"b1c2d3e4-0000-0000-0000-000000000011\",\n      \"branch_name\": \"Abu Dhabi Office\",\n      \"branch_code\": \"AUH\",\n      \"manager_name\": \"Sara Al Hashimi\",\n      \"is_head_office\": false,\n      \"country\": \"UAE\",\n      \"state\": \"Abu Dhabi\",\n      \"city\": \"Abu Dhabi\",\n      \"latitude\": \"24.45388000\",\n      \"longitude\": \"54.37729000\",\n      \"attendance_radius\": 150,\n      \"is_active\": true\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Branch by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}"
+              ]
+            },
+            "description": "Admin or Manager. Fetch a single branch by UUID."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n    \"branch_name\": \"Dubai HQ\",\n    \"branch_code\": \"DXB\",\n    \"manager_name\": \"Ahmed Al Mansouri\",\n    \"is_head_office\": true,\n    \"country\": \"UAE\",\n    \"state\": \"Dubai\",\n    \"city\": \"Dubai\",\n    \"address\": \"Office 501, Business Bay Tower\",\n    \"phone\": \"+97141234567\",\n    \"email\": \"dubai@acme.com\",\n    \"latitude\": \"25.18540000\",\n    \"longitude\": \"55.26950000\",\n    \"attendance_radius\": 100,\n    \"is_active\": true\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Branch Geofence",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/geofence",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "geofence"
+              ]
+            },
+            "description": "All authenticated users. Called by the attendance service before check-in/out to get branch lat/long and radius. Returns error if lat/long not configured."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n    \"branch_name\": \"Dubai HQ\",\n    \"latitude\": \"25.18540000\",\n    \"longitude\": \"55.26950000\",\n    \"attendance_radius\": 100\n  }\n}"
+            },
+            {
+              "name": "404 — Location not configured",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch location not configured. Cannot verify check-in.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Branch",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branch_name\": \"Dubai Headquarters\",\n  \"manager_name\": \"Khalid Al Rashid\",\n  \"latitude\": 25.20484800,\n  \"longitude\": 55.27012800,\n  \"attendance_radius\": 200\n}"
+            },
+            "description": "Admin or Manager. Update any branch field. company_id cannot be changed. If updating branch_code, uniqueness within the company is enforced."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Branch updated successfully\",\n  \"data\": {\n    \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n    \"branch_name\": \"Dubai Headquarters\",\n    \"manager_name\": \"Khalid Al Rashid\",\n    \"latitude\": \"25.20484800\",\n    \"longitude\": \"55.27012800\",\n    \"attendance_radius\": 200,\n    \"updated_at\": \"2026-05-11T15:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 — Not found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Branch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "deactivate"
+              ]
+            },
+            "description": "Admin only. Disables the branch. Employees assigned to this branch can no longer check in via geofence."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Branch deactivated successfully\",\n  \"data\": {\n    \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n    \"is_active\": false\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Branch",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}"
+              ]
+            },
+            "description": "Admin only. Soft deletes a branch. Users linked via user_companies.branch_id will have branch_id set to NULL automatically (ON DELETE SET NULL in DB)."
+          },
+          "response": [
+            {
+              "name": "200 — Success",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Branch deleted successfully\",\n  \"data\": {\n    \"id\": \"b1c2d3e4-0000-0000-0000-000000000010\",\n    \"deleted_at\": \"2026-05-11T15:30:00.000Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
