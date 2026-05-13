@@ -25,9 +25,7 @@ CREATE TABLE IF NOT EXISTS departments (
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    -- Constraints
-    CONSTRAINT uq_department_name_per_branch
-        UNIQUE (company_id, branch_id, department_name)
+  
 );
 
 CREATE INDEX IF NOT EXISTS idx_departments_company_id
