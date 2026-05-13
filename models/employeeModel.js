@@ -1,0 +1,165 @@
+const db = require("../config/database");
+
+const Employee = {
+
+    async create(data) {
+        const {
+            company_id,
+            branch_id = null,
+            department_id = null,
+            shift_id = null,
+            user_id,
+            employee_code,
+            first_name,
+            last_name,
+            email,
+            phone = null,
+            gender = null,
+            date_of_birth = null,
+            address = null,
+            joining_date = null,
+            employment_type = null,
+            basic_salary = null,
+            bank_name = null,
+            bank_account_number = null,
+            iban = null,
+        } = data;
+
+        const result = await db.query(
+            `INSERT INTO employees (
+                company_id, branch_id, department_id, shift_id, user_id,
+                employee_code, first_name, last_name, email, phone,
+                gender, date_of_birth, address,
+                joining_date, employment_type,
+                basic_salary, bank_name, bank_account_number, iban
+            ) VALUES (
+                $1,  $2,  $3,  $4,  $5,
+                $6,  $7,  $8,  $9,  $10,
+                $11, $12, $13,
+                $14, $15,
+                $16, $17, $18, $19
+            ) RETURNING *`,
+            [
+                company_id, branch_id, department_id, shift_id, user_id,
+                employee_code, first_name, last_name, email, phone,
+                gender, date_of_birth, address,
+                joining_date, employment_type,
+                basic_salary, bank_name, bank_account_number, iban,
+            ]
+        );
+        return result.rows[0];
+    },
+
+    async findById(id) {
+        const result = await db.query(
+            `SELECT * FROM employees WHERE id = $1 AND deleted_at IS NULL`,
+            [id]
+        );
+        return result.rows[0];
+    },
+
+    // Used by inviteEmployee to enforce unique employee_code per company
+    async findByCode(company_id, employee_code) {
+        const result = await db.query(
+            `SELECT * FROM employees
+             WHERE company_id = $1 AND employee_code = $2 AND deleted_at IS NULL`,
+            [company_id, employee_code]
+        );
+        return result.rows[0];
+    },
+
+    async findByUserId(user_id) {
+        const result = await db.query(
+            `SELECT * FROM employees WHERE user_id = $1 AND deleted_at IS NULL`,
+            [user_id]
+        );
+        return result.rows;
+    },
+
+    async findByUserAndCompany(user_id, company_id) {
+        const result = await db.query(
+            `SELECT * FROM employees
+             WHERE user_id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+            [user_id, company_id]
+        );
+        return result.rows[0];
+    },
+
+    async getAllByCompany(company_id) {
+        const result = await db.query(
+            `SELECT * FROM employees
+             WHERE company_id = $1 AND deleted_at IS NULL
+             ORDER BY created_at DESC`,
+            [company_id]
+        );
+        return result.rows;
+    },
+
+    async getAllByBranch(company_id, branch_id) {
+        const result = await db.query(
+            `SELECT * FROM employees
+             WHERE company_id = $1 AND branch_id = $2 AND deleted_at IS NULL
+             ORDER BY created_at DESC`,
+            [company_id, branch_id]
+        );
+        return result.rows;
+    },
+
+    async getAllByDepartment(company_id, department_id) {
+        const result = await db.query(
+            `SELECT * FROM employees
+             WHERE company_id = $1 AND department_id = $2 AND deleted_at IS NULL
+             ORDER BY created_at DESC`,
+            [company_id, department_id]
+        );
+        return result.rows;
+    },
+
+    async update(id, data) {
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+
+        for (const [key, value] of Object.entries(data)) {
+            updates.push(`${key} = $${paramCount}`);
+            values.push(value);
+            paramCount++;
+        }
+
+        values.push(id);
+        const query = `UPDATE employees SET ${updates.join(", ")}
+                       WHERE id = $${paramCount}
+                         AND deleted_at IS NULL
+                       RETURNING *`;
+
+        const result = await db.query(query, values);
+        return result.rows[0];
+    },
+
+    async updateStatus(id, status) {
+        const result = await db.query(
+            `UPDATE employees SET status = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING *`,
+            [status, id]
+        );
+        return result.rows[0];
+    },
+
+    async deactivate(id) {
+        const result = await db.query(
+            `UPDATE employees SET is_active = false WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+            [id]
+        );
+        return result.rows[0];
+    },
+
+    // Soft delete
+    async delete(id) {
+        const result = await db.query(
+            `UPDATE employees SET deleted_at = NOW() WHERE id = $1 RETURNING *`,
+            [id]
+        );
+        return result.rows[0];
+    },
+};
+
+module.exports = Employee;

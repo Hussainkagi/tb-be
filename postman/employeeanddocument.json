@@ -1,0 +1,561 @@
+{
+  "info": {
+    "name": "HRMS — Employee & Documents",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000/api" },
+    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
+    { "key": "employee_id", "value": "e1e2e3e4-0000-0000-0000-000000000001" },
+    { "key": "branch_id", "value": "b1b2b3b4-0000-0000-0000-000000000001" },
+    { "key": "department_id", "value": "d1d2d3d4-0000-0000-0000-000000000001" },
+    { "key": "document_id", "value": "dc000001-0000-0000-0000-000000000001" },
+    { "key": "access_token", "value": "your_jwt_access_token_here" }
+  ],
+  "item": [
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "Get All Employees (by Company)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "employees"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n      \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n      \"shift_id\": \"s1s2s3s4-0000-0000-0000-000000000001\",\n      \"user_id\": \"u1u2u3u4-0000-0000-0000-000000000001\",\n      \"employee_code\": \"EMP001\",\n      \"first_name\": \"Sarah\",\n      \"last_name\": \"Khan\",\n      \"email\": \"sarah.khan@acme.com\",\n      \"phone\": \"+971501234567\",\n      \"gender\": \"female\",\n      \"date_of_birth\": \"1995-06-15\",\n      \"joining_date\": \"2023-01-10\",\n      \"employment_type\": \"full_time\",\n      \"status\": \"active\",\n      \"basic_salary\": \"8500.00\",\n      \"is_active\": true,\n      \"created_at\": \"2023-01-10T08:00:00.000Z\",\n      \"updated_at\": \"2023-01-10T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Employee by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n    \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n    \"shift_id\": \"s1s2s3s4-0000-0000-0000-000000000001\",\n    \"user_id\": \"u1u2u3u4-0000-0000-0000-000000000001\",\n    \"employee_code\": \"EMP001\",\n    \"first_name\": \"Sarah\",\n    \"last_name\": \"Khan\",\n    \"email\": \"sarah.khan@acme.com\",\n    \"phone\": \"+971501234567\",\n    \"gender\": \"female\",\n    \"date_of_birth\": \"1995-06-15\",\n    \"address\": \"Apt 12, Marina Tower, Dubai\",\n    \"joining_date\": \"2023-01-10\",\n    \"employment_type\": \"full_time\",\n    \"status\": \"active\",\n    \"basic_salary\": \"8500.00\",\n    \"bank_name\": \"Emirates NBD\",\n    \"bank_account_number\": \"1234567890\",\n    \"iban\": \"AE070331234567890123456\",\n    \"is_active\": true,\n    \"created_at\": \"2023-01-10T08:00:00.000Z\",\n    \"updated_at\": \"2023-01-10T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Employee not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Employees by Branch",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/branch/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "branch",
+                "{{branch_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"employee_code\": \"EMP001\",\n      \"first_name\": \"Sarah\",\n      \"last_name\": \"Khan\",\n      \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n      \"status\": \"active\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Employees by Department",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/department/{{department_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "department",
+                "{{department_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"employee_code\": \"EMP001\",\n      \"first_name\": \"Sarah\",\n      \"last_name\": \"Khan\",\n      \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n      \"status\": \"active\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Employee",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+971509999999\",\n  \"address\": \"Villa 5, JVC, Dubai\",\n  \"basic_salary\": 9500,\n  \"bank_name\": \"ADCB\",\n  \"bank_account_number\": \"9876543210\",\n  \"iban\": \"AE250030009876543210123\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"phone\": \"+971509999999\",\n    \"address\": \"Villa 5, JVC, Dubai\",\n    \"basic_salary\": \"9500.00\",\n    \"bank_name\": \"ADCB\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Employee not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Employee Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"on_leave\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee status updated to 'on_leave'\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"status\": \"on_leave\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Invalid Status",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: active, inactive, terminated, on_leave\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Employee",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "deactivate"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deactivated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"is_active\": false,\n    \"updated_at\": \"2024-03-15T11:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Employee (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deleted successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"deleted_at\": \"2024-03-15T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Employee not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Employee Documents",
+      "item": [
+        {
+          "name": "Add Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "documents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type\": \"emirates_id\",\n  \"document_number\": \"784-1995-1234567-8\",\n  \"issued_country\": \"AE\",\n  \"issued_date\": \"2021-03-01\",\n  \"expiry_date\": \"2026-03-01\",\n  \"file_url\": \"https://s3.amazonaws.com/hrms/docs/eid_sarah.pdf\",\n  \"file_name\": \"eid_sarah.pdf\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Document added successfully\",\n  \"data\": {\n    \"id\": \"dc000001-0000-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"document_type\": \"emirates_id\",\n    \"document_number\": \"784-1995-1234567-8\",\n    \"issued_country\": \"AE\",\n    \"issued_date\": \"2021-03-01\",\n    \"expiry_date\": \"2026-03-01\",\n    \"file_url\": \"https://s3.amazonaws.com/hrms/docs/eid_sarah.pdf\",\n    \"file_name\": \"eid_sarah.pdf\",\n    \"is_active\": true,\n    \"created_at\": \"2024-03-15T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Duplicate Document Type",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"A 'emirates_id' document already exists for this employee. Use update instead.\"\n}"
+            },
+            {
+              "name": "400 Employee Not in Company",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Employee not found in this company\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Document by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "documents",
+                "{{document_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"dc000001-0000-0000-0000-000000000001\",\n    \"employee_id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"document_type\": \"emirates_id\",\n    \"document_number\": \"784-1995-1234567-8\",\n    \"issued_country\": \"AE\",\n    \"issued_date\": \"2021-03-01\",\n    \"expiry_date\": \"2026-03-01\",\n    \"file_url\": \"https://s3.amazonaws.com/hrms/docs/eid_sarah.pdf\",\n    \"file_name\": \"eid_sarah.pdf\",\n    \"is_active\": true\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Document not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get All Documents (by Employee)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "documents"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"dc000001-0000-0000-0000-000000000001\",\n      \"document_type\": \"emirates_id\",\n      \"document_number\": \"784-1995-1234567-8\",\n      \"expiry_date\": \"2026-03-01\",\n      \"is_active\": true\n    },\n    {\n      \"id\": \"dc000002-0000-0000-0000-000000000002\",\n      \"document_type\": \"passport\",\n      \"document_number\": \"P1234567\",\n      \"expiry_date\": \"2028-08-20\",\n      \"is_active\": true\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get All Documents (by Company)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "documents"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"dc000001-0000-0000-0000-000000000001\",\n      \"employee_id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"document_type\": \"emirates_id\",\n      \"document_number\": \"784-1995-1234567-8\",\n      \"expiry_date\": \"2026-03-01\"\n    },\n    {\n      \"id\": \"dc000003-0000-0000-0000-000000000003\",\n      \"employee_id\": \"e9e8e7e6-0000-0000-0000-000000000002\",\n      \"document_type\": \"visa\",\n      \"document_number\": \"V98765432\",\n      \"expiry_date\": \"2025-01-15\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Expiring Documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/documents/expiring?days=30",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "documents", "expiring"],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "Lookahead window in days. Defaults to 30."
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"dc000003-0000-0000-0000-000000000003\",\n      \"employee_id\": \"e9e8e7e6-0000-0000-0000-000000000002\",\n      \"document_type\": \"visa\",\n      \"document_number\": \"V98765432\",\n      \"expiry_date\": \"2024-04-01\",\n      \"issued_country\": \"AE\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 OK — None Expiring",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Document",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "documents",
+                "{{document_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_number\": \"784-1995-9999999-9\",\n  \"expiry_date\": \"2029-03-01\",\n  \"file_url\": \"https://s3.amazonaws.com/hrms/docs/eid_sarah_renewed.pdf\",\n  \"file_name\": \"eid_sarah_renewed.pdf\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Document updated successfully\",\n  \"data\": {\n    \"id\": \"dc000001-0000-0000-0000-000000000001\",\n    \"document_number\": \"784-1995-9999999-9\",\n    \"expiry_date\": \"2029-03-01\",\n    \"file_url\": \"https://s3.amazonaws.com/hrms/docs/eid_sarah_renewed.pdf\",\n    \"updated_at\": \"2024-03-15T12:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Document not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Document",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "documents",
+                "{{document_id}}",
+                "deactivate"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Document deactivated successfully\",\n  \"data\": {\n    \"id\": \"dc000001-0000-0000-0000-000000000001\",\n    \"is_active\": false,\n    \"updated_at\": \"2024-03-15T12:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Document (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees",
+                "{{employee_id}}",
+                "documents",
+                "{{document_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Document deleted successfully\",\n  \"data\": {\n    \"id\": \"dc000001-0000-0000-0000-000000000001\",\n    \"deleted_at\": \"2024-03-15T12:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"success\": false,\n  \"message\": \"Document not found\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

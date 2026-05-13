@@ -23,7 +23,8 @@ const isSelfOrAdmin = (req, res, next) => {
     const { role, id } = req.user;
     const resourceId = req.params.id;
 
-    const isPrivileged = role === Role.ADMIN || role === Role.MANAGER;
+    const isPrivileged = parseInt(role, 10) === Role.ADMIN ||
+        parseInt(role, 10) === Role.MANAGER || parseInt(role, 10) === Role.EMPLOYEE;
     const isSelf = String(id) === String(resourceId);
 
     if (isPrivileged || isSelf) {

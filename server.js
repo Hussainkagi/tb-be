@@ -81,6 +81,12 @@ app.use("/api/companies/:company_id/branches/:branch_id/departments", Department
 const ShiftRoutes = require("./routes/shiftRoute");
 app.use("/api/companies/:company_id/branches/:branch_id/shifts", ShiftRoutes);
 
+const EmployeeRoutes = require("./routes/employeeRoute");
+app.use("/api/companies/:company_id/employees", EmployeeRoutes);
+
+const EmployeeDocumentRoutes = require("./routes/employeeDocumentRoute");
+app.use("/api/companies/:company_id/employees/:employee_id/documents", EmployeeDocumentRoutes);
+
 
 // 404 handler
 app.use("*", (req, res) => {
