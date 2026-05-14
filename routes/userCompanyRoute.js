@@ -73,8 +73,10 @@ router.patch(
     UserCompanyController.deactivateUserFromCompany
 );
 
+
+// Update user role in a company (needs both company_id and user_id)
 router.patch(
-    "/companies/users/:id/role",
+    "/companies/:company_id/users/:user_id/role",
     verifyToken,
     isAdmin,
     UserCompanyController.updateUserCompanyRole

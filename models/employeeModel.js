@@ -63,9 +63,9 @@ const Employee = {
          LEFT JOIN departments d 
             ON e.department_id = d.id
          LEFT JOIN user_companies uc
-            ON uc.company_id = e.company_id
-            AND uc.user_id = e.user_id
-         WHERE e.id = $1 
+            ON uc.user_id = e.user_id
+            AND uc.company_id = e.company_id
+         WHERE e.id = $1
            AND e.deleted_at IS NULL`,
             [id]
         );

@@ -599,56 +599,58 @@ const UserCompanyService = {
             return { success: false, message: error.message, error };
         }
     },
-    async updateUserCompanyRole(uc_id, role, requester_role) {
-    try {
-        // 1. Only admins can change roles
-        if (requester_role !== String(Role.ADMIN)) {
-            return { success: false, message: "Only admins can change user roles" };
-        }
+    async updateUserCompanyRole(user_id, company_id, role, requester_role) {
+        try {
+            // 1. Only admins can change roles
+            if (requester_role !== String(Role.ADMIN)) {
+                return { success: false, message: "Only admins can change user roles" };
+            }
 
-        // 2. Validate role value
-        const validRoles = Object.values(Role).map(String);
-        if (!validRoles.includes(role)) {
-            return { success: false, message: `Invalid role. Must be one of: ${validRoles.join(", ")}` };
-        }
+            // 2. Validate role value
+            const validRoles = Object.values(Role).map(String);
+            console.log("Valid roles:", validRoles);
+            if (!validRoles.includes(role)) {
+                console.log("Invalid role provided:", role);
+                return { success: false, message: `Invalid role. Must be one of: ${validRoles.join(", ")}` };
+            }
 
-        // 3. Cannot assign Admin role
-        if (role === String(Role.ADMIN)) {
-            return { success: false, message: "Cannot assign Admin role via this flow" };
-        }
+            // 3. Cannot assign Admin role
+            if (role === String(Role.ADMIN)) {
+                return { success: false, message: "Cannot assign Admin role via this flow" };
+            }
 
-        // 4. Fetch existing record
-        const existing = await UserCompanyModel.findById(uc_id);
-        if (!existing) {
-            return { success: false, message: "User company record not found" };
-        }
+            // 4. Fetch existing record by user_id and company_id
+            const existing = await UserCompanyModel.findByUserAndCompany(user_id, company_id);
+            if (!existing) {
+                return { success: false, message: "User company record not found" };
+            }
 
-        // 5. No-op guard
-        if (existing.role === role) {
-            return { success: false, message: "User already has this role" };
-        }
+            // 5. No-op guard
+            if (existing.role === role) {
+                return { success: false, message: "User already has this role" };
+            }
 
-        // 6. Update
-        const updated = await UserCompanyModel.updateRole(uc_id, role);
-        if (!updated) {
-            return { success: false, message: "Update failed" };
-        }
+            // 6. Update
+            const updated = await UserCompanyModel.updateRole(existing.id, role);
+            if (!updated) {
+                return { success: false, message: "Update failed" };
+            }
 
-        return {
-            success: true,
-            message: "Role updated successfully",
-            data: {
-                id:         updated.id,
-                user_id:    updated.user_id,
-                company_id: updated.company_id,
-                role:       updated.role,
-                updated_at: updated.updated_at,
-            },
-        };
-    } catch (error) {
-        return { success: false, message: error.message, error };
-    }
-},
+            return {
+                success: true,
+                message: "Role updated successfully",
+                data: {
+                    id:         updated.id,
+                    user_id:    updated.user_id,
+                    company_id: updated.company_id,
+                    role:       updated.role,
+                    updated_at: updated.updated_at,
+                },
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
 };
 
 module.exports = UserCompanyService;

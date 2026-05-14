@@ -243,8 +243,10 @@ const UserCompanyController = {
     // ── UPDATE USER COMPANY ROLE ──────────────────────────────────────────────────
     async updateUserCompanyRole(req, res) {
         try {
+            console.log("Updating user company role:", req.body.role);
             const result = await UserCompanyService.updateUserCompanyRole(
-                req.params.id,
+                req.params.user_id,
+                req.params.company_id,
                 req.body.role,
                 req.user.role
             );
