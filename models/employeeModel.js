@@ -55,13 +55,21 @@ const Employee = {
             `SELECT 
             e.*,
             s.shift_name AS shift_name,
-            d.department_name AS department_name
+            d.department_name AS department_name,
+            uc.role AS role
          FROM employees e
-         LEFT JOIN shifts s ON e.shift_id = s.id
-         LEFT JOIN departments d ON e.department_id = d.id
-         WHERE e.id = $1 AND e.deleted_at IS NULL`,
+         LEFT JOIN shifts s 
+            ON e.shift_id = s.id
+         LEFT JOIN departments d 
+            ON e.department_id = d.id
+         LEFT JOIN user_companies uc
+            ON uc.company_id = e.company_id
+            AND uc.user_id = e.user_id
+         WHERE e.id = $1 
+           AND e.deleted_at IS NULL`,
             [id]
         );
+
         return result.rows[0];
     },
 
