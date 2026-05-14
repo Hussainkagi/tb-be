@@ -108,6 +108,19 @@ const UserCompanyService = {
                 is_invited: false,
             });
 
+            const employee = await EmployeeModel.create({
+                company_id:company.id,
+                user_id: user.id,
+                employee_code :`EMP${user.id.replace(/-/g, "").slice(-6).toUpperCase()}`,
+                first_name,
+                last_name,
+                email,
+                phone,
+                joining_date : new Date().toISOString(),
+            });
+
+
+
             // 8. Generate OTP + store
             const otp = generateOTP();
             const expires_at = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
@@ -189,131 +202,132 @@ const UserCompanyService = {
 
     // ── ADMIN ADDS EMPLOYEE ──────────────────────────────────────────────────
     // No password set by admin — employee gets an invite link to set their own.    
-async inviteEmployee(data) {
-    try {
-        const {
-            // user fields
-            first_name, last_name, email, phone,
-            // company context
-            company_id, role = String(Role.EMPLOYEE),
-            // employee-specific fields
-            branch_id = null,
-            department_id = null,
-            shift_id = null,
-            employee_code,
-            gender = null,
-            date_of_birth = null,
-            joining_date = null,
-            employment_type = null,
-            basic_salary = null,
-            bank_name = null,
-            bank_account_number = null,
-            iban = null,
-        } = data;
+    async inviteEmployee(data) {
+        try {
+            const {
+                // user fields
+                first_name, last_name, email, phone,
+                // company context
+                company_id, role = String(Role.EMPLOYEE),
+                // employee-specific fields
+                branch_id = null,
+                department_id = null,
+                shift_id = null,
+                gender = null,
+                date_of_birth = null,
+                joining_date = null,
+                employment_type = null,
+                basic_salary = null,
+                bank_name = null,
+                bank_account_number = null,
+                iban = null,
+            } = data;
 
-        // 1. Validate role
-        if (role === String(Role.ADMIN)) {
-            return { success: false, message: "Cannot invite a user as Admin. Use company registration." };
-        }
+            // 1. Validate role
+            if (role === String(Role.ADMIN)) {
+                return { success: false, message: "Cannot invite a user as Admin. Use company registration." };
+            }
 
-        // 2. Validate employee_code not taken in this company
-        const codeExists = await EmployeeModel.findByCode(company_id, employee_code);
-        if (codeExists) {
-            return { success: false, message: "Employee code already taken in this company" };
-        }
+            
 
-        // 3. Find or create user
-        const { user } = await UserModel.findOrCreate({
-            first_name, last_name, email, phone,
-        });
+            // 2. Find or create user
+            const { user } = await UserModel.findOrCreate({
+                first_name, last_name, email, phone,
+            });
 
-        // 4. Check if already linked to this company
-        const existingLink = await UserCompanyModel.findByUserAndCompany(user.id, company_id);
-        if (existingLink) {
-            return { success: false, message: "User is already a member of this company" };
-        }
+            // 3. Validate employee_code not taken in this company
+            const codeExists = await EmployeeModel.findByCode(company_id, `EMP${user.id.replace(/-/g, "").slice(-6).toUpperCase()}`);
+            if (codeExists) {
+                return { success: false, message: "Employee code already taken in this company" };
+            }
 
-        // 5. Fetch company
-        const company = await CompanyModel.findById(company_id);
-        if (!company || !company.is_active) {
-            return { success: false, message: "Company not found or inactive" };
-        }
+            // 4. Check if already linked to this company
+            const existingLink = await UserCompanyModel.findByUserAndCompany(user.id, company_id);
+            if (existingLink) {
+                return { success: false, message: "User is already a member of this company" };
+            }
 
-        // 6. Generate username (no password yet)
-        const username = await generateUsername();
+            // 5. Fetch company
+            const company = await CompanyModel.findById(company_id);
+            if (!company || !company.is_active) {
+                return { success: false, message: "Company not found or inactive" };
+            }
 
-        // 7. Create user_companies row with NULL password_hash
-        const userCompany = await UserCompanyModel.create({
-            user_id: user.id,
-            company_id,
-            branch_id,
-            username,
-            password_hash: null,
-            role,
-            is_invited: true,
-        });
+            // 6. Generate username (no password yet)
+            const username = await generateUsername();
 
-        // 8. Create employee row and link user_id
-        const employee = await EmployeeModel.create({
-            company_id,
-            branch_id,
-            department_id,
-            shift_id,
-            user_id: user.id,          // ← the link between user and employee
-            employee_code,
-            first_name,
-            last_name,
-            email,
-            phone,
-            gender,
-            date_of_birth,
-            joining_date,
-            employment_type,
-            basic_salary,
-            bank_name,
-            bank_account_number,
-            iban,
-        });
-
-        // 9. Generate invite token + store
-        const token = generateSecureToken();
-        const expires_at = new Date(Date.now() + INVITE_EXPIRY_HOURS * 60 * 60 * 1000);
-
-        await OtpModel.create({
-            user_id: user.id,
-            company_id,
-            type: "invite",
-            token,
-            expires_at,
-        });
-
-        // 10. Send invite email
-        await sendEmail({
-            to: email,
-            subject: `You've been added to ${company.company_name} — Set your password`,
-            html: inviteEmployeeTemplate({
-                first_name,
-                company_name: company.company_name,
-                username,
-                invite_link: `${process.env.FRONTEND_URL}/set-password?token=${token}`,
-                expires_hours: INVITE_EXPIRY_HOURS,
-            }),
-        });
-
-        return {
-            success: true,
-            message: "Employee invited. Password-set link sent to email.",
-            data: {
+            // 7. Create user_companies row with NULL password_hash
+            const userCompany = await UserCompanyModel.create({
                 user_id: user.id,
-                employee_id: employee.id,   // ← expose for admin reference
-                username,
                 company_id,
-            },
-        };
-    } catch (error) {
-        return { success: false, message: error.message, error };
-    }
-},
+                branch_id,
+                username,
+                password_hash: null,
+                role,
+                is_invited: true,
+            });
+
+            // 8. Create employee row and link user_id
+            const employee = await EmployeeModel.create({
+                company_id,
+                branch_id,
+                department_id,
+                shift_id,
+                user_id: user.id,          // ← the link between user and employee
+                employee_code:`EMP${user.id.replace(/-/g, "").slice(-6).toUpperCase()}`,
+                first_name,
+                last_name,
+                email,
+                phone,
+                gender,
+                date_of_birth,
+                joining_date,
+                employment_type,
+                basic_salary,
+                bank_name,
+                bank_account_number,
+                iban,
+            });
+
+            // 9. Generate invite token + store
+            const token = generateSecureToken();
+            const expires_at = new Date(Date.now() + INVITE_EXPIRY_HOURS * 60 * 60 * 1000);
+
+            await OtpModel.create({
+                user_id: user.id,
+                company_id,
+                type: "invite",
+                token,
+                expires_at,
+            });
+
+            // 10. Send invite email
+            await sendEmail({
+                to: email,
+                subject: `You've been added to ${company.company_name} — Set your password`,
+                html: inviteEmployeeTemplate({
+                    first_name,
+                    company_name: company.company_name,
+                    username,
+                    invite_link: `${process.env.FRONTEND_URL}/set-password?token=${token}`,
+                    expires_hours: INVITE_EXPIRY_HOURS,
+                }),
+            });
+
+            return {
+                success: true,
+                message: "Employee invited. Password-set link sent to email.",
+                data: {
+                    user_id: user.id,
+                    employee_id: employee.id,   // ← expose for admin reference
+                    username,
+                    company_id,
+                },
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
 
     // ── SET PASSWORD (employee accepts invite) ────────────────────────────────
     async setPasswordFromInvite(token, password) {

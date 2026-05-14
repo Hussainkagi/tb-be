@@ -52,7 +52,14 @@ const Employee = {
 
     async findById(id) {
         const result = await db.query(
-            `SELECT * FROM employees WHERE id = $1 AND deleted_at IS NULL`,
+            `SELECT 
+            e.*,
+            s.shift_name AS shift_name,
+            d.department_name AS department_name
+         FROM employees e
+         LEFT JOIN shifts s ON e.shift_id = s.id
+         LEFT JOIN departments d ON e.department_id = d.id
+         WHERE e.id = $1 AND e.deleted_at IS NULL`,
             [id]
         );
         return result.rows[0];
@@ -70,7 +77,14 @@ const Employee = {
 
     async findByUserId(user_id) {
         const result = await db.query(
-            `SELECT * FROM employees WHERE user_id = $1 AND deleted_at IS NULL`,
+            `SELECT 
+            e.*,
+            s.shift_name AS shift_name,
+            d.department_name AS department_name
+         FROM employees e
+         LEFT JOIN shifts s ON e.shift_id = s.id
+         LEFT JOIN departments d ON e.department_id = d.id
+         WHERE e.user_id = $1 AND e.deleted_at IS NULL`,
             [user_id]
         );
         return result.rows;
@@ -97,9 +111,15 @@ const Employee = {
 
     async getAllByBranch(company_id, branch_id) {
         const result = await db.query(
-            `SELECT * FROM employees
-             WHERE company_id = $1 AND branch_id = $2 AND deleted_at IS NULL
-             ORDER BY created_at DESC`,
+            `SELECT 
+            e.*,
+            s.shift_name AS shift_name,
+            d.department_name AS department_name
+         FROM employees e
+         LEFT JOIN shifts s ON e.shift_id = s.id
+         LEFT JOIN departments d ON e.department_id = d.id
+         WHERE e.company_id = $1 AND e.branch_id = $2 AND e.deleted_at IS NULL
+         ORDER BY e.created_at DESC`,
             [company_id, branch_id]
         );
         return result.rows;

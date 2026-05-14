@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS departments (
 
     -- Audit
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 
   
 );
@@ -45,6 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_departments_is_active
 
 -- set_updated_at() is defined in 00_functions.sql — no need to redefine here.
 
+
+DROP TRIGGER IF EXISTS trg_departments_updated_at ON departments;
+
 CREATE TRIGGER trg_departments_updated_at
     BEFORE UPDATE ON departments
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    FOR EACH ROW
+    EXECUTE FUNCTION set_updated_at();
