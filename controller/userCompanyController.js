@@ -239,6 +239,29 @@ const UserCompanyController = {
             });
         }
     },
+
+    // ── UPDATE USER COMPANY ROLE ──────────────────────────────────────────────────
+    async updateUserCompanyRole(req, res) {
+        try {
+            const result = await UserCompanyService.updateUserCompanyRole(
+                req.params.id,
+                req.body.role,
+                req.user.role
+            );
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
 };
 
 module.exports = UserCompanyController;

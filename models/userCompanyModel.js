@@ -5,7 +5,6 @@ const UserCompany = {
         const {
             user_id,
             company_id,
-            branch_id = null,
             username,
             password_hash = null,
             role = "2",
@@ -15,7 +14,7 @@ const UserCompany = {
         const result = await db.query(
             `INSERT INTO user_companies
                 (user_id, company_id, branch_id, username, password_hash, role, is_invited)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
             [user_id, company_id, branch_id, username, password_hash, role, is_invited]
         );
         return result.rows[0];
@@ -111,6 +110,14 @@ const UserCompany = {
                        WHERE id = $${paramCount} AND deleted_at IS NULL RETURNING *`;
 
         const result = await db.query(query, values);
+        return result.rows[0];
+    },
+    async updateRole(id, role) {
+        const result = await db.query(
+            `UPDATE user_companies SET role = $1
+         WHERE id = $2 AND deleted_at IS NULL RETURNING *`,
+            [role, id]
+        );
         return result.rows[0];
     },
 

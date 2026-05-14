@@ -73,4 +73,11 @@ router.patch(
     UserCompanyController.deactivateUserFromCompany
 );
 
+router.patch(
+    "/companies/users/:id/role",
+    verifyToken,
+    isAdmin,
+    UserCompanyController.updateUserCompanyRole
+);
+
 module.exports = router;
