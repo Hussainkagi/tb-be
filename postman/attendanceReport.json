@@ -1,0 +1,416 @@
+{
+  "info": {
+    "name": "Attendance Reports API",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "description": "All 5 attendance report endpoints scoped under /api/companies/:company_id/attendance-reports",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_JWT_TOKEN_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Detailed Report",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance-reports/detailed?employeeId=EMP001&startDate=2026-03-01&endDate=2026-03-31&timezone=Asia/Dubai",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance-reports",
+            "detailed"
+          ],
+          "query": [
+            {
+              "key": "employeeId",
+              "value": "EMP001",
+              "description": "Filter by employee code (optional)"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-03-01",
+              "description": "Start date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-03-31",
+              "description": "End date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "timezone",
+              "value": "Asia/Dubai",
+              "description": "IANA timezone (optional, default UTC)"
+            },
+            {
+              "key": "branchId",
+              "value": "",
+              "description": "Filter by branch UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "departmentId",
+              "value": "",
+              "description": "Filter by department UUID (optional)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Returns a per-day attendance code grid for each employee in the date range.\n\nCodes:\n- P  = Present\n- A  = Absent\n- WO = Week Off\n- H  = Holiday\n- L  = Leave\n- CO = Comp Off\n- HP = Half Present"
+      },
+      "response": [
+        {
+          "name": "200 OK — Single Employee",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"dates\": [\n        \"2026-03-01\",\n        \"2026-03-02\",\n        \"2026-03-03\",\n        \"2026-03-04\",\n        \"2026-03-05\",\n        \"2026-03-06\",\n        \"2026-03-07\",\n        \"2026-03-08\",\n        \"2026-03-09\",\n        \"2026-03-10\",\n        \"2026-03-11\",\n        \"2026-03-12\",\n        \"2026-03-13\",\n        \"2026-03-14\",\n        \"2026-03-15\",\n        \"2026-03-16\",\n        \"2026-03-17\",\n        \"2026-03-18\",\n        \"2026-03-19\",\n        \"2026-03-20\",\n        \"2026-03-21\",\n        \"2026-03-22\",\n        \"2026-03-23\",\n        \"2026-03-24\",\n        \"2026-03-25\",\n        \"2026-03-26\",\n        \"2026-03-27\",\n        \"2026-03-28\",\n        \"2026-03-29\",\n        \"2026-03-30\",\n        \"2026-03-31\"\n    ],\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"attendanceByDate\": {\n                \"2026-03-01\": { \"code\": \"WO\" },\n                \"2026-03-02\": { \"code\": \"A\" },\n                \"2026-03-03\": {\n                    \"code\": \"P\",\n                    \"checkIn\": \"2026-03-03T09:12:45\"\n                },\n                \"2026-03-04\": {\n                    \"code\": \"P\",\n                    \"checkIn\": \"2026-03-04T09:05:10\",\n                    \"checkOut\": \"2026-03-04T18:10:22\",\n                    \"workedMinutes\": 545,\n                    \"workingHours\": 9.08\n                },\n                \"2026-03-05\": {\n                    \"code\": \"P\",\n                    \"checkIn\": \"2026-03-05T09:45:00\",\n                    \"checkOut\": \"2026-03-05T18:00:00\",\n                    \"workedMinutes\": 495,\n                    \"workingHours\": 8.25\n                },\n                \"2026-03-06\": { \"code\": \"A\" },\n                \"2026-03-07\": { \"code\": \"A\" },\n                \"2026-03-08\": { \"code\": \"WO\" },\n                \"2026-03-09\": { \"code\": \"L\" },\n                \"2026-03-10\": { \"code\": \"L\" },\n                \"2026-03-11\": { \"code\": \"A\" },\n                \"2026-03-12\": {\n                    \"code\": \"P\",\n                    \"checkIn\": \"2026-03-12T08:55:00\",\n                    \"checkOut\": \"2026-03-12T17:58:00\",\n                    \"workedMinutes\": 483,\n                    \"workingHours\": 8.05\n                },\n                \"2026-03-13\": {\n                    \"code\": \"P\",\n                    \"checkIn\": \"2026-03-13T09:30:00\",\n                    \"checkOut\": \"2026-03-13T18:05:00\",\n                    \"workedMinutes\": 515,\n                    \"workingHours\": 8.58\n                },\n                \"2026-03-14\": { \"code\": \"H\" },\n                \"2026-03-15\": { \"code\": \"WO\" },\n                \"2026-03-16\": { \"code\": \"A\" },\n                \"2026-03-17\": { \"code\": \"A\" },\n                \"2026-03-18\": {\n                    \"code\": \"HP\",\n                    \"checkIn\": \"2026-03-18T09:00:00\",\n                    \"checkOut\": \"2026-03-18T13:00:00\",\n                    \"workedMinutes\": 240,\n                    \"workingHours\": 4.0\n                },\n                \"2026-03-19\": { \"code\": \"A\" },\n                \"2026-03-20\": { \"code\": \"A\" },\n                \"2026-03-21\": { \"code\": \"A\" },\n                \"2026-03-22\": { \"code\": \"WO\" },\n                \"2026-03-23\": {\n                    \"code\": \"P\",\n                    \"checkIn\": \"2026-03-23T09:02:00\",\n                    \"checkOut\": \"2026-03-23T18:00:00\",\n                    \"workedMinutes\": 478,\n                    \"workingHours\": 7.97\n                },\n                \"2026-03-24\": { \"code\": \"CO\" },\n                \"2026-03-25\": { \"code\": \"A\" },\n                \"2026-03-26\": { \"code\": \"A\" },\n                \"2026-03-27\": { \"code\": \"A\" },\n                \"2026-03-28\": { \"code\": \"A\" },\n                \"2026-03-29\": { \"code\": \"WO\" },\n                \"2026-03-30\": { \"code\": \"A\" },\n                \"2026-03-31\": { \"code\": \"A\" }\n            }\n        }\n    ]\n}"
+        },
+        {
+          "name": "400 Bad Request — Missing Dates",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"success\": false,\n    \"message\": \"startDate and endDate query parameters are required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Headcount",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance-reports/headcount?employeeId=EMP001&startDate=2026-03-01&endDate=2026-03-31&timezone=Asia/Dubai",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance-reports",
+            "headcount"
+          ],
+          "query": [
+            {
+              "key": "employeeId",
+              "value": "EMP001",
+              "description": "Filter by employee code (optional)"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-03-01",
+              "description": "Start date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-03-31",
+              "description": "End date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "timezone",
+              "value": "Asia/Dubai",
+              "description": "IANA timezone (optional, default UTC)"
+            },
+            {
+              "key": "branchId",
+              "value": "",
+              "description": "Filter by branch UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "departmentId",
+              "value": "",
+              "description": "Filter by department UUID (optional)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Returns attendance count breakdown per employee — present, absent, week-off, leave, holiday, half-present, comp-off — plus working days vs total working days."
+      },
+      "response": [
+        {
+          "name": "200 OK — Single Employee",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"present\": 6,\n            \"absent\": 13,\n            \"weekOff\": 5,\n            \"weekOffPresent\": 0,\n            \"halfPresent\": 1,\n            \"weekOffHalfPresent\": 0,\n            \"holiday\": 1,\n            \"holidayPresent\": 0,\n            \"leave\": 2,\n            \"workingDays\": 7,\n            \"totalWorkingDays\": 24,\n            \"total\": 31\n        }\n    ]\n}"
+        },
+        {
+          "name": "200 OK — Whole Branch",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"present\": 6,\n            \"absent\": 13,\n            \"weekOff\": 5,\n            \"weekOffPresent\": 0,\n            \"halfPresent\": 1,\n            \"weekOffHalfPresent\": 0,\n            \"holiday\": 1,\n            \"holidayPresent\": 0,\n            \"leave\": 2,\n            \"workingDays\": 7,\n            \"totalWorkingDays\": 24,\n            \"total\": 31\n        },\n        {\n            \"empNo\": \"EMP002\",\n            \"name\": \"Jane Smith\",\n            \"shift\": \"Morning Shift\",\n            \"present\": 20,\n            \"absent\": 3,\n            \"weekOff\": 5,\n            \"weekOffPresent\": 1,\n            \"halfPresent\": 0,\n            \"weekOffHalfPresent\": 0,\n            \"holiday\": 1,\n            \"holidayPresent\": 0,\n            \"leave\": 1,\n            \"workingDays\": 20,\n            \"totalWorkingDays\": 24,\n            \"total\": 31\n        },\n        {\n            \"empNo\": \"EMP003\",\n            \"name\": \"Ali Hassan\",\n            \"shift\": \"Night Shift\",\n            \"present\": 18,\n            \"absent\": 4,\n            \"weekOff\": 8,\n            \"weekOffPresent\": 0,\n            \"halfPresent\": 0,\n            \"weekOffHalfPresent\": 0,\n            \"holiday\": 1,\n            \"holidayPresent\": 0,\n            \"leave\": 0,\n            \"workingDays\": 18,\n            \"totalWorkingDays\": 22,\n            \"total\": 31\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Check-In / Check-Out Ratio",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance-reports/check-in-out-ratio?employeeId=EMP001&startDate=2026-03-01&endDate=2026-03-31&timezone=Asia/Dubai",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance-reports",
+            "check-in-out-ratio"
+          ],
+          "query": [
+            {
+              "key": "employeeId",
+              "value": "EMP001",
+              "description": "Filter by employee code (optional)"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-03-01",
+              "description": "Start date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-03-31",
+              "description": "End date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "timezone",
+              "value": "Asia/Dubai",
+              "description": "IANA timezone (optional, default UTC)"
+            },
+            {
+              "key": "branchId",
+              "value": "",
+              "description": "Filter by branch UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "departmentId",
+              "value": "",
+              "description": "Filter by department UUID (optional)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Returns check-in and check-out percentages per employee.\n\n- checkInEligibleDays  = total days excluding week-off, holiday, comp-off\n- checkOutEligibleDays = days where employee actually checked in\n- Percentages are rounded to 2 decimal places"
+      },
+      "response": [
+        {
+          "name": "200 OK — Single Employee",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"checkInPercentage\": 29.17,\n            \"checkInCount\": 7,\n            \"checkInEligibleDays\": 24,\n            \"checkOutPercentage\": 85.71,\n            \"checkOutCount\": 6,\n            \"checkOutEligibleDays\": 7\n        }\n    ]\n}"
+        },
+        {
+          "name": "200 OK — Whole Branch",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"checkInPercentage\": 29.17,\n            \"checkInCount\": 7,\n            \"checkInEligibleDays\": 24,\n            \"checkOutPercentage\": 85.71,\n            \"checkOutCount\": 6,\n            \"checkOutEligibleDays\": 7\n        },\n        {\n            \"empNo\": \"EMP002\",\n            \"name\": \"Jane Smith\",\n            \"shift\": \"Morning Shift\",\n            \"checkInPercentage\": 87.5,\n            \"checkInCount\": 21,\n            \"checkInEligibleDays\": 24,\n            \"checkOutPercentage\": 95.24,\n            \"checkOutCount\": 20,\n            \"checkOutEligibleDays\": 21\n        },\n        {\n            \"empNo\": \"EMP003\",\n            \"name\": \"Ali Hassan\",\n            \"shift\": \"Night Shift\",\n            \"checkInPercentage\": 81.82,\n            \"checkInCount\": 18,\n            \"checkInEligibleDays\": 22,\n            \"checkOutPercentage\": 100,\n            \"checkOutCount\": 18,\n            \"checkOutEligibleDays\": 18\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "4. Punctuality Ratio",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance-reports/punctuality-ratio?employeeId=EMP001&startDate=2026-03-01&endDate=2026-03-31&timezone=Asia/Dubai",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance-reports",
+            "punctuality-ratio"
+          ],
+          "query": [
+            {
+              "key": "employeeId",
+              "value": "EMP001",
+              "description": "Filter by employee code (optional)"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-03-01",
+              "description": "Start date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-03-31",
+              "description": "End date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "timezone",
+              "value": "Asia/Dubai",
+              "description": "IANA timezone (optional, default UTC)"
+            },
+            {
+              "key": "branchId",
+              "value": "",
+              "description": "Filter by branch UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "departmentId",
+              "value": "",
+              "description": "Filter by department UUID (optional)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Classifies each check-in against the employee's shift start time + late grace window.\n\n- earlyEntry  = checked in before shift start_time\n- onTime      = checked in within start_time + late_grace_minutes\n- late         = checked in after start_time + late_grace_minutes\n- overtime     = checked out after shift end_time (or worked > working_hours for night shifts)\n\nAll percentages are out of totalCheckIns."
+      },
+      "response": [
+        {
+          "name": "200 OK — Single Employee",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"onTimePercentage\": 42.86,\n            \"onTimeCount\": 3,\n            \"latePercentage\": 42.86,\n            \"lateCount\": 3,\n            \"earlyEntryPercentage\": 14.29,\n            \"earlyEntryCount\": 1,\n            \"overtimePercentage\": 28.57,\n            \"overtimeCount\": 2,\n            \"totalCheckIns\": 7\n        }\n    ]\n}"
+        },
+        {
+          "name": "200 OK — Whole Branch",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"onTimePercentage\": 42.86,\n            \"onTimeCount\": 3,\n            \"latePercentage\": 42.86,\n            \"lateCount\": 3,\n            \"earlyEntryPercentage\": 14.29,\n            \"earlyEntryCount\": 1,\n            \"overtimePercentage\": 28.57,\n            \"overtimeCount\": 2,\n            \"totalCheckIns\": 7\n        },\n        {\n            \"empNo\": \"EMP002\",\n            \"name\": \"Jane Smith\",\n            \"shift\": \"Morning Shift\",\n            \"onTimePercentage\": 76.19,\n            \"onTimeCount\": 16,\n            \"latePercentage\": 19.05,\n            \"lateCount\": 4,\n            \"earlyEntryPercentage\": 4.76,\n            \"earlyEntryCount\": 1,\n            \"overtimePercentage\": 33.33,\n            \"overtimeCount\": 7,\n            \"totalCheckIns\": 21\n        },\n        {\n            \"empNo\": \"EMP003\",\n            \"name\": \"Ali Hassan\",\n            \"shift\": \"Night Shift\",\n            \"onTimePercentage\": 88.89,\n            \"onTimeCount\": 16,\n            \"latePercentage\": 11.11,\n            \"lateCount\": 2,\n            \"earlyEntryPercentage\": 0,\n            \"earlyEntryCount\": 0,\n            \"overtimePercentage\": 16.67,\n            \"overtimeCount\": 3,\n            \"totalCheckIns\": 18\n        }\n    ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Working Hours",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance-reports/working-hours?employeeId=EMP001&startDate=2026-03-01&endDate=2026-03-31&timezone=Asia/Dubai",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance-reports",
+            "working-hours"
+          ],
+          "query": [
+            {
+              "key": "employeeId",
+              "value": "EMP001",
+              "description": "Filter by employee code (optional)"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-03-01",
+              "description": "Start date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-03-31",
+              "description": "End date YYYY-MM-DD (required)"
+            },
+            {
+              "key": "timezone",
+              "value": "Asia/Dubai",
+              "description": "IANA timezone (optional, default UTC)"
+            },
+            {
+              "key": "branchId",
+              "value": "",
+              "description": "Filter by branch UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "departmentId",
+              "value": "",
+              "description": "Filter by department UUID (optional)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Returns scheduled vs actually worked vs overtime minutes and hours per employee.\n\n- shiftHoursScheduled    = scheduledWorkingDays × shift.working_hours (in minutes)\n- shiftHoursCompleted    = totalWorkedMinutes − overtimeMinutes (in minutes)\n- overtimeMinutes        = minutes worked beyond shift.working_hours per day\n- All *Hrs fields are the same values converted to hours (2 decimal places)"
+      },
+      "response": [
+        {
+          "name": "200 OK — Single Employee",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"shiftHoursPercentage\": 26.25,\n            \"shiftHoursCompleted\": 2513,\n            \"shiftHoursCompletedHrs\": 41.88,\n            \"shiftHoursScheduled\": 9570,\n            \"shiftHoursScheduledHrs\": 159.5,\n            \"overtimePercentage\": 2.19,\n            \"overtimeMinutes\": 210,\n            \"overtimeHrs\": 3.5,\n            \"totalWorkedMinutes\": 2723,\n            \"totalWorkedHrs\": 45.38\n        }\n    ]\n}"
+        },
+        {
+          "name": "200 OK — Whole Branch",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"employees\": [\n        {\n            \"empNo\": \"EMP001\",\n            \"name\": \"John Doe\",\n            \"shift\": \"Morning Shift\",\n            \"shiftHoursPercentage\": 26.25,\n            \"shiftHoursCompleted\": 2513,\n            \"shiftHoursCompletedHrs\": 41.88,\n            \"shiftHoursScheduled\": 9570,\n            \"shiftHoursScheduledHrs\": 159.5,\n            \"overtimePercentage\": 2.19,\n            \"overtimeMinutes\": 210,\n            \"overtimeHrs\": 3.5,\n            \"totalWorkedMinutes\": 2723,\n            \"totalWorkedHrs\": 45.38\n        },\n        {\n            \"empNo\": \"EMP002\",\n            \"name\": \"Jane Smith\",\n            \"shift\": \"Morning Shift\",\n            \"shiftHoursPercentage\": 89.47,\n            \"shiftHoursCompleted\": 8561,\n            \"shiftHoursCompletedHrs\": 142.68,\n            \"shiftHoursScheduled\": 9570,\n            \"shiftHoursScheduledHrs\": 159.5,\n            \"overtimePercentage\": 4.39,\n            \"overtimeMinutes\": 420,\n            \"overtimeHrs\": 7.0,\n            \"totalWorkedMinutes\": 8981,\n            \"totalWorkedHrs\": 149.68\n        },\n        {\n            \"empNo\": \"EMP003\",\n            \"name\": \"Ali Hassan\",\n            \"shift\": \"Night Shift\",\n            \"shiftHoursPercentage\": 95.45,\n            \"shiftHoursCompleted\": 8378,\n            \"shiftHoursCompletedHrs\": 139.63,\n            \"shiftHoursScheduled\": 8778,\n            \"shiftHoursScheduledHrs\": 146.3,\n            \"overtimePercentage\": 1.14,\n            \"overtimeMinutes\": 100,\n            \"overtimeHrs\": 1.67,\n            \"totalWorkedMinutes\": 8478,\n            \"totalWorkedHrs\": 141.3\n        }\n    ]\n}"
+        },
+        {
+          "name": "400 Bad Request — Invalid Date Format",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"success\": false,\n    \"message\": \"startDate and endDate must be in YYYY-MM-DD format\"\n}"
+        },
+        {
+          "name": "500 Internal Server Error",
+          "status": "Internal Server Error",
+          "code": 500,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n    \"success\": false,\n    \"message\": \"Server error\",\n    \"error\": \"relation \\\"attendance\\\" does not exist\"\n}"
+        }
+      ]
+    }
+  ]
+}

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS employees (
     -- Relations
     company_id              UUID            NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     branch_id               UUID            REFERENCES branches(id) ON DELETE RESTRICT,
-    user_id                 UUID            NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+    user_id                 UUID            REFERENCES users(id) ON DELETE SET NULL,
     shift_id                UUID            REFERENCES shifts(id) ON DELETE SET NULL,
     department_id           UUID            REFERENCES departments(id) ON DELETE SET NULL,
     manager_id              UUID            REFERENCES employees(id) ON DELETE SET NULL,
@@ -51,7 +51,12 @@ CREATE TABLE IF NOT EXISTS employees (
     updated_at              TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     -- employee_code unique within a company
-    CONSTRAINT uq_employee_code_company UNIQUE (company_id, employee_code)
+    CONSTRAINT uq_employee_code_company UNIQUE (company_id, employee_code),
+
+
+    -- one user can only have one employee profile per company
+    CONSTRAINT uq_employee_user_company
+    UNIQUE (company_id, user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_employees_company_id
@@ -82,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_employees_status
     ON employees(company_id, status)
     WHERE deleted_at IS NULL;
 
+DROP TRIGGER IF EXISTS trg_employees_updated_at ON employees;
 CREATE TRIGGER trg_employees_updated_at
     BEFORE UPDATE ON employees
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

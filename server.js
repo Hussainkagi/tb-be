@@ -87,6 +87,12 @@ app.use("/api/companies/:company_id/employees", EmployeeRoutes);
 const EmployeeDocumentRoutes = require("./routes/employeeDocumentRoute");
 app.use("/api/companies/:company_id/employees/:employee_id/documents", EmployeeDocumentRoutes);
 
+const attendanceRoutes = require("./routes/attendanceRoute");
+app.use("/api/companies/:company_id/attendance", attendanceRoutes);
+
+const attendanceReportRoutes = require("./routes/attendanceReportRoute");
+app.use("/api/companies/:company_id/attendance-reports", attendanceReportRoutes);
+
 
 // 404 handler
 app.use("*", (req, res) => {

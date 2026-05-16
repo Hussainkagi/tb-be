@@ -1,0 +1,485 @@
+{
+  "info": {
+    "name": "HRMS - Attendance Module",
+    "_postman_id": "hrms-attendance-collection",
+    "description": "Attendance API for HRMS — check-in, check-out, records, summary, and map endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_JWT_TOKEN_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Check In",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/check-in",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance",
+            "check-in"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 25.204848,\n  \"longitude\": 55.270128,\n  \"address\": \"Dubai Silicon Oasis, Dubai, UAE\",\n  \"selfie_path\": \"uploads/selfies/emp_001/checkin_2026-05-16.jpg\",\n  \"selfie_url\": \"https://cdn.example.com/selfies/emp_001/checkin_2026-05-16.jpg\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Employee checks in for the day. Validates geofence against branch location and calculates attendance status based on shift timing."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Checked in successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"attendance_date\": \"2026-05-16\",\n    \"check_in\": \"09:02:34 AM\",\n    \"attendance_status\": \"on-time\",\n    \"status\": \"checked-in\"\n  }\n}"
+        },
+        {
+          "name": "400 - Already Checked In",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"You have already checked in today\"\n}"
+        },
+        {
+          "name": "400 - Outside Radius",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"You are outside the allowed radius. Your distance: 320m, Allowed: 100m\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Check Out",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/check-out",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance",
+            "check-out"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 25.204848,\n  \"longitude\": 55.270128,\n  \"address\": \"Dubai Silicon Oasis, Dubai, UAE\",\n  \"selfie_path\": \"uploads/selfies/emp_001/checkout_2026-05-16.jpg\",\n  \"selfie_url\": \"https://cdn.example.com/selfies/emp_001/checkout_2026-05-16.jpg\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Employee checks out for the day. Validates geofence and calculates total hours worked."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Checked out successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"attendance_date\": \"2026-05-16\",\n    \"check_in\": \"09:02:34 AM\",\n    \"check_out\": \"06:05:11 PM\",\n    \"total_hours\": 9.04,\n    \"status\": \"checked-out\"\n  }\n}"
+        },
+        {
+          "name": "400 - Not Checked In",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"You must check in before checking out\"\n}"
+        },
+        {
+          "name": "400 - Already Checked Out",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"You have already checked out today\"\n}"
+        },
+        {
+          "name": "400 - Outside Radius",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"You are outside the allowed radius. Your distance: 210m, Allowed: 100m\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get All Attendance by Company",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance?startDate=2026-05-01&endDate=2026-05-16",
+          "host": ["{{base_url}}"],
+          "path": ["api", "companies", "{{company_id}}", "attendance"],
+          "query": [
+            { "key": "startDate", "value": "2026-05-01" },
+            { "key": "endDate", "value": "2026-05-16" }
+          ]
+        },
+        "description": "Returns all attendance records for the company. Supports optional date range filtering."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"company_id\": \"c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1\",\n      \"branch_id\": \"b1b1b1b1-b1b1-b1b1-b1b1-b1b1b1b1b1b1\",\n      \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"employee_code\": \"EMP001\",\n      \"email\": \"john.doe@example.com\",\n      \"department_name\": \"Engineering\",\n      \"shift_name\": \"Morning Shift\",\n      \"attendance_date\": \"2026-05-16\",\n      \"check_in\": \"2026-05-16T05:02:34.000Z\",\n      \"check_out\": \"2026-05-16T14:05:11.000Z\",\n      \"total_hours\": 9.04,\n      \"attendance_status\": \"on-time\",\n      \"status\": \"checked-out\",\n      \"remarks\": null\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Attendance by Employee",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/employee/:employee_id?startDate=2026-05-01&endDate=2026-05-16",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance",
+            "employee",
+            ":employee_id"
+          ],
+          "variable": [
+            {
+              "key": "employee_id",
+              "value": "e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1"
+            }
+          ],
+          "query": [
+            { "key": "startDate", "value": "2026-05-01" },
+            { "key": "endDate", "value": "2026-05-16" }
+          ]
+        },
+        "description": "Returns attendance records for a specific employee with optional date range filter."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n      \"attendance_date\": \"2026-05-16\",\n      \"check_in\": \"2026-05-16T05:02:34.000Z\",\n      \"check_out\": \"2026-05-16T14:05:11.000Z\",\n      \"total_hours\": 9.04,\n      \"attendance_status\": \"on-time\",\n      \"status\": \"checked-out\"\n    },\n    {\n      \"id\": \"a2b3c4d5-e6f7-8901-bcde-f12345678901\",\n      \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n      \"attendance_date\": \"2026-05-15\",\n      \"check_in\": null,\n      \"check_out\": null,\n      \"total_hours\": null,\n      \"attendance_status\": null,\n      \"status\": \"absent\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Attendance by Branch",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/branch/:branch_id?startDate=2026-05-01&endDate=2026-05-16",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance",
+            "branch",
+            ":branch_id"
+          ],
+          "variable": [
+            {
+              "key": "branch_id",
+              "value": "b1b1b1b1-b1b1-b1b1-b1b1-b1b1b1b1b1b1"
+            }
+          ],
+          "query": [
+            { "key": "startDate", "value": "2026-05-01" },
+            { "key": "endDate", "value": "2026-05-16" }
+          ]
+        },
+        "description": "Returns attendance records for all employees in a specific branch."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"branch_id\": \"b1b1b1b1-b1b1-b1b1-b1b1-b1b1b1b1b1b1\",\n      \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"employee_code\": \"EMP001\",\n      \"attendance_date\": \"2026-05-16\",\n      \"check_in\": \"2026-05-16T05:02:34.000Z\",\n      \"check_out\": \"2026-05-16T14:05:11.000Z\",\n      \"total_hours\": 9.04,\n      \"attendance_status\": \"late\",\n      \"status\": \"checked-out\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Attendance Summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/summary?startDate=2026-05-01&endDate=2026-05-16",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "attendance",
+            "summary"
+          ],
+          "query": [
+            { "key": "startDate", "value": "2026-05-01" },
+            { "key": "endDate", "value": "2026-05-16" }
+          ]
+        },
+        "description": "Returns aggregated attendance statistics for the company over a date range."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"total\": 48,\n    \"present\": 38,\n    \"absent\": 4,\n    \"late\": 5,\n    \"on_time\": 30,\n    \"before_time\": 3,\n    \"comp_off\": 2,\n    \"week_off\": 2,\n    \"leave\": 1,\n    \"holiday\": 1,\n    \"total_hours\": 342.5,\n    \"average_hours\": 9.01\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Check-In Locations (Map)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/map?startDate=2026-05-16&endDate=2026-05-16",
+          "host": ["{{base_url}}"],
+          "path": ["api", "companies", "{{company_id}}", "attendance", "map"],
+          "query": [
+            { "key": "startDate", "value": "2026-05-16" },
+            { "key": "endDate", "value": "2026-05-16" }
+          ]
+        },
+        "description": "Returns check-in coordinates with employee info for map visualization. Only records with valid coordinates are returned."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n      \"first_name\": \"John\",\n      \"last_name\": \"Doe\",\n      \"employee_code\": \"EMP001\",\n      \"attendance_date\": \"2026-05-16\",\n      \"check_in\": \"2026-05-16T05:02:34.000Z\",\n      \"check_in_latitude\": 25.20484,\n      \"check_in_longitude\": 55.27013,\n      \"check_in_address\": \"Dubai Silicon Oasis, Dubai, UAE\",\n      \"status\": \"checked-out\"\n    },\n    {\n      \"id\": \"a2b3c4d5-e6f7-8901-bcde-f12345678901\",\n      \"employee_id\": \"e2e2e2e2-e2e2-e2e2-e2e2-e2e2e2e2e2e2\",\n      \"first_name\": \"Sara\",\n      \"last_name\": \"Ali\",\n      \"employee_code\": \"EMP002\",\n      \"attendance_date\": \"2026-05-16\",\n      \"check_in\": \"2026-05-16T04:58:10.000Z\",\n      \"check_in_latitude\": 25.20491,\n      \"check_in_longitude\": 55.27021,\n      \"check_in_address\": \"Dubai Silicon Oasis, Dubai, UAE\",\n      \"status\": \"checked-in\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Attendance by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/:id",
+          "host": ["{{base_url}}"],
+          "path": ["api", "companies", "{{company_id}}", "attendance", ":id"],
+          "variable": [
+            { "key": "id", "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" }
+          ]
+        },
+        "description": "Returns a single attendance record by ID with joined employee, department, shift, and branch info."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"company_id\": \"c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1\",\n    \"branch_id\": \"b1b1b1b1-b1b1-b1b1-b1b1-b1b1b1b1b1b1\",\n    \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"employee_code\": \"EMP001\",\n    \"email\": \"john.doe@example.com\",\n    \"department_name\": \"Engineering\",\n    \"shift_name\": \"Morning Shift\",\n    \"branch_name\": \"Dubai HQ\",\n    \"attendance_date\": \"2026-05-16\",\n    \"check_in\": \"2026-05-16T05:02:34.000Z\",\n    \"check_out\": \"2026-05-16T14:05:11.000Z\",\n    \"total_hours\": 9.04,\n    \"attendance_status\": \"on-time\",\n    \"status\": \"checked-out\",\n    \"remarks\": null\n  }\n}"
+        },
+        {
+          "name": "404 - Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Attendance record not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Update Attendance (Admin Override)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/:id",
+          "host": ["{{base_url}}"],
+          "path": ["api", "companies", "{{company_id}}", "attendance", ":id"],
+          "variable": [
+            { "key": "id", "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"leave\",\n  \"attendance_status\": \"on-time\",\n  \"remarks\": \"Employee submitted leave application retroactively\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Admin manually updates an attendance record. Fields company_id, employee_id, and attendance_date are immutable."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Attendance record updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"status\": \"leave\",\n    \"attendance_status\": \"on-time\",\n    \"remarks\": \"Employee submitted leave application retroactively\",\n    \"updated_at\": \"2026-05-16T16:30:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "400 - Invalid Status",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: checked-in, checked-out, absent, leave, holiday, week-off, comp-off\"\n}"
+        },
+        {
+          "name": "404 - Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Attendance record not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Delete Attendance",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/attendance/:id",
+          "host": ["{{base_url}}"],
+          "path": ["api", "companies", "{{company_id}}", "attendance", ":id"],
+          "variable": [
+            { "key": "id", "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" }
+          ]
+        },
+        "description": "Permanently deletes an attendance record. Admin only. No soft delete."
+      },
+      "response": [
+        {
+          "name": "200 - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Attendance record deleted successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"employee_id\": \"e1e1e1e1-e1e1-e1e1-e1e1-e1e1e1e1e1e1\",\n    \"attendance_date\": \"2026-05-16\"\n  }\n}"
+        },
+        {
+          "name": "404 - Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Attendance record not found\"\n}"
+        }
+      ]
+    }
+  ]
+}

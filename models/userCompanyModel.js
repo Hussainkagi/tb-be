@@ -13,9 +13,9 @@ const UserCompany = {
 
         const result = await db.query(
             `INSERT INTO user_companies
-                (user_id, company_id, branch_id, username, password_hash, role, is_invited)
+                (user_id, company_id, username, password_hash, role, is_invited)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [user_id, company_id, branch_id, username, password_hash, role, is_invited]
+            [user_id, company_id, username, password_hash, role, is_invited]
         );
         return result.rows[0];
     },
