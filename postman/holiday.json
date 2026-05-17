@@ -1,0 +1,545 @@
+{
+  "info": {
+    "name": "HRMS — Holiday Module",
+    "description": "All Holiday APIs. Set collection variables: base_url, token, company_id, branch_id, holiday_id.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000" },
+    { "key": "token", "value": "your_jwt_token_here" },
+    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
+    { "key": "branch_id", "value": "b1b2c3d4-0000-0000-0000-000000000002" },
+    { "key": "holiday_id", "value": "h1b2c3d4-0000-0000-0000-000000000003" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "1. Company-Wide Holidays",
+      "item": [
+        {
+          "name": "Create Holiday (company-wide)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "holidays"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holiday_name\": \"National Day\",\n  \"holiday_type\": \"national\",\n  \"holiday_start_date\": \"2025-12-02\",\n  \"holiday_end_date\": \"2025-12-02\",\n  \"is_company_wide\": true,\n  \"description\": \"UAE National Day — all branches closed\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Holiday created successfully\",\n  \"data\": {\n    \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": null,\n    \"holiday_name\": \"National Day\",\n    \"holiday_type\": \"national\",\n    \"holiday_start_date\": \"2025-12-02\",\n    \"holiday_end_date\": \"2025-12-02\",\n    \"is_company_wide\": true,\n    \"description\": \"UAE National Day — all branches closed\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-11-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-11-01T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 End date before start date",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"holiday_end_date cannot be before holiday_start_date\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Holiday (branch-specific)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "holidays"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holiday_name\": \"Dubai Branch Foundation Day\",\n  \"holiday_type\": \"regional\",\n  \"holiday_start_date\": \"2025-10-15\",\n  \"holiday_end_date\": \"2025-10-15\",\n  \"is_company_wide\": false,\n  \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n  \"description\": \"Dubai branch only\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Holiday created successfully\",\n  \"data\": {\n    \"id\": \"h9b2c3d4-0000-0000-0000-000000000009\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"holiday_name\": \"Dubai Branch Foundation Day\",\n    \"holiday_type\": \"regional\",\n    \"holiday_start_date\": \"2025-10-15\",\n    \"holiday_end_date\": \"2025-10-15\",\n    \"is_company_wide\": false,\n    \"description\": \"Dubai branch only\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-09-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-09-01T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Missing branch_id",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"branch_id is required when is_company_wide is false\"\n}"
+            },
+            {
+              "name": "400 Branch not in company",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch does not belong to this company\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get All Holidays (Company)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "holidays"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": null,\n      \"holiday_name\": \"National Day\",\n      \"holiday_type\": \"national\",\n      \"holiday_start_date\": \"2025-12-02\",\n      \"holiday_end_date\": \"2025-12-02\",\n      \"is_company_wide\": true,\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-11-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-11-01T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"h9b2c3d4-0000-0000-0000-000000000009\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n      \"holiday_name\": \"Dubai Branch Foundation Day\",\n      \"holiday_type\": \"regional\",\n      \"holiday_start_date\": \"2025-10-15\",\n      \"holiday_end_date\": \"2025-10-15\",\n      \"is_company_wide\": false,\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-09-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-09-01T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Company-Wide Holidays Only",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/company-wide",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "company-wide"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": null,\n      \"holiday_name\": \"National Day\",\n      \"holiday_type\": \"national\",\n      \"holiday_start_date\": \"2025-12-02\",\n      \"holiday_end_date\": \"2025-12-02\",\n      \"is_company_wide\": true,\n      \"description\": \"UAE National Day — all branches closed\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-11-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-11-01T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Holiday By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/{{holiday_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "{{holiday_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": null,\n    \"holiday_name\": \"National Day\",\n    \"holiday_type\": \"national\",\n    \"holiday_start_date\": \"2025-12-02\",\n    \"holiday_end_date\": \"2025-12-02\",\n    \"is_company_wide\": true,\n    \"description\": \"UAE National Day — all branches closed\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-11-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-11-01T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Holiday not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Holiday",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/{{holiday_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "{{holiday_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holiday_name\": \"UAE National Day\",\n  \"description\": \"Updated description\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 Updated",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Holiday updated successfully\",\n  \"data\": {\n    \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": null,\n    \"holiday_name\": \"UAE National Day\",\n    \"holiday_type\": \"national\",\n    \"holiday_start_date\": \"2025-12-02\",\n    \"holiday_end_date\": \"2025-12-02\",\n    \"is_company_wide\": true,\n    \"description\": \"Updated description\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-11-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-11-10T10:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Scope change blocked",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot change is_company_wide or branch_id via update. Delete and recreate the holiday instead.\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Holiday not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Activate Holiday",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/{{holiday_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "{{holiday_id}}",
+                "activate"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Activated",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Holiday activated successfully\",\n  \"data\": {\n    \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n    \"holiday_name\": \"National Day\",\n    \"is_active\": true,\n    \"updated_at\": \"2025-11-12T09:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Holiday not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Holiday",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/{{holiday_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "{{holiday_id}}",
+                "deactivate"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Deactivated",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Holiday deactivated successfully\",\n  \"data\": {\n    \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n    \"holiday_name\": \"National Day\",\n    \"is_active\": false,\n    \"updated_at\": \"2025-11-12T09:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Holiday not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Holiday",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/{{holiday_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "{{holiday_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Deleted",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Holiday deleted successfully\",\n  \"data\": {\n    \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n    \"holiday_name\": \"National Day\",\n    \"deleted_at\": \"2025-11-15T12:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Holiday not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Branch-Scoped Holidays",
+      "item": [
+        {
+          "name": "Get All Holidays for Branch (merged)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/branch/{{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "branch",
+                "{{branch_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success — company-wide + branch merged",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n      \"branch_id\": null,\n      \"holiday_name\": \"National Day\",\n      \"holiday_type\": \"national\",\n      \"holiday_start_date\": \"2025-12-02\",\n      \"holiday_end_date\": \"2025-12-02\",\n      \"is_company_wide\": true,\n      \"is_active\": true\n    },\n    {\n      \"id\": \"h9b2c3d4-0000-0000-0000-000000000009\",\n      \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n      \"holiday_name\": \"Dubai Branch Foundation Day\",\n      \"holiday_type\": \"regional\",\n      \"holiday_start_date\": \"2025-10-15\",\n      \"holiday_end_date\": \"2025-10-15\",\n      \"is_company_wide\": false,\n      \"is_active\": true\n    }\n  ]\n}"
+            },
+            {
+              "name": "404 Branch Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Branch-Specific Holidays Only",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/branch/{{branch_id}}/branch-only",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "branch",
+                "{{branch_id}}",
+                "branch-only"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"h9b2c3d4-0000-0000-0000-000000000009\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n      \"holiday_name\": \"Dubai Branch Foundation Day\",\n      \"holiday_type\": \"regional\",\n      \"holiday_start_date\": \"2025-10-15\",\n      \"holiday_end_date\": \"2025-10-15\",\n      \"is_company_wide\": false,\n      \"description\": \"Dubai branch only\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-09-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-09-01T08:00:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "404 Branch Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Branch not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Attendance & Payroll Helpers",
+      "item": [
+        {
+          "name": "Check If Date Is Holiday",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/branch/{{branch_id}}/check?date=2025-12-02",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "branch",
+                "{{branch_id}}",
+                "check"
+              ],
+              "query": [{ "key": "date", "value": "2025-12-02" }]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — Is a holiday",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"is_holiday\": true,\n    \"date\": \"2025-12-02\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\"\n  }\n}"
+            },
+            {
+              "name": "200 — Not a holiday",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"is_holiday\": false,\n    \"date\": \"2025-12-03\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\"\n  }\n}"
+            },
+            {
+              "name": "400 Missing date param",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Query param 'date' is required (YYYY-MM-DD)\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Holidays By Date Range",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/holidays/branch/{{branch_id}}/range?from=2025-12-01&to=2025-12-31",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "holidays",
+                "branch",
+                "{{branch_id}}",
+                "range"
+              ],
+              "query": [
+                { "key": "from", "value": "2025-12-01" },
+                { "key": "to", "value": "2025-12-31" }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"h1b2c3d4-0000-0000-0000-000000000003\",\n      \"branch_id\": null,\n      \"holiday_name\": \"National Day\",\n      \"holiday_type\": \"national\",\n      \"holiday_start_date\": \"2025-12-02\",\n      \"holiday_end_date\": \"2025-12-02\",\n      \"is_company_wide\": true,\n      \"is_active\": true\n    },\n    {\n      \"id\": \"h3b2c3d4-0000-0000-0000-000000000010\",\n      \"branch_id\": null,\n      \"holiday_name\": \"Christmas Day\",\n      \"holiday_type\": \"public\",\n      \"holiday_start_date\": \"2025-12-25\",\n      \"holiday_end_date\": \"2025-12-25\",\n      \"is_company_wide\": true,\n      \"is_active\": true\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 Missing query params",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Query params 'from' and 'to' are required (YYYY-MM-DD)\"\n}"
+            },
+            {
+              "name": "400 to before from",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"to_date cannot be before from_date\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

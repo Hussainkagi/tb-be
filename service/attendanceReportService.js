@@ -1,3 +1,4 @@
+
 const db = require("../config/database");
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,7 @@ async function fetchEmployeesAndAttendance(filters) {
     const { companyId, employeeId, branchId, departmentId, startDate, endDate } = filters;
 
     // ── 1. Build employee query ──────────────────────────────────────────────
+    // employeeId is the employee UUID (e.id), not employee_code
     const empConditions = [
         "e.company_id = $1",
         "e.deleted_at IS NULL",
@@ -135,10 +137,9 @@ async function fetchEmployeesAndAttendance(filters) {
     let p = 2;
 
     if (employeeId) {
-        empConditions.push(`e.employee_code = $${p++}`);
+        empConditions.push(`e.id = $${p++}`);
         empValues.push(employeeId);
     }
-    console.log('********', empValues)
     if (branchId) {
         empConditions.push(`e.branch_id = $${p++}`);
         empValues.push(branchId);
@@ -583,6 +584,49 @@ const AttendanceReportService = {
             });
 
             return { success: true, data: { employees: employeeReports } };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    // -----------------------------------------------------------------------
+    // API 6 — Casual (Raw Attendance Entries)
+    // Returns all attendance entries between specific dates with all fields
+    // Filters: companyId (required), employeeId, branchId, departmentId, startDate, endDate
+    // -----------------------------------------------------------------------
+    async getCasualReport(filters) {
+        try {
+            const { companyId, employeeId, branchId, departmentId, startDate, endDate } = filters;
+            if (!companyId || !startDate || !endDate) {
+                return { success: false, message: "companyId, startDate, and endDate are required" };
+            }
+
+            const conditions = ["a.company_id = $1", "a.attendance_date BETWEEN $2 AND $3"];
+            const values = [companyId, startDate, endDate];
+            let p = 4;
+            if (employeeId) {
+                conditions.push(`a.employee_id = $${p++}`);
+                values.push(employeeId);
+            }
+            if (branchId) {
+                conditions.push(`a.branch_id = $${p++}`);
+                values.push(branchId);
+            }
+            if (departmentId) {
+                conditions.push(`e.department_id = $${p++}`);
+                values.push(departmentId);
+            }
+
+            // Join with employees for department filter and employee info
+            const query = `
+                SELECT a.*, e.employee_code, e.first_name, e.last_name, e.department_id, e.branch_id
+                FROM attendance a
+                JOIN employees e ON a.employee_id = e.id
+                WHERE ${conditions.join(" AND ")}
+                ORDER BY a.attendance_date, e.employee_code
+            `;
+            const result = await db.query(query, values);
+            return { success: true, data: result.rows };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

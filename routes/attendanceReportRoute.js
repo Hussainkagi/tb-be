@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router({ mergeParams: true });
 
@@ -52,6 +53,15 @@ router.get(
     validateTenant,
     isManager,
     AttendanceReportController.getWorkingHours,
+);
+
+// GET /api/companies/:company_id/attendance-reports/casual?employeeId=&startDate=&endDate=&branchId=&departmentId=
+router.get(
+    "/casual",
+    verifyToken,
+    validateTenant,
+    isManager,
+    AttendanceReportController.getCasualReport,
 );
 
 module.exports = router;

@@ -176,6 +176,33 @@ const AttendanceReportController = {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }
     },
+    /**
+     * GET /api/companies/:company_id/attendance-reports/casual
+     * Query: employeeId, startDate, endDate, branchId, departmentId
+     */
+    async getCasualReport(req, res) {
+        try {
+            const { startDate, endDate, employeeId, branchId, departmentId } = req.query;
+            const err = validateDateRange(startDate, endDate);
+            if (err) return res.status(400).json({ success: false, message: err });
+
+            const result = await AttendanceReportService.getCasualReport({
+                companyId: req.params.company_id,
+                employeeId: employeeId || null,
+                branchId: branchId || null,
+                departmentId: departmentId || null,
+                startDate,
+                endDate,
+            });
+
+            if (!result.success) {
+                return res.status(400).json({ success: false, message: result.message });
+            }
+            return res.status(200).json(result.data);
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
 };
 
 module.exports = AttendanceReportController;
