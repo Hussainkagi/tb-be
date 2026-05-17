@@ -8,7 +8,7 @@ const HolidayService = {
 
     async createHoliday(data) {
         try {
-            const { company_id, branch_id, is_company_wide = false } = data;
+            const { company_id, branch_id, is_company_wide = false, holiday_start_date, holiday_end_date } = data;
 
             // If branch-scoped, verify branch exists and belongs to this company
             if (!is_company_wide) {
@@ -36,11 +36,52 @@ const HolidayService = {
             }
 
             // Validate date range
-            if (new Date(data.holiday_end_date) < new Date(data.holiday_start_date)) {
+            if (new Date(holiday_end_date) < new Date(holiday_start_date)) {
                 return {
                     success: false,
                     message: "holiday_end_date cannot be before holiday_start_date",
                 };
+            }
+
+            // Check for overlapping holidays
+            // 1. If creating company-wide, block if any holiday exists on these dates (company-wide or any branch)
+            // 2. If creating branch-specific, block if company-wide exists on these dates
+            // 3. If creating branch-specific, allow if only other branches have holidays on these dates
+
+            // Helper: get all holidays overlapping the requested range
+            const overlappingHolidays = await HolidayModel.getByDateRange(
+                company_id,
+                null, // null branch_id to get all (company-wide + all branches)
+                holiday_start_date,
+                holiday_end_date
+            );
+
+            if (is_company_wide) {
+                // Block if any holiday exists on these dates
+                if (overlappingHolidays && overlappingHolidays.length > 0) {
+                    return {
+                        success: false,
+                        message: "Cannot create company-wide holiday: a holiday already exists on these dates (company-wide or branch-specific)",
+                    };
+                }
+            } else {
+                // Check for company-wide holidays in the overlap
+                const companyWideConflict = overlappingHolidays && overlappingHolidays.some(h => h.is_company_wide);
+                if (companyWideConflict) {
+                    return {
+                        success: false,
+                        message: "Cannot create branch-specific holiday: a company-wide holiday already exists on these dates.",
+                    };
+                }
+                // Check for same-branch conflict
+                const sameBranchConflict = overlappingHolidays && overlappingHolidays.some(h => h.branch_id === branch_id && !h.is_company_wide);
+                if (sameBranchConflict) {
+                    return {
+                        success: false,
+                        message: "Cannot create branch-specific holiday: a holiday for this branch already exists on these dates.",
+                    };
+                }
+                // If only other branches have holidays, allow
             }
 
             const result = await HolidayModel.create({
