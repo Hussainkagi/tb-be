@@ -77,20 +77,34 @@ const EmployeeService = {
         }
     },
 
-    async updateEmployeeStatus(id, status) {
+    async updateEmployee(id, data) {
         try {
-            const VALID_STATUSES = ["active", "inactive", "terminated", "on_leave"];
-            if (!VALID_STATUSES.includes(status)) {
-                return { success: false, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` };
+            // Prevent these from being changed via a generic update
+            delete data.company_id;
+            delete data.user_id;
+            delete data.employee_code;
+            delete data.gross_salary;
+
+
+            if (data.branch_id) {
+                const employee = await EmployeeModel.findById(id);
+                if (!employee) {
+                    return { success: false, message: "Employee not found" };
+                }
+
+                const branch = await BranchModel.findById(data.branch_id);
+                if (!branch || branch.company_id !== employee.company_id) {
+                    return { success: false, message: "Branch not found or does not belong to this company" };
+                }
             }
 
-            const result = await EmployeeModel.updateStatus(id, status);
+            const result = await EmployeeModel.update(id, data);
             if (!result) {
                 return { success: false, message: "Employee not found" };
             }
             return {
                 success: true,
-                message: `Employee status updated to '${status}'`,
+                message: "Employee updated successfully",
                 data: result,
             };
         } catch (error) {

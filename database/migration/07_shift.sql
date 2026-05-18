@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS shifts (
     working_hours       NUMERIC(5,2)    NOT NULL DEFAULT 8.00,             -- expected full-day working hours
     is_night_shift      BOOLEAN         NOT NULL DEFAULT FALSE,             -- TRUE when shift crosses midnight
 
+    -- Weekdays (attendance required)
+    monday              BOOLEAN         NOT NULL DEFAULT TRUE,
+    tuesday             BOOLEAN         NOT NULL DEFAULT TRUE,
+    wednesday           BOOLEAN         NOT NULL DEFAULT TRUE,
+    thursday            BOOLEAN         NOT NULL DEFAULT TRUE,
+    friday              BOOLEAN         NOT NULL DEFAULT TRUE,
+    saturday            BOOLEAN         NOT NULL DEFAULT FALSE,
+    sunday              BOOLEAN         NOT NULL DEFAULT FALSE,
+
     -- State
     is_active           BOOLEAN         NOT NULL DEFAULT TRUE,
     deleted_at          TIMESTAMP,                                          -- soft delete
@@ -69,6 +78,6 @@ CREATE INDEX IF NOT EXISTS idx_shifts_is_active
 
 -- set_updated_at() is defined in 00_functions.sql — no need to redefine here.
 
-CREATE TRIGGER trg_shifts_updated_at
+CREATE OR REPLACE TRIGGER trg_shifts_updated_at
     BEFORE UPDATE ON shifts
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

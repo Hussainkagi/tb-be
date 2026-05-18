@@ -161,7 +161,18 @@ const AttendanceService = {
 
             const timezone = shift.timezone ?? "UTC";
 
-            // 4. Geofence check
+
+            // 4. Check if today is a company off day (shift weekday is false)
+            const now = new Date();
+            const weekday = now.toLocaleString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
+            if (shift[weekday] === false) {
+                return {
+                    success: false,
+                    message: `Today is a company off day (${weekday.charAt(0).toUpperCase() + weekday.slice(1)}). Check-in is not allowed.`
+                };
+            }
+
+            // 5. Geofence check
             if (branch.latitude == null || branch.longitude == null) {
                 return { success: false, message: "Branch location is not configured" };
             }
@@ -293,7 +304,18 @@ const AttendanceService = {
 
             const timezone = shift.timezone ?? "UTC";
 
-            // 4. Geofence check
+
+            // 4. Check if today is a company off day (shift weekday is false)
+            const now = new Date();
+            const weekday = now.toLocaleString("en-US", { weekday: "long", timeZone: timezone }).toLowerCase();
+            if (shift[weekday] === false) {
+                return {
+                    success: false,
+                    message: `Today is a company off day (${weekday.charAt(0).toUpperCase() + weekday.slice(1)}). Check-out is not allowed.`
+                };
+            }
+
+            // 5. Geofence check
             if (branch.latitude == null || branch.longitude == null) {
                 return { success: false, message: "Branch location is not configured" };
             }

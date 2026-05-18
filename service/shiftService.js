@@ -15,7 +15,7 @@ const ShiftService = {
 
             // 2. Verify branch exists and belongs to the company
             const branch = await BranchModel.findById(branch_id);
-            if (!branch || branch.company_id !== company_id) {
+            if (!branch || branch.company_id !== company_id || !branch.is_active) {
                 return { success: false, message: "Branch not found or does not belong to this company" };
             }
 

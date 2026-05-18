@@ -12,18 +12,27 @@ const Shift = {
             half_day_hours = 0.00,
             working_hours = 8.00,
             is_night_shift = false,
+            monday = true,
+            tuesday = true,
+            wednesday = true,
+            thursday = true,
+            friday = true,
+            saturday = false,
+            sunday = false,
         } = data;
 
         const result = await db.query(
             `INSERT INTO shifts (
                 company_id, branch_id, shift_name,
                 start_time, end_time,
-                late_grace_minutes, half_day_hours, working_hours, is_night_shift
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+                late_grace_minutes, half_day_hours, working_hours, is_night_shift,
+                monday, tuesday, wednesday, thursday, friday, saturday, sunday
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
             [
                 company_id, branch_id, shift_name,
                 start_time, end_time,
                 late_grace_minutes, half_day_hours, working_hours, is_night_shift,
+                monday, tuesday, wednesday, thursday, friday, saturday, sunday
             ]
         );
         return result.rows[0];
@@ -71,7 +80,8 @@ const Shift = {
     async findTiming(id) {
         const result = await db.query(
             `SELECT id, shift_name, start_time, end_time,
-                    late_grace_minutes, half_day_hours, working_hours, is_night_shift
+                    late_grace_minutes, half_day_hours, working_hours, is_night_shift,
+                    monday, tuesday, wednesday, thursday, friday, saturday, sunday
              FROM shifts
              WHERE id = $1 AND is_active = true AND deleted_at IS NULL`,
             [id]

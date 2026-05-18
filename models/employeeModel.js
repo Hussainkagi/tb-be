@@ -20,6 +20,10 @@ const Employee = {
             joining_date = null,
             employment_type = null,
             basic_salary = null,
+            housing_allowance = 0.00,
+            transport_allowance = 0.00,
+            other_allowance = 0.00,
+            is_remote_job = false,
             bank_name = null,
             bank_account_number = null,
             iban = null,
@@ -31,20 +35,26 @@ const Employee = {
                 employee_code, first_name, last_name, email, phone,
                 gender, date_of_birth, address,
                 joining_date, employment_type,
-                basic_salary, bank_name, bank_account_number, iban
+                basic_salary, housing_allowance, transport_allowance, other_allowance,
+                is_remote_job,
+                bank_name, bank_account_number, iban
             ) VALUES (
                 $1,  $2,  $3,  $4,  $5,
                 $6,  $7,  $8,  $9,  $10,
                 $11, $12, $13,
                 $14, $15,
-                $16, $17, $18, $19
+                $16, $17, $18, $19,
+                $20,
+                $21, $22, $23
             ) RETURNING *`,
             [
                 company_id, branch_id, department_id, shift_id, user_id,
                 employee_code, first_name, last_name, email, phone,
                 gender, date_of_birth, address,
                 joining_date, employment_type,
-                basic_salary, bank_name, bank_account_number, iban,
+                basic_salary, housing_allowance, transport_allowance, other_allowance,
+                is_remote_job,
+                bank_name, bank_account_number, iban,
             ]
         );
         return result.rows[0];
@@ -53,27 +63,25 @@ const Employee = {
     async findById(id) {
         const result = await db.query(
             `SELECT 
-            e.*,
-            s.shift_name AS shift_name,
-            d.department_name AS department_name,
-            uc.role AS role
-         FROM employees e
-         LEFT JOIN shifts s 
-            ON e.shift_id = s.id
-         LEFT JOIN departments d 
-            ON e.department_id = d.id
-         LEFT JOIN user_companies uc
-            ON uc.user_id = e.user_id
-            AND uc.company_id = e.company_id
-         WHERE e.id = $1
-           AND e.deleted_at IS NULL`,
+                e.*,
+                s.shift_name      AS shift_name,
+                d.department_name AS department_name,
+                uc.role           AS role
+             FROM employees e
+             LEFT JOIN shifts s
+                ON e.shift_id = s.id
+             LEFT JOIN departments d
+                ON e.department_id = d.id
+             LEFT JOIN user_companies uc
+                ON uc.user_id = e.user_id
+               AND uc.company_id = e.company_id
+             WHERE e.id = $1
+               AND e.deleted_at IS NULL`,
             [id]
         );
-
         return result.rows[0];
     },
 
-    // Used by inviteEmployee to enforce unique employee_code per company
     async findByCode(company_id, employee_code) {
         const result = await db.query(
             `SELECT * FROM employees
@@ -86,13 +94,13 @@ const Employee = {
     async findByUserId(user_id) {
         const result = await db.query(
             `SELECT 
-            e.*,
-            s.shift_name AS shift_name,
-            d.department_name AS department_name
-         FROM employees e
-         LEFT JOIN shifts s ON e.shift_id = s.id
-         LEFT JOIN departments d ON e.department_id = d.id
-         WHERE e.user_id = $1 AND e.deleted_at IS NULL`,
+                e.*,
+                s.shift_name      AS shift_name,
+                d.department_name AS department_name
+             FROM employees e
+             LEFT JOIN shifts s ON e.shift_id = s.id
+             LEFT JOIN departments d ON e.department_id = d.id
+             WHERE e.user_id = $1 AND e.deleted_at IS NULL`,
             [user_id]
         );
         return result.rows;
@@ -120,14 +128,14 @@ const Employee = {
     async getAllByBranch(company_id, branch_id) {
         const result = await db.query(
             `SELECT 
-            e.*,
-            s.shift_name AS shift_name,
-            d.department_name AS department_name
-         FROM employees e
-         LEFT JOIN shifts s ON e.shift_id = s.id
-         LEFT JOIN departments d ON e.department_id = d.id
-         WHERE e.company_id = $1 AND e.branch_id = $2 AND e.deleted_at IS NULL
-         ORDER BY e.created_at DESC`,
+                e.*,
+                s.shift_name      AS shift_name,
+                d.department_name AS department_name
+             FROM employees e
+             LEFT JOIN shifts s ON e.shift_id = s.id
+             LEFT JOIN departments d ON e.department_id = d.id
+             WHERE e.company_id = $1 AND e.branch_id = $2 AND e.deleted_at IS NULL
+             ORDER BY e.created_at DESC`,
             [company_id, branch_id]
         );
         return result.rows;
@@ -144,6 +152,14 @@ const Employee = {
     },
 
     async update(id, data) {
+        // Prevent updating generated column
+        delete data.gross_salary;
+
+        // Prevent updating is_remote_job to non-boolean
+        if ("is_remote_job" in data && typeof data.is_remote_job !== "boolean") {
+            data.is_remote_job = Boolean(data.is_remote_job);
+        }
+
         const updates = [];
         const values = [];
         let paramCount = 1;
@@ -180,7 +196,6 @@ const Employee = {
         return result.rows[0];
     },
 
-    // Soft delete
     async delete(id) {
         const result = await db.query(
             `UPDATE employees SET deleted_at = NOW() WHERE id = $1 RETURNING *`,
