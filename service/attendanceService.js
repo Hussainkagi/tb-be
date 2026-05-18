@@ -172,24 +172,26 @@ const AttendanceService = {
                 };
             }
 
-            // 5. Geofence check
-            if (branch.latitude == null || branch.longitude == null) {
-                return { success: false, message: "Branch location is not configured" };
-            }
+            // 5. Geofence check (skip if remote job)
+            if (!employee.is_remote_job) {
+                if (branch.latitude == null || branch.longitude == null) {
+                    return { success: false, message: "Branch location is not configured" };
+                }
 
-            const { withinRadius, distance } = isWithinRadius(
-                latitude,
-                longitude,
-                branch.latitude,
-                branch.longitude,
-                branch.attendance_radius,
-            );
+                const { withinRadius, distance } = isWithinRadius(
+                    latitude,
+                    longitude,
+                    branch.latitude,
+                    branch.longitude,
+                    branch.attendance_radius,
+                );
 
-            if (!withinRadius) {
-                return {
-                    success: false,
-                    message: `You are outside the allowed radius. Your distance: ${distance}m, Allowed: ${branch.attendance_radius}m`,
-                };
+                if (!withinRadius) {
+                    return {
+                        success: false,
+                        message: `You are outside the allowed radius. Your distance: ${distance}m, Allowed: ${branch.attendance_radius}m`,
+                    };
+                }
             }
 
             // 5. Resolve today's date in the shift's timezone
@@ -315,24 +317,26 @@ const AttendanceService = {
                 };
             }
 
-            // 5. Geofence check
-            if (branch.latitude == null || branch.longitude == null) {
-                return { success: false, message: "Branch location is not configured" };
-            }
+            // 5. Geofence check (skip if remote job)
+            if (!employee.is_remote_job) {
+                if (branch.latitude == null || branch.longitude == null) {
+                    return { success: false, message: "Branch location is not configured" };
+                }
 
-            const { withinRadius, distance } = isWithinRadius(
-                latitude,
-                longitude,
-                branch.latitude,
-                branch.longitude,
-                branch.attendance_radius,
-            );
+                const { withinRadius, distance } = isWithinRadius(
+                    latitude,
+                    longitude,
+                    branch.latitude,
+                    branch.longitude,
+                    branch.attendance_radius,
+                );
 
-            if (!withinRadius) {
-                return {
-                    success: false,
-                    message: `You are outside the allowed radius. Your distance: ${distance}m, Allowed: ${branch.attendance_radius}m`,
-                };
+                if (!withinRadius) {
+                    return {
+                        success: false,
+                        message: `You are outside the allowed radius. Your distance: ${distance}m, Allowed: ${branch.attendance_radius}m`,
+                    };
+                }
             }
 
             // 5. Resolve today's date in shift timezone

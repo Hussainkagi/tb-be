@@ -205,11 +205,8 @@ const UserCompanyService = {
    async inviteEmployee(data) {
     try {
         const {
-
             first_name, last_name, email, phone,
-           
             company_id, role = String(Role.EMPLOYEE),
-           
             branch_id = null,
             department_id = null,
             shift_id = null,
@@ -218,9 +215,10 @@ const UserCompanyService = {
             joining_date = null,
             employment_type = null,
             basic_salary = null,
-            housing_allowance = 0.00,      
-            transport_allowance = 0.00,     
-            other_allowance = 0.00,        
+            housing_allowance = 0.00,
+            transport_allowance = 0.00,
+            other_allowance = 0.00,
+            is_remote_job = false,
             bank_name = null,
             bank_account_number = null,
             iban = null,
@@ -285,8 +283,9 @@ const UserCompanyService = {
             employment_type,
             basic_salary,
             housing_allowance,
-            transport_allowance,        
-            other_allowance,           
+            transport_allowance,
+            other_allowance,
+            is_remote_job,
             bank_name,
             bank_account_number,
             iban,
