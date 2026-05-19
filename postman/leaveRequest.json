@@ -1,0 +1,694 @@
+{
+  "info": {
+    "name": "Leave Request Module",
+    "_postman_id": "leave-request-collection-v1",
+    "description": "All endpoints for the Leave Request module — employee self-service and admin management.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000/api" },
+    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
+    { "key": "branch_id", "value": "b1b2c3d4-0000-0000-0000-000000000002" },
+    { "key": "employee_id", "value": "e1b2c3d4-0000-0000-0000-000000000003" },
+    { "key": "request_id", "value": "r1b2c3d4-0000-0000-0000-000000000004" },
+    { "key": "token", "value": "your_jwt_token_here" }
+  ],
+  "item": [
+    {
+      "name": "Employee — Self Service",
+      "item": [
+        {
+          "name": "Create Leave Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n  \"from_date\": \"2025-08-01\",\n  \"to_date\": \"2025-08-03\",\n  \"total_days\": 3,\n  \"is_half_day\": false,\n  \"reason\": \"Family vacation\",\n  \"document_url\": null\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request created successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  }\n}"
+            },
+            {
+              "name": "400 Overlapping Leave",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Employee already has a pending or approved leave request overlapping these dates\"\n}"
+            },
+            {
+              "name": "400 Document Required",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A supporting document is required for this leave type\"\n}"
+            },
+            {
+              "name": "400 Half-Day Not Allowed",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Half-day leave is not allowed for this leave type\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get All Leave Requests (Employee)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"is_half_day\": false,\n      \"reason\": \"Family vacation\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"r2b2c3d4-0000-0000-0000-000000000005\",\n      \"leave_type_id\": \"lt000002-0000-0000-0000-000000000011\",\n      \"leave_name\": \"Sick Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-06-10\",\n      \"to_date\": \"2025-06-10\",\n      \"total_days\": \"0.50\",\n      \"is_half_day\": true,\n      \"reason\": \"Doctor appointment\",\n      \"status\": \"approved\",\n      \"created_at\": \"2025-06-09T10:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Requests by Status (Employee)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/status/pending",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests",
+                "status",
+                "pending"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 Invalid Status",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: pending, approved, rejected, cancelled\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Request by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests",
+                "{{request_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"leave_name\": \"Annual Leave\",\n    \"is_paid\": true,\n    \"requires_document\": false,\n    \"is_half_day_allowed\": true,\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Leave Request (Pending Only)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests",
+                "{{request_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n  \"reason\": \"Updated reason — extended family trip\",\n  \"from_date\": \"2025-08-01\",\n  \"to_date\": \"2025-08-05\",\n  \"total_days\": 5\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request updated successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-05\",\n    \"total_days\": \"5.00\",\n    \"reason\": \"Updated reason — extended family trip\",\n    \"status\": \"pending\",\n    \"updated_at\": \"2025-07-21T09:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Not Pending",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only pending leave requests can be edited. Current status: approved\"\n}"
+            },
+            {
+              "name": "400 Unauthorized Employee",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"You are not authorized to update this leave request\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel Leave Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests",
+                "{{request_id}}",
+                "cancel"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request cancelled successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"status\": \"cancelled\",\n    \"updated_at\": \"2025-07-21T10:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Cannot Cancel",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Leave request cannot be cancelled. Current status: rejected\"\n}"
+            },
+            {
+              "name": "400 Unauthorized Employee",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"You are not authorized to cancel this leave request\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Leave Request",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests",
+                "{{request_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request deleted successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"deleted_at\": \"2025-07-21T10:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Cannot Delete Approved",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Approved leave requests cannot be deleted. Cancel it first.\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Approval Workflow",
+      "item": [
+        {
+          "name": "Approve Leave Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/{{request_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests",
+                "{{request_id}}",
+                "approve"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request approved successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"status\": \"approved\",\n    \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n    \"approved_at\": \"2025-07-21T11:00:00.000Z\",\n    \"updated_at\": \"2025-07-21T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Not Pending",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only pending leave requests can be approved. Current status: approved\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reject Leave Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/{{request_id}}/reject",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests",
+                "{{request_id}}",
+                "reject"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n  \"rejection_reason\": \"Insufficient staffing during requested period\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request rejected successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"status\": \"rejected\",\n    \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n    \"approved_at\": \"2025-07-21T11:15:00.000Z\",\n    \"rejection_reason\": \"Insufficient staffing during requested period\",\n    \"updated_at\": \"2025-07-21T11:15:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Missing Rejection Reason",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"rejection_reason is required when rejecting a leave request\"\n}"
+            },
+            {
+              "name": "400 Not Pending",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only pending leave requests can be rejected. Current status: cancelled\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Company Scope",
+      "item": [
+        {
+          "name": "Get All Leave Requests (Company)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "leave-requests"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"r3b2c3d4-0000-0000-0000-000000000006\",\n      \"employee_id\": \"e2b2c3d4-0000-0000-0000-000000000007\",\n      \"leave_name\": \"Sick Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-07-25\",\n      \"to_date\": \"2025-07-26\",\n      \"total_days\": \"2.00\",\n      \"status\": \"approved\",\n      \"created_at\": \"2025-07-19T07:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Requests by Status (Company)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/status/approved",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests",
+                "status",
+                "approved"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r3b2c3d4-0000-0000-0000-000000000006\",\n      \"employee_id\": \"e2b2c3d4-0000-0000-0000-000000000007\",\n      \"leave_name\": \"Sick Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-07-25\",\n      \"to_date\": \"2025-07-26\",\n      \"total_days\": \"2.00\",\n      \"status\": \"approved\",\n      \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n      \"approved_at\": \"2025-07-20T09:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Requests by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/date-range?from_date=2025-08-01&to_date=2025-08-31&branch_id={{branch_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests",
+                "date-range"
+              ],
+              "query": [
+                { "key": "from_date", "value": "2025-08-01" },
+                { "key": "to_date", "value": "2025-08-31" },
+                {
+                  "key": "branch_id",
+                  "value": "{{branch_id}}",
+                  "description": "Optional"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"approved\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 Missing Date Params",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"from_date and to_date are required query parameters\"\n}"
+            },
+            {
+              "name": "400 Invalid Date Range",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"to_date must be on or after from_date\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Request by ID (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/{{request_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests",
+                "{{request_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_name\": \"Annual Leave\",\n    \"is_paid\": true,\n    \"requires_document\": false,\n    \"is_half_day_allowed\": true,\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin — Branch Scope",
+      "item": [
+        {
+          "name": "Get All Leave Requests (Branch)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/leave-requests",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "leave-requests"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Requests by Status (Branch)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/leave-requests/status/pending",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "leave-requests",
+                "status",
+                "pending"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -96,6 +96,21 @@ app.use("/api/companies/:company_id/attendance-reports", attendanceReportRoutes)
 const holidayRoutes = require("./routes/holidayRoute");
 app.use("/api/companies/:company_id/holidays", holidayRoutes);
 
+const leaveTypeRoutes = require("./routes/leaveTypeRoute");
+app.use("/api/companies/:company_id/leave-types", leaveTypeRoutes);
+
+const leaveRequestRoutes = require("./routes/leaveRequestUserRoute");
+app.use(
+    "/api/companies/:company_id/branches/:branch_id/employees/:employee_id/leave-requests",
+    leaveRequestRoutes
+);
+
+const leaveRequestAdminRoutes = require("./routes/leaveRequestAdminRoute");
+app.use("/api/companies/:company_id", leaveRequestAdminRoutes);
+
+
+
+
 
 // 404 handler
 app.use("*", (req, res) => {

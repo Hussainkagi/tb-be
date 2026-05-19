@@ -1,0 +1,592 @@
+{
+  "info": {
+    "name": "Leave Types API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000/api"
+    },
+    {
+      "key": "company_id",
+      "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+    {
+      "key": "leave_type_id",
+      "value": "f1e2d3c4-b5a6-7890-dcba-098765432101"
+    },
+    {
+      "key": "token",
+      "value": "your_jwt_token_here"
+    }
+  ],
+  "item": [
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "Check Leave Types Exist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/has-defaults",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "has-defaults"
+              ]
+            },
+            "description": "Returns true/false to show or hide the 'Create Default Leave Types' button during company onboarding."
+          },
+          "response": [
+            {
+              "name": "No leave types yet — show button",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"has_leave_types\": false\n    }\n}"
+            },
+            {
+              "name": "Already seeded — hide button",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"has_leave_types\": true\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Seed Default Leave Types",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/seed-defaults",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "seed-defaults"
+              ]
+            },
+            "description": "Admin-only. Seeds 6 standard leave types for the company in a single bulk insert. Call once during onboarding."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"message\": \"6 default leave types created successfully\",\n    \"data\": [\n        {\n            \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Annual Leave\",\n            \"total_days\": 21,\n            \"is_paid\": true,\n            \"is_carry_forward\": true,\n            \"max_carry_forward_days\": 10,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"a2b3c4d5-e6f7-8901-bcde-109876543212\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Sick Leave\",\n            \"total_days\": 10,\n            \"is_paid\": true,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": true,\n            \"is_half_day_allowed\": false,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"b3c4d5e6-f7a8-9012-cdef-210987654323\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Unpaid Leave\",\n            \"total_days\": 30,\n            \"is_paid\": false,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"c4d5e6f7-a8b9-0123-defa-321098765434\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Maternity Leave\",\n            \"total_days\": 90,\n            \"is_paid\": true,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": true,\n            \"is_half_day_allowed\": false,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"d5e6f7a8-b9c0-1234-efab-432109876545\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Paternity Leave\",\n            \"total_days\": 7,\n            \"is_paid\": true,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": false,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"e6f7a8b9-c0d1-2345-fabc-543210987656\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Emergency Leave\",\n            \"total_days\": 3,\n            \"is_paid\": true,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": false,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        }\n    ]\n}"
+            },
+            {
+              "name": "Conflict — already seeded",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"One or more default leave types already exist for this company. Remove existing ones before seeding defaults.\"\n}"
+            },
+            {
+              "name": "Company not found",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"Company not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Leave Types",
+      "item": [
+        {
+          "name": "Create Leave Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"leave_name\": \"Hajj Leave\",\n    \"total_days\": 14,\n    \"is_paid\": true,\n    \"is_carry_forward\": false,\n    \"max_carry_forward_days\": null,\n    \"requires_document\": true,\n    \"is_half_day_allowed\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "leave-types"]
+            },
+            "description": "Create a custom leave type for the company."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"message\": \"Leave type created successfully\",\n    \"data\": {\n        \"id\": \"f9e8d7c6-b5a4-3210-fedc-ba9876543210\",\n        \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"leave_name\": \"Hajj Leave\",\n        \"total_days\": 14,\n        \"is_paid\": true,\n        \"is_carry_forward\": false,\n        \"max_carry_forward_days\": null,\n        \"requires_document\": true,\n        \"is_half_day_allowed\": false,\n        \"is_active\": true,\n        \"deleted_at\": null,\n        \"created_at\": \"2025-01-15T09:30:00.000Z\",\n        \"updated_at\": \"2025-01-15T09:30:00.000Z\"\n    }\n}"
+            },
+            {
+              "name": "Duplicate name",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"A leave type named \\\"Hajj Leave\\\" already exists for this company\"\n}"
+            },
+            {
+              "name": "Invalid total_days",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"total_days must be greater than 0\"\n}"
+            },
+            {
+              "name": "Invalid carry forward config",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"max_carry_forward_days can only be set when is_carry_forward is true\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get All Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "leave-types"]
+            },
+            "description": "Returns all leave types for the company (active + inactive, excludes soft-deleted)."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Annual Leave\",\n            \"total_days\": 21,\n            \"is_paid\": true,\n            \"is_carry_forward\": true,\n            \"max_carry_forward_days\": 10,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"a2b3c4d5-e6f7-8901-bcde-109876543212\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Sick Leave\",\n            \"total_days\": 10,\n            \"is_paid\": true,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": true,\n            \"is_half_day_allowed\": false,\n            \"is_active\": false,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-16T10:00:00.000Z\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Active Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/active",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "leave-types", "active"]
+            },
+            "description": "Returns only active leave types."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Annual Leave\",\n            \"total_days\": 21,\n            \"is_paid\": true,\n            \"is_carry_forward\": true,\n            \"max_carry_forward_days\": 10,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Paid Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/paid",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "leave-types", "paid"]
+            },
+            "description": "Returns only paid and active leave types."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Annual Leave\",\n            \"total_days\": 21,\n            \"is_paid\": true,\n            \"is_carry_forward\": true,\n            \"max_carry_forward_days\": 10,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        },\n        {\n            \"id\": \"a2b3c4d5-e6f7-8901-bcde-109876543212\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Sick Leave\",\n            \"total_days\": 10,\n            \"is_paid\": true,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": true,\n            \"is_half_day_allowed\": false,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Unpaid Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/unpaid",
+              "host": ["{{base_url}}"],
+              "path": ["companies", "{{company_id}}", "leave-types", "unpaid"]
+            },
+            "description": "Returns only unpaid and active leave types."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"b3c4d5e6-f7a8-9012-cdef-210987654323\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Unpaid Leave\",\n            \"total_days\": 30,\n            \"is_paid\": false,\n            \"is_carry_forward\": false,\n            \"max_carry_forward_days\": null,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Carry Forward Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/carry-forward",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "carry-forward"
+              ]
+            },
+            "description": "Returns only active leave types that allow carry forward."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n            \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"leave_name\": \"Annual Leave\",\n            \"total_days\": 21,\n            \"is_paid\": true,\n            \"is_carry_forward\": true,\n            \"max_carry_forward_days\": 10,\n            \"requires_document\": false,\n            \"is_half_day_allowed\": true,\n            \"is_active\": true,\n            \"deleted_at\": null,\n            \"created_at\": \"2025-01-15T08:00:00.000Z\",\n            \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n        }\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Type By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/{{leave_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "{{leave_type_id}}"
+              ]
+            },
+            "description": "Returns a single leave type by ID."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n        \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"leave_name\": \"Annual Leave\",\n        \"total_days\": 21,\n        \"is_paid\": true,\n        \"is_carry_forward\": true,\n        \"max_carry_forward_days\": 10,\n        \"requires_document\": false,\n        \"is_half_day_allowed\": true,\n        \"is_active\": true,\n        \"deleted_at\": null,\n        \"created_at\": \"2025-01-15T08:00:00.000Z\",\n        \"updated_at\": \"2025-01-15T08:00:00.000Z\"\n    }\n}"
+            },
+            {
+              "name": "Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"Leave type not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Leave Type",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"total_days\": 25,\n    \"requires_document\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/{{leave_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "{{leave_type_id}}"
+              ]
+            },
+            "description": "Update any field on a leave type. Works on both seeded and manually created records."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"message\": \"Leave type updated successfully\",\n    \"data\": {\n        \"id\": \"f1e2d3c4-b5a6-7890-dcba-098765432101\",\n        \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"leave_name\": \"Annual Leave\",\n        \"total_days\": 25,\n        \"is_paid\": true,\n        \"is_carry_forward\": true,\n        \"max_carry_forward_days\": 10,\n        \"requires_document\": true,\n        \"is_half_day_allowed\": true,\n        \"is_active\": true,\n        \"deleted_at\": null,\n        \"created_at\": \"2025-01-15T08:00:00.000Z\",\n        \"updated_at\": \"2025-01-17T11:00:00.000Z\"\n    }\n}"
+            },
+            {
+              "name": "Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"Leave type not found\"\n}"
+            },
+            {
+              "name": "Invalid total_days",
+              "status": "Not Found",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"total_days must be greater than 0\"\n}"
+            },
+            {
+              "name": "Invalid carry forward config",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"max_carry_forward_days can only be set when is_carry_forward is true\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Activate Leave Type",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/{{leave_type_id}}/activate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "{{leave_type_id}}",
+                "activate"
+              ]
+            },
+            "description": "Sets is_active to true for the leave type."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"message\": \"Leave type activated successfully\",\n    \"data\": {\n        \"id\": \"a2b3c4d5-e6f7-8901-bcde-109876543212\",\n        \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"leave_name\": \"Sick Leave\",\n        \"total_days\": 10,\n        \"is_paid\": true,\n        \"is_carry_forward\": false,\n        \"max_carry_forward_days\": null,\n        \"requires_document\": true,\n        \"is_half_day_allowed\": false,\n        \"is_active\": true,\n        \"deleted_at\": null,\n        \"created_at\": \"2025-01-15T08:00:00.000Z\",\n        \"updated_at\": \"2025-01-17T12:00:00.000Z\"\n    }\n}"
+            },
+            {
+              "name": "Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"Leave type not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Leave Type",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/{{leave_type_id}}/deactivate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "{{leave_type_id}}",
+                "deactivate"
+              ]
+            },
+            "description": "Sets is_active to false for the leave type."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"message\": \"Leave type deactivated successfully\",\n    \"data\": {\n        \"id\": \"a2b3c4d5-e6f7-8901-bcde-109876543212\",\n        \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"leave_name\": \"Sick Leave\",\n        \"total_days\": 10,\n        \"is_paid\": true,\n        \"is_carry_forward\": false,\n        \"max_carry_forward_days\": null,\n        \"requires_document\": true,\n        \"is_half_day_allowed\": false,\n        \"is_active\": false,\n        \"deleted_at\": null,\n        \"created_at\": \"2025-01-15T08:00:00.000Z\",\n        \"updated_at\": \"2025-01-17T12:30:00.000Z\"\n    }\n}"
+            },
+            {
+              "name": "Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"Leave type not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Leave Type",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-types/{{leave_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-types",
+                "{{leave_type_id}}"
+              ]
+            },
+            "description": "Soft deletes a leave type by setting deleted_at to now. Does not permanently remove the record."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": true,\n    \"message\": \"Leave type deleted successfully\",\n    \"data\": {\n        \"id\": \"f9e8d7c6-b5a4-3210-fedc-ba9876543210\",\n        \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"leave_name\": \"Hajj Leave\",\n        \"total_days\": 14,\n        \"is_paid\": true,\n        \"is_carry_forward\": false,\n        \"max_carry_forward_days\": null,\n        \"requires_document\": true,\n        \"is_half_day_allowed\": false,\n        \"is_active\": true,\n        \"deleted_at\": \"2025-01-17T13:00:00.000Z\",\n        \"created_at\": \"2025-01-15T09:30:00.000Z\",\n        \"updated_at\": \"2025-01-17T13:00:00.000Z\"\n    }\n}"
+            },
+            {
+              "name": "Not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n    \"success\": false,\n    \"message\": \"Leave type not found\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
