@@ -214,14 +214,7 @@ const UserCompanyService = {
             date_of_birth = null,
             joining_date = null,
             employment_type = null,
-            basic_salary = null,
-            housing_allowance = 0.00,
-            transport_allowance = 0.00,
-            other_allowance = 0.00,
             is_remote_job = false,
-            bank_name = null,
-            bank_account_number = null,
-            iban = null,
         } = data;
 
         // 1. Validate role
@@ -281,14 +274,7 @@ const UserCompanyService = {
             date_of_birth,
             joining_date,
             employment_type,
-            basic_salary,
-            housing_allowance,
-            transport_allowance,
-            other_allowance,
-            is_remote_job,
-            bank_name,
-            bank_account_number,
-            iban,
+            is_remote_job
         });
 
         // 9. Generate invite token + store

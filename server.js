@@ -87,6 +87,9 @@ app.use("/api/companies/:company_id/employees", EmployeeRoutes);
 const EmployeeDocumentRoutes = require("./routes/employeeDocumentRoute");
 app.use("/api/companies/:company_id/employees/:employee_id/documents", EmployeeDocumentRoutes);
 
+const EmployeeSalaryStructureRoutes = require("./routes/employeeSalaryStructureRoute");
+app.use("/api/companies/:company_id/employees/:employee_id/salary-structures", EmployeeSalaryStructureRoutes);
+
 const attendanceRoutes = require("./routes/attendanceRoute");
 app.use("/api/companies/:company_id/attendance", attendanceRoutes);
 

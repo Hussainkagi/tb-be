@@ -11,7 +11,7 @@ const validateTenant = require("../middleware/validateTenant");
 // All routes scoped under /api/companies/:company_id/employees
 
 
-router.get("/:user_id", verifyToken, validateTenant, isEmployee, EmployeeController.getByUserAndCompany),
+router.get("/user-company/:user_id", verifyToken, validateTenant, isEmployee, EmployeeController.getByUserAndCompany),
 
     // ─────────────────────────────────────────────
     // ADMIN + MANAGER

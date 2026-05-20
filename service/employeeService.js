@@ -7,8 +7,9 @@ const EmployeeService = {
     async getEmployeeById(id) {
         try {
             const result = await EmployeeModel.findById(id);
+            console.log("getEmployeeById result:", result);
             if (!result) {
-                return { success: false, message: "Employee not found" };
+                return { success: false, message: "Employee nots found" };
             }
             return { success: true, data: result };
         } catch (error) {
@@ -147,7 +148,7 @@ const EmployeeService = {
         try {
             const result = await EmployeeModel.findByUserAndCompany(user_id, company_id);
             if (!result) {
-                return { success: false, message: "Employee not found" };
+                return { success: false, message: "Employee nots found" };
             }
             return { success: true, data: result };
         } catch (error) {

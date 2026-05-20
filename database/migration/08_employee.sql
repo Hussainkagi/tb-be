@@ -34,23 +34,12 @@ CREATE TABLE IF NOT EXISTS employees (
     employment_type         VARCHAR(50),    -- full_time, part_time, contract, etc.
     status                  VARCHAR(50)     NOT NULL DEFAULT 'active',  -- active, inactive, terminated, on_leave
 
-    -- Compensation
-    basic_salary            NUMERIC(12,2),
-    housing_allowance       NUMERIC(12,2)       NOT NULL DEFAULT 0.00,
-    transport_allowance     NUMERIC(12,2)       NOT NULL DEFAULT 0.00,
-    other_allowance         NUMERIC(12,2)       NOT NULL DEFAULT 0.00,
-
-    gross_salary            NUMERIC(12,2)       GENERATED ALWAYS AS
-                                (COALESCE(basic_salary, 0) + housing_allowance + transport_allowance + other_allowance)
-                                STORED,
+   
+    
 
     -- Remote work
     is_remote_job           BOOLEAN             NOT NULL DEFAULT FALSE,
 
-    -- Banking
-    bank_name               VARCHAR(255),
-    bank_account_number     VARCHAR(255),
-    iban                    VARCHAR(255),
 
     -- State
     is_active               BOOLEAN         NOT NULL DEFAULT TRUE,

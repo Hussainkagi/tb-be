@@ -19,14 +19,7 @@ const Employee = {
             address = null,
             joining_date = null,
             employment_type = null,
-            basic_salary = null,
-            housing_allowance = 0.00,
-            transport_allowance = 0.00,
-            other_allowance = 0.00,
             is_remote_job = false,
-            bank_name = null,
-            bank_account_number = null,
-            iban = null,
         } = data;
 
         const result = await db.query(
@@ -35,26 +28,20 @@ const Employee = {
                 employee_code, first_name, last_name, email, phone,
                 gender, date_of_birth, address,
                 joining_date, employment_type,
-                basic_salary, housing_allowance, transport_allowance, other_allowance,
-                is_remote_job,
-                bank_name, bank_account_number, iban
+                is_remote_job
             ) VALUES (
                 $1,  $2,  $3,  $4,  $5,
                 $6,  $7,  $8,  $9,  $10,
                 $11, $12, $13,
                 $14, $15,
-                $16, $17, $18, $19,
-                $20,
-                $21, $22, $23
+                $16
             ) RETURNING *`,
             [
                 company_id, branch_id, department_id, shift_id, user_id,
                 employee_code, first_name, last_name, email, phone,
                 gender, date_of_birth, address,
                 joining_date, employment_type,
-                basic_salary, housing_allowance, transport_allowance, other_allowance,
                 is_remote_job,
-                bank_name, bank_account_number, iban,
             ]
         );
         return result.rows[0];
@@ -62,7 +49,7 @@ const Employee = {
 
     async findById(id) {
         const result = await db.query(
-            `SELECT 
+            `SELECT
                 e.*,
                 s.shift_name      AS shift_name,
                 d.department_name AS department_name,
@@ -93,7 +80,7 @@ const Employee = {
 
     async findByUserId(user_id) {
         const result = await db.query(
-            `SELECT 
+            `SELECT
                 e.*,
                 s.shift_name      AS shift_name,
                 d.department_name AS department_name
@@ -127,7 +114,7 @@ const Employee = {
 
     async getAllByBranch(company_id, branch_id) {
         const result = await db.query(
-            `SELECT 
+            `SELECT
                 e.*,
                 s.shift_name      AS shift_name,
                 d.department_name AS department_name
@@ -152,8 +139,20 @@ const Employee = {
     },
 
     async update(id, data) {
-        // Prevent updating generated column
-        delete data.gross_salary;
+        // Prevent updating salary/bank fields — managed via employee_salary_structures
+        const SALARY_BANK_FIELDS = [
+            "basic_salary",
+            "housing_allowance",
+            "transport_allowance",
+            "other_allowance",
+            "gross_salary",
+            "bank_name",
+            "bank_account_number",
+            "iban",
+        ];
+        for (const field of SALARY_BANK_FIELDS) {
+            delete data[field];
+        }
 
         // Prevent updating is_remote_job to non-boolean
         if ("is_remote_job" in data && typeof data.is_remote_job !== "boolean") {
