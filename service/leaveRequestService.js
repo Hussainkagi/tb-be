@@ -2,10 +2,12 @@ const LeaveRequestModel = require("../models/leaveRequestModel");
 const LeaveTypeModel = require("../models/leaveTypeModel");
 const EmployeeModel = require("../models/employeeModel");
 
+
 const LeaveRequestService = {
     // --------------------------------------------------------
     // CREATE
     // --------------------------------------------------------
+
 
     async createLeaveRequest(data) {
         try {
@@ -18,86 +20,80 @@ const LeaveRequestService = {
                 is_half_day = false,
                 reason,
                 document_url = null,
+                document_file = null, // multer file object from req.file
             } = data;
+
+            // Upload document to Cloudinary if provided
+            let uploadedDocUrl = document_url;
+            if (document_file) {
+                try {
+                    const { secureUrl } = await require("../utils/cloudinaryHelper").uploadToCloudinary(
+                        document_file.buffer, // 👈 pass only the Buffer, not the whole multer object
+                        {
+                            folder: `leave/documents/${employee_id}`,
+                            resourceType: "auto",
+                        }
+                    );
+                    uploadedDocUrl = secureUrl;
+                } catch (err) {
+                    return {
+                        success: false,
+                        message: "Document upload failed",
+                        error: err.message,
+                    };
+                }
+            }
 
             // Verify employee exists
             const employee = await EmployeeModel.findById(employee_id);
             if (!employee) {
-                return {
-                    success: false,
-                    message: "Employee not found",
-                };
+                return { success: false, message: "Employee not found" };
             }
 
             // Verify leave type exists and is active
             const leaveType = await LeaveTypeModel.findById(leave_type_id);
             if (!leaveType) {
-                return {
-                    success: false,
-                    message: "Leave type not found",
-                };
+                return { success: false, message: "Leave type not found" };
             }
             if (!leaveType.is_active) {
-                return {
-                    success: false,
-                    message: "The selected leave type is not active",
-                };
+                return { success: false, message: "The selected leave type is not active" };
             }
 
             // Half-day validation
             if (is_half_day) {
                 if (!leaveType.is_half_day_allowed) {
-                    return {
-                        success: false,
-                        message: "Half-day leave is not allowed for this leave type",
-                    };
+                    return { success: false, message: "Half-day leave is not allowed for this leave type" };
                 }
                 if (from_date !== to_date) {
-                    return {
-                        success: false,
-                        message: "Half-day leave must be a single-day request (from_date must equal to_date)",
-                    };
+                    return { success: false, message: "Half-day leave must be a single-day request (from_date must equal to_date)" };
                 }
             }
 
             // Document validation
-            if (leaveType.requires_document && !document_url) {
-                return {
-                    success: false,
-                    message: "A supporting document is required for this leave type",
-                };
+            if (leaveType.requires_document && !uploadedDocUrl) {
+                return { success: false, message: "A supporting document is required for this leave type" };
             }
 
             // Date range validation
             if (new Date(to_date) < new Date(from_date)) {
-                return {
-                    success: false,
-                    message: "to_date must be on or after from_date",
-                };
+                return { success: false, message: "to_date must be on or after from_date" };
             }
 
             // Total days validation
             if (!total_days || total_days <= 0) {
-                return {
-                    success: false,
-                    message: "total_days must be greater than 0",
-                };
+                return { success: false, message: "total_days must be greater than 0" };
             }
 
             // Overlapping leave check
-            const overlapping = await LeaveRequestModel.getOverlapping(
-                employee_id,
-                from_date,
-                to_date
-            );
+            const overlapping = await LeaveRequestModel.getOverlapping(employee_id, from_date, to_date);
             if (overlapping.length > 0) {
-                return {
-                    success: false,
-                    message: "Employee already has a pending or approved leave request overlapping these dates",
-                };
+                return { success: false, message: "Employee already has a pending or approved leave request overlapping these dates" };
             }
 
-            const result = await LeaveRequestModel.create(data);
+            const result = await LeaveRequestModel.create({
+                ...data,
+                document_url: uploadedDocUrl,
+            });
 
             return {
                 success: true,

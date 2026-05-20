@@ -1,3 +1,5 @@
+// Get employee by user_id and company_id
+
 const express = require("express");
 const router = express.Router({ mergeParams: true });
 
@@ -8,10 +10,13 @@ const validateTenant = require("../middleware/validateTenant");
 
 // All routes scoped under /api/companies/:company_id/employees
 
-// ─────────────────────────────────────────────
-// ADMIN + MANAGER
-// ─────────────────────────────────────────────
-router.get("/", verifyToken, validateTenant, isManager, EmployeeController.getByCompany);
+
+router.get("/:user_id", verifyToken, validateTenant, isEmployee, EmployeeController.getByUserAndCompany),
+
+    // ─────────────────────────────────────────────
+    // ADMIN + MANAGER
+    // ─────────────────────────────────────────────
+    router.get("/", verifyToken, validateTenant, isManager, EmployeeController.getByCompany);
 router.get("/:id", verifyToken, validateTenant, isManager, EmployeeController.getById);
 router.put("/:id", verifyToken, validateTenant, isManager, EmployeeController.update);
 router.patch("/:id/status", verifyToken, validateTenant, isManager, EmployeeController.updateStatus);

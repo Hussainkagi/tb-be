@@ -143,6 +143,17 @@ const EmployeeService = {
             return { success: false, message: error.message, error };
         }
     },
+    async getEmployeeByUserAndCompany(user_id, company_id) {
+        try {
+            const result = await EmployeeModel.findByUserAndCompany(user_id, company_id);
+            if (!result) {
+                return { success: false, message: "Employee not found" };
+            }
+            return { success: true, data: result };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
 };
 
 module.exports = EmployeeService;

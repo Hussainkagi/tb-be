@@ -1,6 +1,21 @@
+
 const EmployeeService = require("../service/employeeService");
 
 const EmployeeController = {
+
+    async getByUserAndCompany(req, res) {
+        try {
+            const { user_id, company_id } = req.params;
+            const result = await EmployeeService.getEmployeeByUserAndCompany(user_id, company_id);
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(404).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
 
     async getById(req, res) {
         try {

@@ -10,6 +10,7 @@ const LeaveRequestController = {
         try {
             const result = await LeaveRequestService.createLeaveRequest({
                 ...req.body,
+                document_file: req.file ?? null,
                 company_id: req.params.company_id,
                 branch_id: req.params.branch_id,
                 employee_id: req.params.employee_id,

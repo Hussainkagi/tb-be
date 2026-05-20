@@ -3,7 +3,7 @@ const router = express.Router({ mergeParams: true });
 
 const LeaveTypeController = require("../controller/leaveTypeController");
 const verifyToken = require("../middleware/verifyToken");
-const { isAdmin } = require("../middleware/authorizeRoles");
+const { isAdmin, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
 
 // All routes scoped under /api/companies/:company_id/leave-types
@@ -97,7 +97,7 @@ router.get(
     "/",
     verifyToken,
     validateTenant,
-    isAdmin,
+    isEmployee,
     LeaveTypeController.getAllByCompany
 );
 

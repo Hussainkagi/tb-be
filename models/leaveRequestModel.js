@@ -95,14 +95,21 @@ const LeaveRequestModel = {
 
     async getAllByBranch(branch_id) {
         const result = await db.query(
-            `SELECT lr.*,
-                    lt.leave_name,
-                    lt.is_paid
-             FROM leave_requests lr
-             JOIN leave_types lt ON lt.id = lr.leave_type_id
-             WHERE lr.branch_id  = $1
-               AND lr.deleted_at IS NULL
-             ORDER BY lr.from_date DESC`,
+            `SELECT
+            lr.*,
+            lt.leave_name,
+            lt.is_paid,
+            e.employee_code,
+            e.first_name,
+            e.last_name,
+            e.email,
+            e.gender
+         FROM leave_requests lr
+         JOIN leave_types  lt ON lt.id = lr.leave_type_id
+         JOIN employees    e  ON e.id  = lr.employee_id
+         WHERE lr.branch_id  = $1
+           AND lr.deleted_at IS NULL
+         ORDER BY lr.from_date DESC`,
             [branch_id]
         );
         return result.rows;
@@ -110,15 +117,22 @@ const LeaveRequestModel = {
 
     async getByBranchAndStatus(branch_id, status) {
         const result = await db.query(
-            `SELECT lr.*,
-                    lt.leave_name,
-                    lt.is_paid
-             FROM leave_requests lr
-             JOIN leave_types lt ON lt.id = lr.leave_type_id
-             WHERE lr.branch_id  = $1
-               AND lr.status     = $2
-               AND lr.deleted_at IS NULL
-             ORDER BY lr.from_date DESC`,
+            `SELECT
+            lr.*,
+            lt.leave_name,
+            lt.is_paid,
+            e.employee_code,
+            e.first_name,
+            e.last_name,
+            e.email,
+            e.gender
+         FROM leave_requests lr
+         JOIN leave_types  lt ON lt.id = lr.leave_type_id
+         JOIN employees    e  ON e.id  = lr.employee_id
+         WHERE lr.branch_id  = $1
+           AND lr.status     = $2
+           AND lr.deleted_at IS NULL
+         ORDER BY lr.from_date DESC`,
             [branch_id, status]
         );
         return result.rows;

@@ -5,6 +5,10 @@ const LeaveRequestController = require("../controller/leaveRequestController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPLOYEE — create a leave request
@@ -13,6 +17,7 @@ const validateTenant = require("../middleware/validateTenant");
 
 router.post(
     "/",
+    upload.single("document_file"),
     verifyToken,
     validateTenant,
     isEmployee,
