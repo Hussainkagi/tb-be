@@ -1,0 +1,424 @@
+{
+  "info": {
+    "name": "Payroll Periods API",
+    "_postman_id": "payroll-periods-collection-v1",
+    "description": "All endpoints for managing payroll periods scoped under /api/companies/:company_id/payroll-periods",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000/api" },
+    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
+    { "key": "period_id", "value": "a1b2c3d4-0000-0000-0000-000000000099" },
+    { "key": "token", "value": "your_jwt_token_here" }
+  ],
+  "item": [
+    {
+      "name": "Create Payroll Period",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods",
+          "host": ["{{base_url}}"],
+          "path": ["companies", "{{company_id}}", "payroll-periods"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n  \"period_name\": \"May 2025\",\n  \"start_date\": \"2025-05-01\",\n  \"end_date\": \"2025-05-31\"\n}"
+        }
+      },
+      "response": [
+        {
+          "name": "201 Created",
+          "status": "Created",
+          "code": 201,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Payroll period created successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"open\",\n    \"processed_at\": null,\n    \"processed_by\": null,\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-01T08:00:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "400 Duplicate Period Name",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"A payroll period with this name already exists for the company\"\n}"
+        },
+        {
+          "name": "400 Invalid Dates",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"end_date must be after start_date\"\n}"
+        },
+        {
+          "name": "400 Missing Required Fields",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"company_id, period_name, start_date, and end_date are required\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Get All Payroll Periods by Company",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods",
+          "host": ["{{base_url}}"],
+          "path": ["companies", "{{company_id}}", "payroll-periods"]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"period_name\": \"May 2025\",\n      \"start_date\": \"2025-05-01\",\n      \"end_date\": \"2025-05-31\",\n      \"status\": \"open\",\n      \"processed_at\": null,\n      \"processed_by\": null,\n      \"processed_by_name\": null,\n      \"created_at\": \"2025-05-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-05-01T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000098\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"period_name\": \"April 2025\",\n      \"start_date\": \"2025-04-01\",\n      \"end_date\": \"2025-04-30\",\n      \"status\": \"locked\",\n      \"processed_at\": \"2025-05-02T10:00:00.000Z\",\n      \"processed_by\": \"a1b2c3d4-0000-0000-0000-000000000010\",\n      \"processed_by_name\": \"John Smith\",\n      \"created_at\": \"2025-04-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-05-02T10:00:00.000Z\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Get Payroll Period by ID",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/{{period_id}}",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "{{period_id}}"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"open\",\n    \"processed_at\": null,\n    \"processed_by\": null,\n    \"processed_by_name\": null,\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-01T08:00:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Payroll period not found\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Get Payroll Periods by Status",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/status/open",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "status",
+            "open"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"period_name\": \"May 2025\",\n      \"start_date\": \"2025-05-01\",\n      \"end_date\": \"2025-05-31\",\n      \"status\": \"open\",\n      \"processed_at\": null,\n      \"processed_by\": null,\n      \"created_at\": \"2025-05-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-05-01T08:00:00.000Z\"\n    }\n  ]\n}"
+        },
+        {
+          "name": "400 Invalid Status",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: open, processing, completed, locked\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Get Payroll Periods by Date Range",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/range/search?start_date=2025-01-01&end_date=2025-06-30",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "range",
+            "search"
+          ],
+          "query": [
+            { "key": "start_date", "value": "2025-01-01" },
+            { "key": "end_date", "value": "2025-06-30" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000097\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"period_name\": \"January 2025\",\n      \"start_date\": \"2025-01-01\",\n      \"end_date\": \"2025-01-31\",\n      \"status\": \"locked\",\n      \"processed_at\": \"2025-02-03T09:00:00.000Z\",\n      \"processed_by\": \"a1b2c3d4-0000-0000-0000-000000000010\",\n      \"created_at\": \"2025-01-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-02-03T09:00:00.000Z\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"period_name\": \"May 2025\",\n      \"start_date\": \"2025-05-01\",\n      \"end_date\": \"2025-05-31\",\n      \"status\": \"open\",\n      \"processed_at\": null,\n      \"processed_by\": null,\n      \"created_at\": \"2025-05-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-05-01T08:00:00.000Z\"\n    }\n  ]\n}"
+        },
+        {
+          "name": "400 Missing Dates",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"start_date and end_date are required\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Update Payroll Period",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/{{period_id}}",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "{{period_id}}"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"period_name\": \"May 2025 - Revised\",\n  \"end_date\": \"2025-05-31\"\n}"
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Payroll period updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025 - Revised\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"open\",\n    \"processed_at\": null,\n    \"processed_by\": null,\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-21T12:30:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Payroll period not found\"\n}"
+        },
+        {
+          "name": "400 Locked Period",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Locked payroll periods cannot be modified\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Update Status",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/{{period_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "{{period_id}}",
+            "status"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"processing\"\n}"
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Payroll period status updated to 'processing'\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"processing\",\n    \"processed_at\": null,\n    \"processed_by\": null,\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-21T13:00:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "400 Invalid Transition",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Cannot transition from 'locked' to 'open'. Allowed: none\"\n}"
+        },
+        {
+          "name": "400 Invalid Status Value",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: open, processing, completed, locked\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Mark as Processed",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/{{period_id}}/process",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "{{period_id}}",
+            "process"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"processed_by\": \"a1b2c3d4-0000-0000-0000-000000000010\"\n}"
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Payroll period marked as completed\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"completed\",\n    \"processed_at\": \"2025-05-21T14:00:00.000Z\",\n    \"processed_by\": \"a1b2c3d4-0000-0000-0000-000000000010\",\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-21T14:00:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "400 Wrong Status",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Only periods in 'processing' status can be marked as completed. Current status: 'open'\"\n}"
+        },
+        {
+          "name": "400 Missing processed_by",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"processed_by (user_id) is required\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Lock Payroll Period",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/{{period_id}}/lock",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "{{period_id}}",
+            "lock"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Payroll period locked successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"locked\",\n    \"processed_at\": \"2025-05-21T14:00:00.000Z\",\n    \"processed_by\": \"a1b2c3d4-0000-0000-0000-000000000010\",\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-21T15:00:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "400 Not Completed",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Only 'completed' periods can be locked. Current status: 'processing'\"\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Payroll period not found\"\n}"
+        }
+      ]
+    },
+
+    {
+      "name": "Delete Payroll Period",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/companies/{{company_id}}/payroll-periods/{{period_id}}",
+          "host": ["{{base_url}}"],
+          "path": [
+            "companies",
+            "{{company_id}}",
+            "payroll-periods",
+            "{{period_id}}"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Payroll period deleted successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000099\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"period_name\": \"May 2025\",\n    \"start_date\": \"2025-05-01\",\n    \"end_date\": \"2025-05-31\",\n    \"status\": \"open\",\n    \"processed_at\": null,\n    \"processed_by\": null,\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-05-01T08:00:00.000Z\"\n  }\n}"
+        },
+        {
+          "name": "400 Locked Period",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Locked payroll periods cannot be deleted\"\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Payroll period not found\"\n}"
+        }
+      ]
+    }
+  ]
+}

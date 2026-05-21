@@ -112,6 +112,10 @@ const leaveRequestAdminRoutes = require("./routes/leaveRequestAdminRoute");
 app.use("/api/companies/:company_id", leaveRequestAdminRoutes);
 
 
+const payrollPeriodRoutes = require("./routes/payrollPeriodRoute");
+app.use("/api/companies/:company_id/payroll-periods", payrollPeriodRoutes);
+
+
 
 
 

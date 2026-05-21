@@ -17,18 +17,20 @@ const LeaveRequestService = {
                 from_date,
                 to_date,
                 total_days,
-                is_half_day = false,
+                is_half_day: _is_half_day = false,
                 reason,
                 document_url = null,
-                document_file = null, // multer file object from req.file
+                document_file = null,
             } = data;
 
-            // Upload document to Cloudinary if provided
+            const is_half_day = _is_half_day === true || _is_half_day === "true";
+
+
             let uploadedDocUrl = document_url;
             if (document_file) {
                 try {
                     const { secureUrl } = await require("../utils/cloudinaryHelper").uploadToCloudinary(
-                        document_file.buffer, // 👈 pass only the Buffer, not the whole multer object
+                        document_file.buffer,
                         {
                             folder: `leave/documents/${employee_id}`,
                             resourceType: "auto",
@@ -60,6 +62,7 @@ const LeaveRequestService = {
             }
 
             // Half-day validation
+            console.log("is_half_day:", is_half_day);
             if (is_half_day) {
                 if (!leaveType.is_half_day_allowed) {
                     return { success: false, message: "Half-day leave is not allowed for this leave type" };
