@@ -1,0 +1,1033 @@
+{
+  "info": {
+    "name": "Payroll Module",
+    "_postman_id": "payroll-module-collection-v1",
+    "description": "Complete API collection for the Payroll Module covering Payrolls, Payroll Adjustments, and Payslips.\n\n**Base URL:** `{{base_url}}/api/companies/{{company_id}}`\n\n**Auth:** All routes require a Bearer token via the `Authorization` header.\n\n**Roles:**\n- `isAdmin` — full access\n- `isManager` — read + limited write\n- `isEmployee` — self-service read only",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000", "type": "string" },
+    { "key": "company_id", "value": "uuid-company-001", "type": "string" },
+    { "key": "token", "value": "your-jwt-token-here", "type": "string" },
+    { "key": "payroll_id", "value": "uuid-payroll-001", "type": "string" },
+    {
+      "key": "payroll_period_id",
+      "value": "uuid-period-001",
+      "type": "string"
+    },
+    { "key": "employee_id", "value": "uuid-employee-001", "type": "string" },
+    {
+      "key": "adjustment_id",
+      "value": "uuid-adjustment-001",
+      "type": "string"
+    },
+    { "key": "payslip_id", "value": "uuid-payslip-001", "type": "string" },
+    {
+      "key": "payslip_number",
+      "value": "PSL-202501-EMP001-A3F2",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Payrolls",
+      "description": "Core payroll records — one per employee per payroll period. Handles generation, retrieval, status transitions, and deletion.",
+      "item": [
+        {
+          "name": "Generate Payroll",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/generate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "generate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"{{company_id}}\",\n  \"payroll_period_id\": \"{{payroll_period_id}}\",\n  \"branch_id\": null\n}"
+            },
+            "description": "**Role:** `isAdmin`\n\nTriggers full payroll computation for all active employees in the company (or a specific branch if `branch_id` is provided).\n\nFor each employee the engine:\n1. Fetches their salary structure effective on the period start date\n2. Classifies every calendar day (present, absent, holiday, week-off, paid leave, unpaid leave)\n3. Applies the sandwich-leave rule\n4. Calculates deductions, overtime, and net salary\n\nSkips employees who already have a payroll record for the period."
+          },
+          "response": [
+            {
+              "name": "200 OK — Payroll Generated",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll generated for 2 employee(s)\",\n  \"data\": {\n    \"generated_count\": 2,\n    \"skipped_count\": 1,\n    \"error_count\": 0,\n    \"generated\": [\n      {\n        \"id\": \"uuid-payroll-001\",\n        \"company_id\": \"uuid-company-001\",\n        \"payroll_period_id\": \"uuid-period-001\",\n        \"employee_id\": \"uuid-employee-001\",\n        \"branch_id\": \"uuid-branch-001\",\n        \"basic_salary\": 5000.00,\n        \"gross_salary\": 7000.00,\n        \"total_working_days\": 31,\n        \"total_present_days\": 28,\n        \"total_absent_days\": 1,\n        \"total_paid_leave_days\": 1.0,\n        \"total_unpaid_leave_days\": 1.0,\n        \"total_holidays\": 2,\n        \"overtime_hours\": 3.5,\n        \"overtime_amount\": 87.50,\n        \"bonus_amount\": 0.00,\n        \"deduction_amount\": 225.81,\n        \"tax_amount\": 0.00,\n        \"net_salary\": 6861.69,\n        \"payroll_status\": \"processed\",\n        \"paid_at\": null,\n        \"created_at\": \"2025-01-31T10:00:00.000Z\",\n        \"updated_at\": \"2025-01-31T10:00:00.000Z\"\n      }\n    ],\n    \"skipped\": [\n      {\n        \"employee_id\": \"uuid-employee-003\",\n        \"employee_code\": \"EMP003\",\n        \"reason\": \"Payroll already exists\"\n      }\n    ],\n    \"errors\": []\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Period Locked",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payroll period is locked and cannot be processed\"\n}"
+            },
+            {
+              "name": "400 Bad Request — No Active Employees",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"No active employees found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get All Payrolls (Company)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "payrolls"]
+            },
+            "description": "**Role:** `isManager`\n\nReturns all payroll records belonging to the company across all periods."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-payroll-001\",\n      \"company_id\": \"uuid-company-001\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"employee_id\": \"uuid-employee-001\",\n      \"branch_id\": \"uuid-branch-001\",\n      \"basic_salary\": 5000.00,\n      \"gross_salary\": 7000.00,\n      \"total_working_days\": 31,\n      \"total_present_days\": 28,\n      \"total_absent_days\": 1,\n      \"total_paid_leave_days\": 1.0,\n      \"total_unpaid_leave_days\": 1.0,\n      \"total_holidays\": 2,\n      \"overtime_hours\": 3.5,\n      \"overtime_amount\": 87.50,\n      \"bonus_amount\": 500.00,\n      \"deduction_amount\": 225.81,\n      \"tax_amount\": 0.00,\n      \"net_salary\": 7361.69,\n      \"payroll_status\": \"processed\",\n      \"paid_at\": null,\n      \"created_at\": \"2025-01-31T10:00:00.000Z\",\n      \"updated_at\": \"2025-01-31T10:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payroll by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/{{payroll_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "{{payroll_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nFetches a single payroll record by its UUID."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"uuid-payroll-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"employee_id\": \"uuid-employee-001\",\n    \"branch_id\": \"uuid-branch-001\",\n    \"basic_salary\": 5000.00,\n    \"gross_salary\": 7000.00,\n    \"total_working_days\": 31,\n    \"total_present_days\": 28,\n    \"total_absent_days\": 1,\n    \"total_paid_leave_days\": 1.0,\n    \"total_unpaid_leave_days\": 1.0,\n    \"total_holidays\": 2,\n    \"overtime_hours\": 3.5,\n    \"overtime_amount\": 87.50,\n    \"bonus_amount\": 500.00,\n    \"deduction_amount\": 225.81,\n    \"tax_amount\": 0.00,\n    \"net_salary\": 7361.69,\n    \"payroll_status\": \"processed\",\n    \"paid_at\": null,\n    \"created_at\": \"2025-01-31T10:00:00.000Z\",\n    \"updated_at\": \"2025-01-31T10:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payroll record not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payrolls by Period",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/period/{{payroll_period_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "period",
+                "{{payroll_period_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nReturns all payroll records for a specific payroll period. Useful for period-level reporting and bulk status updates."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-payroll-001\",\n      \"employee_id\": \"uuid-employee-001\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"gross_salary\": 7000.00,\n      \"net_salary\": 7361.69,\n      \"payroll_status\": \"processed\"\n    },\n    {\n      \"id\": \"uuid-payroll-002\",\n      \"employee_id\": \"uuid-employee-002\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"gross_salary\": 4500.00,\n      \"net_salary\": 4275.00,\n      \"payroll_status\": \"processed\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payrolls by Employee",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/employee/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "employee",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nReturns full payroll history for a specific employee across all periods."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-payroll-001\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"gross_salary\": 7000.00,\n      \"net_salary\": 7361.69,\n      \"payroll_status\": \"paid\",\n      \"paid_at\": \"2025-02-05T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-payroll-005\",\n      \"payroll_period_id\": \"uuid-period-002\",\n      \"gross_salary\": 7000.00,\n      \"net_salary\": 7000.00,\n      \"payroll_status\": \"processed\",\n      \"paid_at\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Payroll Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/{{payroll_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "{{payroll_id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payroll_status\": \"paid\"\n}"
+            },
+            "description": "**Role:** `isAdmin`\n\nTransitions the payroll to a new status. Valid transitions:\n- `draft` → `processed` or `cancelled`\n- `processed` → `paid` or `cancelled`\n- `paid` → _(terminal, no transitions allowed)_\n- `cancelled` → _(terminal, no transitions allowed)_\n\nSetting status to `paid` also stamps the `paid_at` timestamp."
+          },
+          "response": [
+            {
+              "name": "200 OK — Marked as Paid",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll status updated to 'paid'\",\n  \"data\": {\n    \"id\": \"uuid-payroll-001\",\n    \"payroll_status\": \"paid\",\n    \"paid_at\": \"2025-02-05T08:30:00.000Z\",\n    \"updated_at\": \"2025-02-05T08:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid Transition",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot transition from 'paid' to 'draft'\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid Status",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: draft, processed, paid, cancelled\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Payroll",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/{{payroll_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "{{payroll_id}}"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nPermanently deletes a payroll record. Only allowed when `payroll_status` is `draft` or `cancelled`. Cascades to linked adjustments and payslips."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll deleted successfully\",\n  \"data\": {\n    \"id\": \"uuid-payroll-001\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Cannot Delete",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only draft or cancelled payrolls can be deleted\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payroll record not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Payroll Adjustments",
+      "description": "Line-item adjustments attached to a payroll record. Recalculates `bonus_amount`, `deduction_amount`, and `net_salary` automatically after every mutation.\n\n**Types:** `bonus`, `deduction`, `commission`, `penalty`, `loan`",
+      "item": [
+        {
+          "name": "Add Adjustment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payroll_id\": \"{{payroll_id}}\",\n  \"adjustment_type\": \"bonus\",\n  \"title\": \"Performance Bonus Q1\",\n  \"amount\": 500.00,\n  \"is_taxable\": false,\n  \"remarks\": \"Awarded for exceeding Q1 targets\"\n}"
+            },
+            "description": "**Role:** `isAdmin`\n\nAdds a single adjustment to an existing payroll. The payroll must not be `paid` or `cancelled`. After creation, `bonus_amount` / `deduction_amount` and `net_salary` on the parent payroll are recalculated automatically."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Adjustment added successfully\",\n  \"data\": {\n    \"id\": \"uuid-adjustment-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"adjustment_type\": \"bonus\",\n    \"title\": \"Performance Bonus Q1\",\n    \"amount\": 500.00,\n    \"is_taxable\": false,\n    \"remarks\": \"Awarded for exceeding Q1 targets\",\n    \"created_at\": \"2025-01-31T11:00:00.000Z\",\n    \"updated_at\": \"2025-01-31T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid Type",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid adjustment type. Must be one of: bonus, deduction, commission, penalty, loan\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Paid Payroll",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot add adjustments to a paid payroll\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Bulk Add Adjustments",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/payroll/{{payroll_id}}/bulk",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "payroll",
+                "{{payroll_id}}",
+                "bulk"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustments\": [\n    {\n      \"adjustment_type\": \"bonus\",\n      \"title\": \"Annual Bonus\",\n      \"amount\": 1000.00,\n      \"is_taxable\": true,\n      \"remarks\": \"Year-end annual bonus\"\n    },\n    {\n      \"adjustment_type\": \"loan\",\n      \"title\": \"Salary Advance Recovery\",\n      \"amount\": 250.00,\n      \"is_taxable\": false,\n      \"remarks\": \"Recovery installment 2 of 4\"\n    }\n  ]\n}"
+            },
+            "description": "**Role:** `isAdmin`\n\nAdds multiple adjustments to a payroll in a single request. Validates all items before inserting any. Useful for batch imports (e.g. from Excel). Syncs payroll totals once after all inserts."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"2 adjustment(s) added successfully\",\n  \"data\": [\n    {\n      \"id\": \"uuid-adjustment-002\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"adjustment_type\": \"bonus\",\n      \"title\": \"Annual Bonus\",\n      \"amount\": 1000.00,\n      \"is_taxable\": true,\n      \"remarks\": \"Year-end annual bonus\",\n      \"created_at\": \"2025-01-31T11:05:00.000Z\",\n      \"updated_at\": \"2025-01-31T11:05:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-adjustment-003\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"adjustment_type\": \"loan\",\n      \"title\": \"Salary Advance Recovery\",\n      \"amount\": 250.00,\n      \"is_taxable\": false,\n      \"remarks\": \"Recovery installment 2 of 4\",\n      \"created_at\": \"2025-01-31T11:05:00.000Z\",\n      \"updated_at\": \"2025-01-31T11:05:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 Bad Request — Validation Failure",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Item [1]: amount must be a positive number\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Adjustment by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/{{adjustment_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "{{adjustment_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nFetches a single adjustment record by its UUID."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"uuid-adjustment-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"adjustment_type\": \"bonus\",\n    \"title\": \"Performance Bonus Q1\",\n    \"amount\": 500.00,\n    \"is_taxable\": false,\n    \"remarks\": \"Awarded for exceeding Q1 targets\",\n    \"created_at\": \"2025-01-31T11:00:00.000Z\",\n    \"updated_at\": \"2025-01-31T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Adjustment not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Adjustments by Payroll",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/payroll/{{payroll_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "payroll",
+                "{{payroll_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nReturns all adjustments (all types) for a specific payroll."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-adjustment-001\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"adjustment_type\": \"bonus\",\n      \"title\": \"Performance Bonus Q1\",\n      \"amount\": 500.00,\n      \"is_taxable\": false,\n      \"remarks\": \"Awarded for exceeding Q1 targets\",\n      \"created_at\": \"2025-01-31T11:00:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-adjustment-003\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"adjustment_type\": \"loan\",\n      \"title\": \"Salary Advance Recovery\",\n      \"amount\": 250.00,\n      \"is_taxable\": false,\n      \"remarks\": \"Recovery installment 2 of 4\",\n      \"created_at\": \"2025-01-31T11:05:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Adjustments by Type",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/payroll/{{payroll_id}}/type/bonus",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "payroll",
+                "{{payroll_id}}",
+                "type",
+                "bonus"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nFilters adjustments for a payroll by `adjustment_type`. Valid types: `bonus`, `deduction`, `commission`, `penalty`, `loan`.\n\nChange the last path segment to filter by a different type."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-adjustment-001\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"adjustment_type\": \"bonus\",\n      \"title\": \"Performance Bonus Q1\",\n      \"amount\": 500.00,\n      \"is_taxable\": false,\n      \"remarks\": \"Awarded for exceeding Q1 targets\",\n      \"created_at\": \"2025-01-31T11:00:00.000Z\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 Bad Request — Invalid Type",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid adjustment type. Must be one of: bonus, deduction, commission, penalty, loan\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Adjustment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/{{adjustment_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "{{adjustment_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Performance Bonus Q1 (Revised)\",\n  \"amount\": 750.00,\n  \"remarks\": \"Revised after manager approval\"\n}"
+            },
+            "description": "**Role:** `isAdmin`\n\nUpdates any field of an adjustment except `payroll_id`. Blocked on `paid` or `cancelled` payrolls. Recalculates payroll totals automatically."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Adjustment updated successfully\",\n  \"data\": {\n    \"id\": \"uuid-adjustment-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"adjustment_type\": \"bonus\",\n    \"title\": \"Performance Bonus Q1 (Revised)\",\n    \"amount\": 750.00,\n    \"is_taxable\": false,\n    \"remarks\": \"Revised after manager approval\",\n    \"updated_at\": \"2025-01-31T12:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Locked Payroll",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot update adjustments on a paid payroll\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Adjustment",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/{{adjustment_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "{{adjustment_id}}"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nDeletes a single adjustment. Blocked on `paid` or `cancelled` payrolls. Recalculates payroll totals automatically after removal."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Adjustment deleted successfully\",\n  \"data\": {\n    \"id\": \"uuid-adjustment-001\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Adjustment not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete All Adjustments for Payroll",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-adjustments/payroll/{{payroll_id}}/all",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-adjustments",
+                "payroll",
+                "{{payroll_id}}",
+                "all"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nRemoves all adjustments from a payroll in one call. Typically used before re-processing a payroll. Resets `bonus_amount` and `deduction_amount` to 0 and recalculates `net_salary`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"3 adjustment(s) deleted\",\n  \"data\": [\n    { \"id\": \"uuid-adjustment-001\" },\n    { \"id\": \"uuid-adjustment-002\" },\n    { \"id\": \"uuid-adjustment-003\" }\n  ]\n}"
+            },
+            {
+              "name": "400 Bad Request — Paid Payroll",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot clear adjustments from a paid payroll\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Payslips",
+      "description": "Payslip documents generated from processed/paid payroll records. Each payroll can have exactly one payslip. Includes a unique human-readable slip number and an optional PDF URL.",
+      "item": [
+        {
+          "name": "Generate Payslip",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/payroll/{{payroll_id}}/generate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "payroll",
+                "{{payroll_id}}",
+                "generate"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nGenerates a payslip for a single payroll record. The payroll must be in `processed` or `paid` status. Assigns a unique slip number in the format `PSL-{YYYYMM}-{EMPLOYEE_CODE}-{RANDOM4}`."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payslip generated successfully\",\n  \"data\": {\n    \"id\": \"uuid-payslip-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n    \"pdf_url\": null,\n    \"generated_at\": \"2025-02-01T09:00:00.000Z\",\n    \"updated_at\": \"2025-02-01T09:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Wrong Status",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslip can only be generated for processed or paid payrolls. Current status: 'draft'\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Already Exists",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslip already exists for this payroll\",\n  \"data\": {\n    \"id\": \"uuid-payslip-001\",\n    \"payslip_number\": \"PSL-202501-EMP001-A3F2\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Bulk Generate Payslips for Period",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/period/{{payroll_period_id}}/generate",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "period",
+                "{{payroll_period_id}}",
+                "generate"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nGenerates payslips for all eligible payroll records in a period. Skips employees who already have a payslip or whose payroll is not `processed`/`paid`. Returns a summary of generated, skipped, and errored records."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"2 payslip(s) generated\",\n  \"data\": {\n    \"generated_count\": 2,\n    \"skipped_count\": 1,\n    \"error_count\": 0,\n    \"generated\": [\n      {\n        \"id\": \"uuid-payslip-001\",\n        \"payroll_id\": \"uuid-payroll-001\",\n        \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n        \"pdf_url\": null,\n        \"generated_at\": \"2025-02-01T09:00:00.000Z\"\n      },\n      {\n        \"id\": \"uuid-payslip-002\",\n        \"payroll_id\": \"uuid-payroll-002\",\n        \"payslip_number\": \"PSL-202501-EMP002-B7K9\",\n        \"pdf_url\": null,\n        \"generated_at\": \"2025-02-01T09:00:00.000Z\"\n      }\n    ],\n    \"skipped\": [\n      {\n        \"payroll_id\": \"uuid-payroll-003\",\n        \"reason\": \"Payslip already exists\"\n      }\n    ],\n    \"errors\": []\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — No Payrolls Found",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"No payroll records found for this period\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payslip by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/{{payslip_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "{{payslip_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nFetches a payslip by UUID, including all associated adjustments for full document rendering."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"uuid-payslip-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n    \"pdf_url\": \"https://storage.example.com/payslips/PSL-202501-EMP001-A3F2.pdf\",\n    \"generated_at\": \"2025-02-01T09:00:00.000Z\",\n    \"adjustments\": [\n      {\n        \"id\": \"uuid-adjustment-001\",\n        \"adjustment_type\": \"bonus\",\n        \"title\": \"Performance Bonus Q1\",\n        \"amount\": 500.00,\n        \"is_taxable\": false\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslip not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payslip by Payroll ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/payroll/{{payroll_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "payroll",
+                "{{payroll_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nLooks up the payslip linked to a specific payroll record, including adjustments."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"uuid-payslip-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n    \"pdf_url\": null,\n    \"generated_at\": \"2025-02-01T09:00:00.000Z\",\n    \"adjustments\": []\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslip not found for this payroll\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payslip by Number",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/number/{{payslip_number}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "number",
+                "{{payslip_number}}"
+              ]
+            },
+            "description": "**Role:** `isEmployee`\n\nLooks up a payslip by its human-readable slip number (e.g. from a printed slip QR code scan). Includes adjustments."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"uuid-payslip-001\",\n    \"payroll_id\": \"uuid-payroll-001\",\n    \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n    \"pdf_url\": \"https://storage.example.com/payslips/PSL-202501-EMP001-A3F2.pdf\",\n    \"generated_at\": \"2025-02-01T09:00:00.000Z\",\n    \"adjustments\": [\n      {\n        \"id\": \"uuid-adjustment-001\",\n        \"adjustment_type\": \"bonus\",\n        \"title\": \"Performance Bonus Q1\",\n        \"amount\": 500.00,\n        \"is_taxable\": false\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslip not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payslips by Employee",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/employee/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "employee",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "**Role:** `isEmployee`\n\nReturns the full payslip history for an employee. Employees can use this to view their own past slips."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-payslip-001\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n      \"pdf_url\": \"https://storage.example.com/payslips/PSL-202501-EMP001-A3F2.pdf\",\n      \"generated_at\": \"2025-02-01T09:00:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-payslip-007\",\n      \"payroll_id\": \"uuid-payroll-010\",\n      \"payslip_number\": \"PSL-202412-EMP001-X9Q1\",\n      \"pdf_url\": \"https://storage.example.com/payslips/PSL-202412-EMP001-X9Q1.pdf\",\n      \"generated_at\": \"2025-01-02T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Payslips by Period",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/period/{{payroll_period_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "period",
+                "{{payroll_period_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nReturns all payslips generated for a specific payroll period. Useful for period-level audits."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"uuid-payslip-001\",\n      \"payroll_id\": \"uuid-payroll-001\",\n      \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n      \"pdf_url\": null,\n      \"generated_at\": \"2025-02-01T09:00:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-payslip-002\",\n      \"payroll_id\": \"uuid-payroll-002\",\n      \"payslip_number\": \"PSL-202501-EMP002-B7K9\",\n      \"pdf_url\": null,\n      \"generated_at\": \"2025-02-01T09:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update PDF URL",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/{{payslip_id}}/pdf-url",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "{{payslip_id}}",
+                "pdf-url"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pdf_url\": \"https://storage.example.com/payslips/PSL-202501-EMP001-A3F2.pdf\"\n}"
+            },
+            "description": "**Role:** `isAdmin`\n\nAttaches or updates the PDF document URL on a payslip. Called after the PDF is generated asynchronously by a background job or on-demand renderer."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"PDF URL updated successfully\",\n  \"data\": {\n    \"id\": \"uuid-payslip-001\",\n    \"payslip_number\": \"PSL-202501-EMP001-A3F2\",\n    \"pdf_url\": \"https://storage.example.com/payslips/PSL-202501-EMP001-A3F2.pdf\",\n    \"updated_at\": \"2025-02-01T10:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Missing URL",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"pdf_url is required\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Payslip",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payslips/{{payslip_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payslips",
+                "{{payslip_id}}"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nDeletes a payslip record (e.g. to regenerate after corrections). Blocked if the linked payroll is already `paid`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payslip deleted successfully\",\n  \"data\": {\n    \"id\": \"uuid-payslip-001\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Linked to Paid Payroll",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot delete a payslip linked to a paid payroll\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslip not found\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

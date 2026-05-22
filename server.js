@@ -115,6 +115,15 @@ app.use("/api/companies/:company_id", leaveRequestAdminRoutes);
 const payrollPeriodRoutes = require("./routes/payrollPeriodRoute");
 app.use("/api/companies/:company_id/payroll-periods", payrollPeriodRoutes);
 
+const payrollRoutes = require("./routes/payrollRoute");
+app.use("/api/companies/:company_id/payrolls", payrollRoutes);
+
+const payrollAdjustmentRoutes = require("./routes/payrollAdjustmentRoute");
+app.use("/api/companies/:company_id/payroll-adjustments", payrollAdjustmentRoutes);
+
+const payslipRoutes = require("./routes/payslipRoute");
+app.use("/api/companies/:company_id/payslips", payslipRoutes);
+
 
 
 
