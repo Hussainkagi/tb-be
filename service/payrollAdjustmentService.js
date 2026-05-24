@@ -11,32 +11,37 @@ const VALID_ADJUSTMENT_TYPES = ["bonus", "deduction", "commission", "penalty", "
 async function syncPayrollTotals(payroll_id) {
     const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll_id);
 
-    let bonusAmount = 0;
-    let deductionAmount = 0;
+    let adjustmentBonusTotal = 0;
+    let adjustmentDeductionTotal = 0;
 
     for (const adj of adjustments) {
         const amount = parseFloat(adj.amount) || 0;
         if (["bonus", "commission"].includes(adj.adjustment_type)) {
-            bonusAmount += amount;
+            adjustmentBonusTotal += amount;
         } else if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
-            deductionAmount += amount;
+            adjustmentDeductionTotal += amount;
         }
     }
 
-    // Fetch current payroll to get the base values
     const payroll = await PayrollModel.findById(payroll_id);
     const grossSalary = parseFloat(payroll.gross_salary) || 0;
     const overtimeAmount = parseFloat(payroll.overtime_amount) || 0;
     const taxAmount = parseFloat(payroll.tax_amount) || 0;
 
-    // Net = gross + overtime + bonus - deductions - tax
+    // ✅ Use base_deduction_amount (attendance-based), not the already-overwritten deduction_amount
+    const baseDeduction = parseFloat(payroll.base_deduction_amount) || 0;
+    const baseBonusAmount = parseFloat(payroll.base_bonus_amount) || 0;
+
+    const totalDeduction = parseFloat((baseDeduction + adjustmentDeductionTotal).toFixed(2));
+    const totalBonus = parseFloat((baseBonusAmount + adjustmentBonusTotal).toFixed(2));
+
     const netSalary = parseFloat(
-        (grossSalary + overtimeAmount + bonusAmount - deductionAmount - taxAmount).toFixed(2)
+        (grossSalary + overtimeAmount + totalBonus - totalDeduction - taxAmount).toFixed(2)
     );
 
     await PayrollModel.update(payroll_id, {
-        bonus_amount: parseFloat(bonusAmount.toFixed(2)),
-        deduction_amount: parseFloat(deductionAmount.toFixed(2)),
+        bonus_amount: totalBonus,
+        deduction_amount: totalDeduction,
         net_salary: netSalary,
     });
 }

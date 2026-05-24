@@ -20,6 +20,8 @@ const Payroll = {
             overtime_amount = 0,
             bonus_amount = 0,
             deduction_amount = 0,
+            base_deduction_amount = 0,
+            base_bonus_amount = 0,
             tax_amount = 0,
             net_salary = 0,
             payroll_status = "draft",
@@ -29,29 +31,32 @@ const Payroll = {
 
         const result = await db.query(
             `INSERT INTO payrolls (
-                company_id, payroll_period_id, employee_id, branch_id,
-                basic_salary, gross_salary,
-                total_working_days, total_present_days, total_absent_days,
-                total_paid_leave_days, total_unpaid_leave_days, total_holidays,
-                overtime_hours, overtime_amount,
-                bonus_amount, deduction_amount, tax_amount, net_salary,
-                payroll_status, paid_at, remarks
-            ) VALUES (
-                $1,  $2,  $3,  $4,
-                $5,  $6,
-                $7,  $8,  $9,
-                $10, $11, $12,
-                $13, $14,
-                $15, $16, $17, $18,
-                $19, $20, $21
-            ) RETURNING *`,
+            company_id, payroll_period_id, employee_id, branch_id,
+            basic_salary, gross_salary,
+            total_working_days, total_present_days, total_absent_days,
+            total_paid_leave_days, total_unpaid_leave_days, total_holidays,
+            overtime_hours, overtime_amount,
+            bonus_amount, deduction_amount, base_deduction_amount, base_bonus_amount,
+            tax_amount, net_salary,
+            payroll_status, paid_at, remarks
+        ) VALUES (
+            $1,  $2,  $3,  $4,
+            $5,  $6,
+            $7,  $8,  $9,
+            $10, $11, $12,
+            $13, $14,
+            $15, $16, $17, $18,
+            $19, $20,
+            $21, $22, $23
+        ) RETURNING *`,
             [
                 company_id, payroll_period_id, employee_id, branch_id,
                 basic_salary, gross_salary,
                 total_working_days, total_present_days, total_absent_days,
                 total_paid_leave_days, total_unpaid_leave_days, total_holidays,
                 overtime_hours, overtime_amount,
-                bonus_amount, deduction_amount, tax_amount, net_salary,
+                bonus_amount, deduction_amount, base_deduction_amount, base_bonus_amount,
+                tax_amount, net_salary,
                 payroll_status, paid_at, remarks,
             ]
         );

@@ -4,7 +4,10 @@ const PayrollController = {
 
     async generatePayroll(req, res) {
         try {
-            const result = await PayrollService.generatePayroll(req.body);
+            const result = await PayrollService.generatePayroll({
+                ...req.body,
+                user_id: req.user.id,
+            });
             if (result.success) {
                 return res.status(200).json(result);
             } else {
@@ -71,6 +74,25 @@ const PayrollController = {
     async updateStatus(req, res) {
         try {
             const result = await PayrollService.updatePayrollStatus(req.params.id, req.body.payroll_status);
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    async bulkUpdateStatus(req, res) {
+        try {
+            const { company_id, payroll_period_id } = req.params;
+            const { payroll_status } = req.body;
+            const result = await PayrollService.bulkUpdatePayrollStatus(
+                company_id,
+                payroll_period_id,
+                payroll_status
+            );
             if (result.success) {
                 return res.status(200).json(result);
             } else {

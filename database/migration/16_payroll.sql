@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS payrolls (
     deduction_amount        NUMERIC(12,2)   NOT NULL DEFAULT 0,
     tax_amount              NUMERIC(12,2)   NOT NULL DEFAULT 0,
     net_salary              NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    base_deduction_amount   NUMERIC(12,2)   NOT NULL DEFAULT 0,   
+    base_bonus_amount       NUMERIC(12,2)   NOT NULL DEFAULT 0,
 
     -- Status
     payroll_status          VARCHAR(50)     NOT NULL DEFAULT 'draft',  -- draft/processed/paid/cancelled

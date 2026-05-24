@@ -28,6 +28,9 @@ router.get("/employee/:employee_id", verifyToken, validateTenant, isManager, Pay
 // ─────────────────────────────────────────────
 // UPDATE / DELETE
 // ─────────────────────────────────────────────
+
+
+router.patch("/period/:payroll_period_id/bulk-status", verifyToken, validateTenant, isAdmin, PayrollController.bulkUpdateStatus);
 router.patch("/:id/status", verifyToken, validateTenant, isAdmin, PayrollController.updateStatus);
 router.delete("/:id", verifyToken, validateTenant, isAdmin, PayrollController.delete);
 

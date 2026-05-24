@@ -380,7 +380,7 @@ const PayrollService = {
     // Generate payroll for a single branch OR entire company
     // ----------------------------------------------------------
     async generatePayroll(data) {
-        const { company_id, payroll_period_id, branch_id = null } = data;
+        const { company_id, payroll_period_id, branch_id = null, user_id } = data;
         const generated = [];
         const skipped = [];
         const errors = [];
@@ -480,6 +480,8 @@ const PayrollService = {
                         employee_id: employee.id,
                         branch_id: empBranchId,
                         ...calc,
+                        base_deduction_amount: calc.deduction_amount,
+                        base_bonus_amount: 0,
                         bonus_amount: 0,
                         tax_amount: 0,
                         payroll_status: "processed",
@@ -497,8 +499,10 @@ const PayrollService = {
 
             // ── Mark period as completed ──────────────────────
             await db.query(
-                `UPDATE payroll_periods SET status = 'completed', processed_at = NOW() WHERE id = $1`,
-                [payroll_period_id]
+                `UPDATE payroll_periods 
+         SET status = 'completed', processed_at = NOW(), processed_by = $2 
+         WHERE id = $1`,
+                [payroll_period_id, user_id]
             );
 
             return {
@@ -521,13 +525,44 @@ const PayrollService = {
     // ----------------------------------------------------------
     // Get payroll by ID (with full details)
     // ----------------------------------------------------------
+    // getPayrollById — add the same preview fields
     async getPayrollById(id) {
         try {
             const result = await PayrollModel.findById(id);
             if (!result) {
                 return { success: false, message: "Payroll record not found" };
             }
-            return { success: true, data: result };
+            const adjustments = await PayrollAdjustmentModel.getAllByPayroll(id);
+
+            let bonusTotal = 0;
+            let deductionTotal = 0;
+            for (const adj of adjustments) {
+                if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
+                    deductionTotal += parseFloat(adj.amount);
+                } else if (["bonus", "commission"].includes(adj.adjustment_type)) {
+                    bonusTotal += parseFloat(adj.amount);
+                }
+            }
+
+            const preview_deduction = (parseFloat(result.base_deduction_amount) || 0) + deductionTotal;
+            const preview_bonus = (parseFloat(result.base_bonus_amount) || 0) + bonusTotal;
+            const preview_net_salary = parseFloat((
+                (parseFloat(result.gross_salary) || 0)
+                - preview_deduction
+                + (parseFloat(result.overtime_amount) || 0)
+                + preview_bonus
+            ).toFixed(2));
+
+            return {
+                success: true,
+                data: {
+                    ...result,
+                    adjustments,
+                    preview_bonus,
+                    preview_deduction,
+                    preview_net_salary,
+                }
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
@@ -551,7 +586,33 @@ const PayrollService = {
     async getPayrollsByPeriod(company_id, payroll_period_id) {
         try {
             const result = await PayrollModel.getAllByPeriod(company_id, payroll_period_id);
-            return { success: true, data: result };
+            // For each payroll, fetch adjustments and recalculate deduction/bonus/net_salary for preview
+            const payrolls = await Promise.all(result.map(async (payroll) => {
+                const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll.id);
+                let bonusTotal = 0;
+                let deductionTotal = 0;
+                for (const adj of adjustments) {
+                    if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
+                        deductionTotal += parseFloat(adj.amount);
+                    } else if (["bonus", "commission"].includes(adj.adjustment_type)) {
+                        bonusTotal += parseFloat(adj.amount);
+                    }
+                }
+                const preview_deduction = (parseFloat(payroll.base_deduction_amount) || 0) + deductionTotal;
+                const preview_bonus = (parseFloat(payroll.base_bonus_amount) || 0) + bonusTotal;
+                const preview_net_salary = (parseFloat(payroll.gross_salary) || 0)
+                    - preview_deduction
+                    + (parseFloat(payroll.overtime_amount) || 0)
+                    + preview_bonus;
+                return {
+                    ...payroll,
+                    adjustments,
+                    preview_bonus,
+                    preview_deduction,
+                    preview_net_salary,
+                };
+            }));
+            return { success: true, data: payrolls };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
@@ -603,7 +664,28 @@ const PayrollService = {
 
             let result;
             if (payroll_status === "paid") {
+                // Fetch all adjustments for this payroll
+                const adjustments = await PayrollAdjustmentModel.getAllByPayroll(id);
+                let bonusTotal = 0;
+                let deductionTotal = 0;
+                for (const adj of adjustments) {
+                    if (adj.adjustment_type === 'bonus') {
+                        bonusTotal += parseFloat(adj.amount);
+                    } else if (adj.adjustment_type === 'deduction') {
+                        deductionTotal += parseFloat(adj.amount);
+                    }
+                }
+
+                // Update payroll record with adjustments
+                const updatedPayroll = await PayrollModel.update(id, {
+                    bonus_amount: bonusTotal,
+                    deduction_amount: (parseFloat(payroll.deduction_amount) || 0) + deductionTotal,
+                    net_salary: (parseFloat(payroll.net_salary) || 0) + bonusTotal - deductionTotal
+                });
+
+                // Mark as paid
                 result = await PayrollModel.markAsPaid(id);
+                result = { ...updatedPayroll, ...result };
             } else {
                 result = await PayrollModel.updateStatus(id, payroll_status);
             }
@@ -635,6 +717,134 @@ const PayrollService = {
             }
             const result = await PayrollModel.delete(id);
             return { success: true, message: "Payroll deleted successfully", data: result };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    // ----------------------------------------------------------
+    // Bulk update payroll status for an entire period
+    // ----------------------------------------------------------
+    async bulkUpdatePayrollStatus(company_id, payroll_period_id, payroll_status) {
+        try {
+            const VALID_STATUSES = ["approved", "paid", "cancelled"];
+            if (!VALID_STATUSES.includes(payroll_status)) {
+                return {
+                    success: false,
+                    message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}`,
+                };
+            }
+
+            // Validate period belongs to company
+            const period = await fetchPayrollPeriod(payroll_period_id);
+            if (!period) {
+                return { success: false, message: "Payroll period not found" };
+            }
+            if (period.company_id !== company_id) {
+                return { success: false, message: "Payroll period does not belong to this company" };
+            }
+
+            // Define valid transitions for bulk update
+            const validFromStatuses = {
+                approved: ["processed"],        // can only approve processed payrolls
+                paid: ["processed", "approved"], // can pay processed or approved
+                cancelled: ["processed", "approved"], // can cancel processed or approved
+            };
+
+            // Fetch all payrolls for this period
+            const payrolls = await PayrollModel.getAllByPeriod(company_id, payroll_period_id);
+            if (payrolls.length === 0) {
+                return { success: false, message: "No payrolls found for this period" };
+            }
+
+            // Split into eligible and skipped
+            const eligible = payrolls.filter(p =>
+                validFromStatuses[payroll_status].includes(p.payroll_status)
+            );
+            const skipped = payrolls.filter(p =>
+                !validFromStatuses[payroll_status].includes(p.payroll_status)
+            );
+
+            if (eligible.length === 0) {
+                return {
+                    success: false,
+                    message: `No payrolls eligible for '${payroll_status}'. All are either already ${payroll_status} or in a terminal state.`,
+                };
+            }
+
+            const eligibleIds = eligible.map(p => p.id);
+
+            let updatedRows;
+
+            if (payroll_status === "paid") {
+                // For paid: apply adjustments to each payroll and mark paid_at
+                const results = await Promise.all(eligible.map(async (payroll) => {
+                    const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll.id);
+                    let bonusTotal = 0;
+                    let deductionTotal = 0;
+                    for (const adj of adjustments) {
+                        if (["bonus", "commission"].includes(adj.adjustment_type)) {
+                            bonusTotal += parseFloat(adj.amount);
+                        } else if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
+                            deductionTotal += parseFloat(adj.amount);
+                        }
+                    }
+                    const baseDeduction = parseFloat(payroll.base_deduction_amount) || 0;
+                    const baseBonus = parseFloat(payroll.base_bonus_amount) || 0;
+                    const totalDeduction = baseDeduction + deductionTotal;
+                    const totalBonus = baseBonus + bonusTotal;
+                    const netSalary = parseFloat((
+                        (parseFloat(payroll.gross_salary) || 0)
+                        + (parseFloat(payroll.overtime_amount) || 0)
+                        + totalBonus
+                        - totalDeduction
+                        - (parseFloat(payroll.tax_amount) || 0)
+                    ).toFixed(2));
+
+                    return PayrollModel.update(payroll.id, {
+                        bonus_amount: parseFloat(totalBonus.toFixed(2)),
+                        deduction_amount: parseFloat(totalDeduction.toFixed(2)),
+                        net_salary: netSalary,
+                        payroll_status: "paid",
+                        paid_at: new Date(),
+                    });
+                }));
+                updatedRows = results;
+            } else {
+                // For approved/cancelled: simple bulk status update
+                const result = await db.query(
+                    `UPDATE payrolls
+                 SET payroll_status = $1, updated_at = NOW()
+                 WHERE id = ANY($2::uuid[])
+                 RETURNING *`,
+                    [payroll_status, eligibleIds]
+                );
+                updatedRows = result.rows;
+            }
+
+            // Update payroll period status to match if all paid
+            if (payroll_status === "paid") {
+                await db.query(
+                    `UPDATE payroll_periods SET status = 'locked' WHERE id = $1`,
+                    [payroll_period_id]
+                );
+            }
+
+            return {
+                success: true,
+                message: `${updatedRows.length} payroll(s) marked as '${payroll_status}'`,
+                data: {
+                    updated_count: updatedRows.length,
+                    skipped_count: skipped.length,
+                    skipped: skipped.map(p => ({
+                        employee_id: p.employee_id,
+                        employee_code: p.employee_code,
+                        current_status: p.payroll_status,
+                        reason: `Cannot transition from '${p.payroll_status}' to '${payroll_status}'`,
+                    })),
+                    updated: updatedRows,
+                },
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
