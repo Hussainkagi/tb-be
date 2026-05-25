@@ -500,7 +500,7 @@ const PayrollService = {
             // ── Mark period as completed ──────────────────────
             await db.query(
                 `UPDATE payroll_periods 
-         SET status = 'completed', processed_at = NOW(), processed_by = $2 
+         SET status = 'processing', processed_at = NOW(), processed_by = $2 
          WHERE id = $1`,
                 [payroll_period_id, user_id]
             );
