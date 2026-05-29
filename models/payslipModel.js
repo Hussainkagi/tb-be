@@ -44,7 +44,25 @@ const Payslip = {
 
     async findByPayrollId(payroll_id) {
         const result = await db.query(
-            `SELECT * FROM payslips WHERE payroll_id = $1`,
+            `SELECT
+                ps.*,
+                p.employee_id       AS employee_id,
+                p.payroll_period_id AS payroll_period_id,
+                p.net_salary        AS net_salary,
+                p.payroll_status    AS payroll_status,
+                e.first_name        AS employee_first_name,
+                e.last_name         AS employee_last_name,
+                e.employee_code     AS employee_code,
+                pp.period_name      AS period_name,
+                pp.start_date       AS period_start_date,
+                pp.end_date         AS period_end_date,
+                c.company_name       AS company_name
+             FROM payslips ps
+             LEFT JOIN payrolls p        ON ps.payroll_id = p.id
+             LEFT JOIN employees e       ON p.employee_id = e.id
+             LEFT JOIN companies c        ON p.company_id = c.id
+             LEFT JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+             WHERE ps.payroll_id = $1`,
             [payroll_id]
         );
         return result.rows[0];

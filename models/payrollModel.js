@@ -164,6 +164,14 @@ const Payroll = {
         return result.rows;
     },
 
+    async countByPeriod(payroll_period_id) {
+        const result = await db.query(
+            `SELECT COUNT(*) AS count FROM payrolls WHERE payroll_period_id = $1`,
+            [payroll_period_id]
+        );
+        return parseInt(result.rows[0].count, 10);
+    },
+
     async update(id, data) {
         const updates = [];
         const values = [];

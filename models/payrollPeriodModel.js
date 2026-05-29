@@ -53,6 +53,25 @@ const PayrollPeriod = {
         return result.rows[0];
     },
 
+    async findOverlapping(company_id, start_date, end_date, excludeId = null) {
+        const query = `
+        SELECT id, period_name, start_date, end_date
+        FROM payroll_periods
+        WHERE company_id = $1
+          AND start_date < $3
+          AND end_date   > $2
+          ${excludeId ? "AND id != $4" : ""}
+        LIMIT 1
+    `;
+
+        const params = excludeId
+            ? [company_id, start_date, end_date, excludeId]
+            : [company_id, start_date, end_date];
+
+        const result = await db.query(query, params);
+        return result.rows[0] ?? null;
+    },
+
     async getAllByCompany(company_id) {
         const result = await db.query(
             `SELECT

@@ -2,6 +2,8 @@ const PayslipModel = require("../models/payslipModel");
 const PayrollModel = require("../models/payrollModel");
 const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
 
+const PayrollPeriodModel = require("../models/payrollPeriodModel");
+
 // ============================================================
 // UTILITY: Generate unique payslip number
 // Format: PSL-{YYYYMM}-{EMPLOYEE_CODE}-{RANDOM4}
@@ -79,6 +81,11 @@ const PayslipService = {
     // ----------------------------------------------------------
     async generatePayslipsForPeriod(company_id, payroll_period_id) {
         try {
+
+            const period = await PayrollPeriodModel.findById(payroll_period_id);
+            if (!period) {
+                return { success: false, message: "Payroll period not found" };
+            }
             const payrolls = await PayrollModel.getAllByPeriod(company_id, payroll_period_id);
             if (!payrolls || payrolls.length === 0) {
                 return {
@@ -112,7 +119,7 @@ const PayslipService = {
 
                     const payslipNumber = generatePayslipNumber(
                         payroll.employee_code,
-                        payroll.period_start_date
+                        period.start_date
                     );
 
                     const payslip = await PayslipModel.create({

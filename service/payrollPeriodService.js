@@ -1,4 +1,5 @@
 const PayrollPeriodModel = require("../models/payrollPeriodModel");
+const PayrollModel = require("../models/payrollModel");
 
 const VALID_STATUSES = ["open", "processing", "completed", "locked"];
 
@@ -27,6 +28,14 @@ const PayrollPeriodService = {
             const existing = await PayrollPeriodModel.findByName(company_id, period_name);
             if (existing) {
                 return { success: false, message: "A payroll period with this name already exists for the company" };
+            }
+
+            const overlapping = await PayrollPeriodModel.findOverlapping(company_id, start_date, end_date);
+            if (overlapping) {
+                return {
+                    success: false,
+                    message: `Date range overlaps with existing period "${overlapping.period_name}" (${overlapping.start_date} → ${overlapping.end_date})`,
+                };
             }
 
             const result = await PayrollPeriodModel.create(data);
@@ -222,9 +231,14 @@ const PayrollPeriodService = {
                 return { success: false, message: "Payroll period not found" };
             }
 
-            if (period.status === "locked") {
-                return { success: false, message: "Locked payroll periods cannot be deleted" };
+            if (["locked", "completed"].includes(period.status)) {
+                return {
+                    success: false,
+                    message: `Cannot delete a period with status "${period.status}". Only open or processing periods can be deleted.`,
+                };
             }
+
+            const linkedPayrolls = await PayrollModel.countByPeriod(id);
 
             const result = await PayrollPeriodModel.delete(id);
             if (!result) {
@@ -232,7 +246,7 @@ const PayrollPeriodService = {
             }
             return {
                 success: true,
-                message: "Payroll period deleted successfully",
+                message: `Payroll period deleted. ${linkedPayrolls} linked payroll(s) were also removed.`,
                 data: result,
             };
         } catch (error) {
