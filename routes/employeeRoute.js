@@ -17,7 +17,7 @@ router.get("/user-company/:user_id", verifyToken, validateTenant, isEmployee, Em
     // ADMIN + MANAGER
     // ─────────────────────────────────────────────
     router.get("/", verifyToken, validateTenant, isManager, EmployeeController.getByCompany);
-router.get("/:id", verifyToken, validateTenant, isManager, EmployeeController.getById);
+router.get("/:id", verifyToken, validateTenant, isEmployee, EmployeeController.getById);
 router.put("/:id", verifyToken, validateTenant, isManager, EmployeeController.update);
 router.patch("/:id/status", verifyToken, validateTenant, isManager, EmployeeController.updateStatus);
 router.patch("/:id/deactivate", verifyToken, validateTenant, isAdmin, EmployeeController.deactivate);

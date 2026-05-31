@@ -83,10 +83,14 @@ const AttendanceController = {
     async getByEmployee(req, res) {
         try {
             const { startDate, endDate } = req.query;
+            const { company_id, employee_id } = req.params;
+
             const result = await AttendanceService.getAttendanceByEmployee(
-                req.params.employee_id,
+                company_id,
+                employee_id,
                 { startDate, endDate }
             );
+
             if (result.success) {
                 return res.status(200).json(result);
             } else {

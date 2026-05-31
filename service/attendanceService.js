@@ -427,9 +427,9 @@ const AttendanceService = {
         }
     },
 
-    async getAttendanceByEmployee(employee_id, filters = {}) {
+    async getAttendanceByEmployee(company_id, employee_id, filters = {}) {
         try {
-            const records = await AttendanceModel.findByEmployee(employee_id, filters);
+            const records = await AttendanceModel.findByEmployee(company_id, employee_id, filters);
             return { success: true, data: records };
         } catch (error) {
             return { success: false, message: error.message, error };

@@ -121,25 +121,37 @@ const Attendance = {
         return result.rows;
     },
 
-    async findByEmployee(employee_id, { startDate, endDate } = {}) {
-        const values = [employee_id];
+    async findByEmployee(company_id, employee_id, { startDate, endDate } = {}) {
+        const values = [company_id, employee_id];
         let dateFilter = '';
 
         if (startDate && endDate) {
             values.push(startDate, endDate);
-            dateFilter = `AND attendance_date BETWEEN $2 AND $3`;
+            dateFilter = `AND a.attendance_date BETWEEN $3 AND $4`;
         } else if (startDate) {
             values.push(startDate);
-            dateFilter = `AND attendance_date >= $2`;
+            dateFilter = `AND a.attendance_date >= $3`;
         } else if (endDate) {
             values.push(endDate);
-            dateFilter = `AND attendance_date <= $2`;
+            dateFilter = `AND a.attendance_date <= $3`;
         }
 
         const result = await db.query(
-            `SELECT * FROM attendance
-             WHERE employee_id = $1 ${dateFilter}
-             ORDER BY attendance_date DESC`,
+            `SELECT
+            a.*,
+            e.first_name,
+            e.last_name,
+            e.employee_code,
+            e.email,
+            d.department_name,
+            s.shift_name
+         FROM attendance a
+         LEFT JOIN employees e ON a.employee_id = e.id
+         LEFT JOIN departments d ON e.department_id = d.id
+         LEFT JOIN shifts s ON e.shift_id = s.id
+         WHERE a.company_id = $1
+           AND a.employee_id = $2 ${dateFilter}
+         ORDER BY a.attendance_date DESC, a.check_in DESC`,
             values
         );
         return result.rows;

@@ -65,7 +65,7 @@ router.get("/map", verifyToken, validateTenant, isManager, AttendanceController.
 router.get("/branch/:branch_id", verifyToken, validateTenant, isManager, AttendanceController.getByBranch);
 
 // GET /api/companies/:company_id/attendance/employee/:employee_id?startDate=&endDate=
-router.get("/employee/:employee_id", verifyToken, validateTenant, isManager, AttendanceController.getByEmployee);
+router.get("/employee/:employee_id", verifyToken, validateTenant, isEmployee, AttendanceController.getByEmployee);
 
 // ─────────────────────────────────────────────
 // SINGLE RECORD

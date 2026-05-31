@@ -13,7 +13,7 @@ const validateTenant = require("../middleware/validateTenant");
 // ─────────────────────────────────────────────
 router.get("/", verifyToken, validateTenant, isManager, ShiftController.getByBranch);
 router.get("/company", verifyToken, validateTenant, isManager, ShiftController.getByCompany);
-router.get("/:id", verifyToken, validateTenant, isManager, ShiftController.getById);
+router.get("/:id", verifyToken, validateTenant, isEmployee, ShiftController.getById);
 router.post("/", verifyToken, validateTenant, isAdmin, ShiftController.create);
 router.put("/:id", verifyToken, validateTenant, isManager, ShiftController.update);
 router.patch("/:id/deactivate", verifyToken, validateTenant, isAdmin, ShiftController.deactivate);

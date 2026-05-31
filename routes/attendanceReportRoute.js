@@ -4,7 +4,7 @@ const router = express.Router({ mergeParams: true });
 
 const AttendanceReportController = require("../controller/attendanceReportController");
 const verifyToken = require("../middleware/verifyToken");
-const { isAdmin, isManager } = require("../middleware/authorizeRoles");
+const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
 
 // All routes scoped under /api/companies/:company_id/attendance-reports
@@ -24,7 +24,7 @@ router.get(
     "/headcount",
     verifyToken,
     validateTenant,
-    isManager,
+    isEmployee,
     AttendanceReportController.getHeadcount,
 );
 

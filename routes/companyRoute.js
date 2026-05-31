@@ -3,7 +3,7 @@ const router = express.Router();
 
 const CompanyController = require("../controller/companyController");
 const verifyToken = require("../middleware/verifyToken");
-const { isAdmin, isManager } = require("../middleware/authorizeRoles");
+const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 
 // ─────────────────────────────────────────────
 // PUBLIC
@@ -14,7 +14,7 @@ const { isAdmin, isManager } = require("../middleware/authorizeRoles");
 // ADMIN ONLY
 // ─────────────────────────────────────────────
 router.get("/", verifyToken, isAdmin, CompanyController.getAll);
-router.get("/:id", verifyToken, isAdmin, CompanyController.getById);
+router.get("/:id", verifyToken, isEmployee, CompanyController.getById);
 router.get("/code/:code", verifyToken, isAdmin, CompanyController.getByCode);
 router.put("/:id", verifyToken, isAdmin, CompanyController.update);
 router.patch("/:id/plan", verifyToken, isAdmin, CompanyController.updatePlan);
