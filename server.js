@@ -90,6 +90,9 @@ app.use("/api/companies/:company_id/employees/:employee_id/documents", EmployeeD
 const EmployeeSalaryStructureRoutes = require("./routes/employeeSalaryStructureRoute");
 app.use("/api/companies/:company_id/employees/:employee_id/salary-structures", EmployeeSalaryStructureRoutes);
 
+const EmployeeSalaryStructureBulkRoutes = require("./routes/employeeSalaryStructureBulkRoute");
+app.use("/api/companies/:company_id/salary-structures/bulk-upload", EmployeeSalaryStructureBulkRoutes);
+
 const attendanceRoutes = require("./routes/attendanceRoute");
 app.use("/api/companies/:company_id/attendance", attendanceRoutes);
 

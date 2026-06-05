@@ -317,6 +317,140 @@ const UserCompanyService = {
     }
 },
 
+// ── BULK INVITE EMPLOYEES (Excel upload) ──────────────────────────────────────
+// Add this method inside the UserCompanyService object, alongside inviteEmployee.
+//
+// Reads rows from a parsed Excel file (already converted to JSON array by the
+// controller), validates each row, then delegates to the existing inviteEmployee
+// logic row-by-row, collecting per-row results so the caller always gets a full
+// report instead of an all-or-nothing failure.
+//
+// Expected row shape (matches the Excel template headers):
+//   first_name, last_name, email, phone,
+//   gender, role, employment_type, is_remote_job,
+//   branch_id, department_id, shift_id,
+//   date_of_birth, joining_date
+// ---------------------------------------------------------------------------
+
+async bulkInviteEmployees(rows, company_id) {
+    const REQUIRED_FIELDS = ["first_name", "last_name", "email", "phone", "gender", "role", "employment_type", "is_remote_job"];
+    const VALID_GENDERS   = ["male", "female", "other"];
+    const VALID_EMP_TYPES = ["full_time", "part_time", "contract", "intern"];
+
+    const results = {
+        total:     rows.length,
+        succeeded: 0,
+        failed:    0,
+        rows:      [],   // per-row outcome — always populated
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+        const raw       = rows[i];
+        const rowNumber = i + 2; // +2: row 1 = header, row 2 = first data row in Excel (row 3 is sample)
+
+        // ── 1. Normalise values ────────────────────────────────────────────
+        const row = {
+            first_name:      String(raw.first_name      ?? "").trim(),
+            last_name:       String(raw.last_name        ?? "").trim(),
+            email:           String(raw.email            ?? "").trim().toLowerCase(),
+            phone:           String(raw.phone            ?? "").trim(),
+            gender:          String(raw.gender           ?? "").trim().toLowerCase(),
+            role:            String(raw.role             ?? "").trim(),
+            employment_type: String(raw.employment_type  ?? "").trim().toLowerCase(),
+            is_remote_job:   String(raw.is_remote_job    ?? "false").trim().toLowerCase() === "true",
+            branch_id:       raw.branch_id     ? String(raw.branch_id).trim()     : null,
+            department_id:   raw.department_id ? String(raw.department_id).trim() : null,
+            shift_id:        raw.shift_id      ? String(raw.shift_id).trim()      : null,
+            joining_date: raw.joining_date
+                                            ? new Date(raw.joining_date).toISOString().split("T")[0]
+                                            : null,
+                                        date_of_birth: raw.date_of_birth
+                                            ? new Date(raw.date_of_birth).toISOString().split("T")[0]
+                                            : null,
+        };
+
+        // ── 2. Required-field validation ──────────────────────────────────
+        const missing = REQUIRED_FIELDS.filter(f => !row[f] && row[f] !== false);
+        if (missing.length) {
+            results.failed++;
+            results.rows.push({
+                row: rowNumber,
+                email: row.email || "(missing)",
+                success: false,
+                message: `Missing required fields: ${missing.join(", ")}`,
+            });
+            continue;
+        }
+
+        // ── 3. Email format ───────────────────────────────────────────────
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+            results.failed++;
+            results.rows.push({ row: rowNumber, email: row.email, success: false, message: "Invalid email format" });
+            continue;
+        }
+
+        // ── 4. Enum validations ───────────────────────────────────────────
+        if (!VALID_GENDERS.includes(row.gender)) {
+            results.failed++;
+            results.rows.push({ row: rowNumber, email: row.email, success: false, message: `Invalid gender. Must be: ${VALID_GENDERS.join(", ")}` });
+            continue;
+        }
+
+        if (!VALID_EMP_TYPES.includes(row.employment_type)) {
+            results.failed++;
+            results.rows.push({ row: rowNumber, email: row.email, success: false, message: `Invalid employment_type. Must be: ${VALID_EMP_TYPES.join(", ")}` });
+            continue;
+        }
+
+        if (row.role === String(Role.ADMIN)) {
+            results.failed++;
+            results.rows.push({ row: rowNumber, email: row.email, success: false, message: "Cannot bulk-invite a user as Admin" });
+            continue;
+        }
+
+        // ── 5. Delegate to the single-invite service ──────────────────────
+        try {
+            const outcome = await this.inviteEmployee({
+                ...row,
+                company_id,
+            });
+
+            if (outcome.success) {
+                results.succeeded++;
+                results.rows.push({
+                    row: rowNumber,
+                    email: row.email,
+                    success: true,
+                    message: outcome.message,
+                    data: outcome.data,
+                });
+            } else {
+                results.failed++;
+                results.rows.push({
+                    row: rowNumber,
+                    email: row.email,
+                    success: false,
+                    message: outcome.message,
+                });
+            }
+        } catch (err) {
+            results.failed++;
+            results.rows.push({
+                row: rowNumber,
+                email: row.email,
+                success: false,
+                message: err.message,
+            });
+        }
+    }
+
+    return {
+        success: true,   // the *operation* succeeded even if some rows failed
+        message: `Bulk invite complete. ${results.succeeded} succeeded, ${results.failed} failed.`,
+        data: results,
+    };
+},
+
     // ── SET PASSWORD (employee accepts invite) ────────────────────────────────
     async setPasswordFromInvite(token, password) {
         try {

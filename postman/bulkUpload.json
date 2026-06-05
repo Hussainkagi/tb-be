@@ -1,0 +1,87 @@
+{
+  "info": {
+    "name": "Bulk Invite APIs",
+    "_postman_id": "bulk-invite-collection-001",
+    "description": "Bulk employee invite endpoints for HRMS — includes Excel file upload and template download.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000/api",
+      "type": "string",
+      "description": "Base URL of your API server"
+    },
+    {
+      "key": "company_id",
+      "value": "300c16f2-052c-465e-9dc7-e2d401c8b082",
+      "type": "string",
+      "description": "UUID of the company"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT access token — paste after login"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Bulk Invite Employees (Excel Upload)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "",
+              "description": "Select your filled bulk_employee_invite_template.xlsx file here"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/user-companies/companies/{{company_id}}/users/bulk-invite",
+          "host": ["{{base_url}}"],
+          "path": [
+            "user-companies",
+            "companies",
+            "{{company_id}}",
+            "users",
+            "bulk-invite"
+          ]
+        },
+        "description": "Upload a filled .xlsx file to bulk-invite multiple employees at once.\n\n**Required Excel columns (red headers in template):**\n- `first_name`\n- `last_name`\n- `email`\n- `phone`\n- `gender` — `male` | `female` | `other`\n- `role` — `2` (Employee) | `3` (Manager) | `4` (HR)\n- `employment_type` — `full_time` | `part_time` | `contract` | `intern`\n- `is_remote_job` — `true` | `false`\n\n**Optional Excel columns (blue headers in template):**\n- `branch_id` — UUID\n- `department_id` — UUID\n- `shift_id` — UUID\n- `date_of_birth` — YYYY-MM-DD\n- `joining_date` — YYYY-MM-DD\n\n**Limits:** Max 500 rows per upload, max file size 5 MB.\n\n**Auth:** Admin or Manager JWT required.\n\n**Response codes:**\n- `200` — All rows succeeded\n- `207` — Mix of success and failures (check `data.rows` for per-row results)\n- `400` — No file / empty file / exceeds row limit\n- `422` — Every row failed validation\n- `401` — Unauthorized\n\n**Example 207 response:**\n```json\n{\n  \"success\": true,\n  \"message\": \"Bulk invite complete. 48 succeeded, 2 failed.\",\n  \"data\": {\n    \"total\": 50,\n    \"succeeded\": 48,\n    \"failed\": 2,\n    \"rows\": [\n      {\n        \"row\": 2,\n        \"email\": \"hussain@example.com\",\n        \"success\": true,\n        \"message\": \"Employee invited. Password-set link sent to email.\",\n        \"data\": {\n          \"user_id\": \"uuid\",\n          \"employee_id\": \"uuid\",\n          \"username\": \"AA0002\",\n          \"company_id\": \"uuid\"\n        }\n      },\n      {\n        \"row\": 5,\n        \"email\": \"duplicate@example.com\",\n        \"success\": false,\n        \"message\": \"User is already a member of this company\"\n      }\n    ]\n  }\n}\n```"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Download Bulk Invite Template",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/user-companies/companies/bulk-invite/template",
+          "host": ["{{base_url}}"],
+          "path": ["user-companies", "companies", "bulk-invite", "template"]
+        },
+        "description": "Download the blank Excel template (.xlsx) that admins fill out before uploading.\n\nThe file contains:\n- **Employees sheet** — headers with colour coding (red = required, blue = optional) and one sample row\n- **Notes sheet** — accepted values for every column\n\n**Auth:** Admin JWT required.\n\n**Response:** Binary `.xlsx` file download (`Content-Disposition: attachment`).\n\n> In Postman, click **Send and Download** instead of **Send** to save the file to disk."
+      },
+      "response": []
+    }
+  ]
+}

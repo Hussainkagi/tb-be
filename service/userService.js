@@ -17,7 +17,7 @@ const UserService = {
 
             const password_hash = await hashPassword(data.password);
             const verificationToken = crypto.randomBytes(32).toString("hex");
-            const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24hrs
+            const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
             const result = await UserModel.create({
                 ...data,

@@ -6,6 +6,8 @@ const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
 
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Routes scoped under:
 //   /api/companies/:company_id/employees/:employee_id/salary-structures
@@ -31,5 +33,12 @@ router.patch("/:id/deactivate", verifyToken, validateTenant, isAdmin, EmployeeSa
 
 // Hard delete a specific salary structure
 router.delete("/:id", verifyToken, validateTenant, isAdmin, EmployeeSalaryStructureController.delete);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk upload — scoped under:
+//   /api/companies/:company_id/salary-structures/bulk-upload
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 
 module.exports = router;

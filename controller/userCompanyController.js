@@ -102,6 +102,64 @@ const UserCompanyController = {
         }
     },
 
+    // ── BULK INVITE EMPLOYEES (Excel upload) ──────────────────────────────────────
+    async bulkInviteEmployees(req, res) {
+        try {
+            const xlsx = require("xlsx");
+
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No file uploaded. Send a .xlsx file in the 'file' field.",
+                });
+            }
+
+            const workbook = xlsx.read(req.file.buffer, { type: "buffer", cellDates: true });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+            let rows = xlsx.utils.sheet_to_json(sheet, { defval: "" });
+
+            // Strip blank rows and the template sample row
+            rows = rows.filter(r => {
+                const email = String(r.email ?? "").trim();
+                const firstName = String(r.first_name ?? "").trim();
+                if (!email && !firstName) return false;
+                if (email.endsWith("@example.com")) return false;
+                return true;
+            });
+
+            if (rows.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "The uploaded file contains no data rows.",
+                });
+            }
+
+            if (rows.length > 500) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Maximum 500 employees per upload. Please split into smaller files.",
+                });
+            }
+
+            const result = await UserCompanyService.bulkInviteEmployees(rows, req.user.company_id);
+
+            const status =
+                result.data.failed > 0 && result.data.succeeded > 0 ? 207
+                    : result.data.failed === rows.length ? 422
+                        : 200;
+
+            return res.status(status).json(result);
+
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
     // ── SET PASSWORD FROM INVITE ──────────────────────────────────────────────
     async setPasswordFromInvite(req, res) {
         try {
