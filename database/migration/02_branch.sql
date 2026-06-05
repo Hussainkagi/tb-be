@@ -54,6 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_branches_head_office
     ON branches(company_id, is_head_office)
     WHERE is_head_office = TRUE;
 
+DROP TRIGGER IF EXISTS trg_branches_updated_at ON branches;
 CREATE TRIGGER trg_branches_updated_at
     BEFORE UPDATE ON branches
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

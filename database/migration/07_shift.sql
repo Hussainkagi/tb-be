@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS shifts (
 
     -- Constraints
     CONSTRAINT uq_shift_name_per_branch
-        UNIQUE (company_id, branch_id, shift_name),
+        UNIQUE (branch_id, shift_name),
 
     CONSTRAINT chk_late_grace_minutes_non_negative
         CHECK (late_grace_minutes >= 0),
@@ -64,8 +64,6 @@ CREATE INDEX IF NOT EXISTS idx_shifts_company_id
 CREATE INDEX IF NOT EXISTS idx_shifts_branch_id
     ON shifts(branch_id);
 
-CREATE INDEX IF NOT EXISTS idx_shifts_is_night_shift
-    ON shifts(is_night_shift);
 
 CREATE INDEX IF NOT EXISTS idx_shifts_is_active
     ON shifts(is_active)
@@ -78,6 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_shifts_is_active
 
 -- set_updated_at() is defined in 00_functions.sql — no need to redefine here.
 
-CREATE OR REPLACE TRIGGER trg_shifts_updated_at
+DROP TRIGGER IF EXISTS trg_shifts_updated_at ON shifts;
+CREATE TRIGGER trg_shifts_updated_at
     BEFORE UPDATE ON shifts
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

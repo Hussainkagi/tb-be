@@ -60,6 +60,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_companies_updated_at ON companies;
 CREATE TRIGGER trg_companies_updated_at
     BEFORE UPDATE ON companies
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

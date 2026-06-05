@@ -79,7 +79,7 @@ CREATE INDEX IF NOT EXISTS idx_attendance_checkin_location
     WHERE check_in_latitude IS NOT NULL AND check_in_longitude IS NOT NULL;
 
 -- ── Auto-update trigger ───────────────────────────────────────
-
+DROP TRIGGER IF EXISTS trg_attendance_updated_at ON attendance;
 CREATE TRIGGER trg_attendance_updated_at
     BEFORE UPDATE ON attendance
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

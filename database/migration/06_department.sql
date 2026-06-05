@@ -23,7 +23,10 @@ CREATE TABLE IF NOT EXISTS departments (
 
     -- Audit
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+
+    CONSTRAINT uq_department_name_per_branch UNIQUE (branch_id, department_name)
 
   
 );

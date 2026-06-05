@@ -52,6 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_employee_documents_expiry
     ON employee_documents(company_id, expiry_date)
     WHERE expiry_date IS NOT NULL AND deleted_at IS NULL;
 
+DROP TRIGGER IF EXISTS trg_employee_documents_updated_at ON employee_documents;
 CREATE TRIGGER trg_employee_documents_updated_at
     BEFORE UPDATE ON employee_documents
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

@@ -26,6 +26,6 @@ CREATE TABLE IF NOT EXISTS otp_verifications (
 CREATE INDEX IF NOT EXISTS idx_otp_token
     ON otp_verifications(token);
 
-CREATE INDEX IF NOT EXISTS idx_otp_user_type
-    ON otp_verifications(user_id, type)
+CREATE INDEX IF NOT EXISTS idx_otp_user_company_type
+    ON otp_verifications(user_id, company_id, type)
     WHERE verified_at IS NULL;

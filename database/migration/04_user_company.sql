@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS user_companies (
  
     user_id     UUID        NOT NULL REFERENCES users(id)      ON DELETE CASCADE,
     company_id  UUID        NOT NULL REFERENCES companies(id)  ON DELETE CASCADE,
-    branch_id   UUID                 REFERENCES branches(id)   ON DELETE SET NULL,
  
     -- Username: globally unique, company-prefixed (AA0001 format)
     username    VARCHAR(10)  NOT NULL UNIQUE,
@@ -38,14 +37,8 @@ CREATE INDEX IF NOT EXISTS idx_user_companies_user_id
  
 CREATE INDEX IF NOT EXISTS idx_user_companies_company_id
     ON user_companies(company_id);
- 
-CREATE INDEX IF NOT EXISTS idx_user_companies_branch_id
-    ON user_companies(branch_id)
-    WHERE branch_id IS NOT NULL;
 
-
+DROP TRIGGER IF EXISTS trg_user_companies_updated_at ON user_companies;
 CREATE TRIGGER trg_user_companies_updated_at
     BEFORE UPDATE ON user_companies
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
- 
- 

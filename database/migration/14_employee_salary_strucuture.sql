@@ -1,4 +1,4 @@
-CREATE TABLE employee_salary_structures (
+CREATE TABLE IF NOT EXISTS employee_salary_structures (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     company_id              UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -24,3 +24,8 @@ CREATE TABLE employee_salary_structures (
     created_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+DROP TRIGGER IF EXISTS trg_employee_salary_structures_updated_at ON employee_salary_structures;
+CREATE TRIGGER trg_employee_salary_structures_updated_at
+    BEFORE UPDATE ON employee_salary_structures
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
