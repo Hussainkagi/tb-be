@@ -7,7 +7,7 @@ const REQUIRED_COLUMNS = [
     "employee_id",
     "company_id",
     "effective_from",
-    "basic_salary",
+    "actual_salary",
 ];
 
 const OPTIONAL_COLUMNS = [
@@ -78,7 +78,7 @@ function validateRow(raw, rowIndex) {
         effective_from: raw.effective_from instanceof Date
             ? raw.effective_from.toISOString().split("T")[0]
             : String(raw.effective_from).trim(),
-        basic_salary: parseFloat(raw.basic_salary) || 0,
+        actual_salary: parseFloat(raw.actual_salary) || 0,
         housing_allowance: parseFloat(raw.housing_allowance) || 0,
         transport_allowance: parseFloat(raw.transport_allowance) || 0,
         other_allowance: parseFloat(raw.other_allowance) || 0,
@@ -111,7 +111,7 @@ function validateRow(raw, rowIndex) {
     }
 
     // Validate numeric salaries are non-negative
-    for (const field of ["basic_salary", "housing_allowance", "transport_allowance", "other_allowance"]) {
+    for (const field of ["actual_salary", "housing_allowance", "transport_allowance", "other_allowance"]) {
         if (data[field] < 0) {
             errors.push(`${field} cannot be negative`);
         }

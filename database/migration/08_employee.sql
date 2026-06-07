@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS employees (
     -- Employment
     joining_date            DATE,
     employment_type         VARCHAR(50),    -- full_time, part_time, contract, etc.
+    employee_person_code    VARCHAR(50),
     status                  VARCHAR(50)     NOT NULL DEFAULT 'active',  -- active, inactive, terminated, on_leave
 
    

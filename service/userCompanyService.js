@@ -214,6 +214,7 @@ const UserCompanyService = {
             date_of_birth = null,
             joining_date = null,
             employment_type = null,
+             employee_person_code = null, 
             is_remote_job = false,
         } = data;
 
@@ -274,6 +275,7 @@ const UserCompanyService = {
             date_of_birth,
             joining_date,
             employment_type,
+            employee_person_code,
             is_remote_job
         });
 
@@ -357,6 +359,7 @@ async bulkInviteEmployees(rows, company_id) {
             gender:          String(raw.gender           ?? "").trim().toLowerCase(),
             role:            String(raw.role             ?? "").trim(),
             employment_type: String(raw.employment_type  ?? "").trim().toLowerCase(),
+            employee_person_code: raw.employee_person_code ? String(raw.employee_person_code).trim() : null,
             is_remote_job:   String(raw.is_remote_job    ?? "false").trim().toLowerCase() === "true",
             branch_id:       raw.branch_id     ? String(raw.branch_id).trim()     : null,
             department_id:   raw.department_id ? String(raw.department_id).trim() : null,

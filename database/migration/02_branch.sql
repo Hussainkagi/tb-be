@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS branches (
     CONSTRAINT uq_branch_code_company UNIQUE (company_id, branch_code)
 );
 
+-- changes
+ALTER TABLE branches
+    ADD COLUMN IF NOT EXISTS establishment_card_number VARCHAR(50);
+
 CREATE INDEX IF NOT EXISTS idx_branches_company_id
     ON branches(company_id);
 

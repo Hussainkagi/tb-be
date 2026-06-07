@@ -8,7 +8,7 @@ const Payroll = {
             payroll_period_id,
             employee_id,
             branch_id = null,
-            basic_salary = 0,
+            actual_salary = 0,
             gross_salary = 0,
             total_working_days = 0,
             total_present_days = 0,
@@ -32,7 +32,7 @@ const Payroll = {
         const result = await db.query(
             `INSERT INTO payrolls (
             company_id, payroll_period_id, employee_id, branch_id,
-            basic_salary, gross_salary,
+            actual_salary, gross_salary,
             total_working_days, total_present_days, total_absent_days,
             total_paid_leave_days, total_unpaid_leave_days, total_holidays,
             overtime_hours, overtime_amount,
@@ -51,7 +51,7 @@ const Payroll = {
         ) RETURNING *`,
             [
                 company_id, payroll_period_id, employee_id, branch_id,
-                basic_salary, gross_salary,
+                actual_salary, gross_salary,
                 total_working_days, total_present_days, total_absent_days,
                 total_paid_leave_days, total_unpaid_leave_days, total_holidays,
                 overtime_hours, overtime_amount,

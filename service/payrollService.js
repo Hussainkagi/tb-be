@@ -87,7 +87,7 @@ async function calculateEmployeePayroll(employee, period, shift, salaryStructure
     // ----------------------------------------------------------
     // STEP 1 — SALARY STRUCTURE
     // ----------------------------------------------------------
-    const basicSalary = parseFloat(salaryStructure.basic_salary) || 0;
+    const basicSalary = parseFloat(salaryStructure.actual_salary) || 0;
     const housingAllowance = parseFloat(salaryStructure.housing_allowance) || 0;
     const transportAllowance = parseFloat(salaryStructure.transport_allowance) || 0;
     const otherAllowance = parseFloat(salaryStructure.other_allowance) || 0;
@@ -253,7 +253,7 @@ async function calculateEmployeePayroll(employee, period, shift, salaryStructure
     );
 
     return {
-        basic_salary: basicSalary,
+        actual_salary: basicSalary,
         gross_salary: parseFloat(grossSalary.toFixed(2)),
         total_working_days: totalWorkingDays,
         total_present_days: parseFloat(totalPresentDays.toFixed(2)),

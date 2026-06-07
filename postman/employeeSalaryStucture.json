@@ -32,7 +32,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"effective_from\": \"2025-01-01\",\n  \"effective_to\": null,\n  \"basic_salary\": 5000.00,\n  \"housing_allowance\": 1000.00,\n  \"transport_allowance\": 500.00,\n  \"other_allowance\": 250.00,\n  \"overtime_enabled\": true,\n  \"overtime_rate_per_hour\": 35.00,\n  \"payment_type\": \"monthly\"\n}"
+          "raw": "{\n  \"effective_from\": \"2025-01-01\",\n  \"effective_to\": null,\n  \"actual_salary\": 5000.00,\n  \"housing_allowance\": 1000.00,\n  \"transport_allowance\": 500.00,\n  \"other_allowance\": 250.00,\n  \"overtime_enabled\": true,\n  \"overtime_rate_per_hour\": 35.00,\n  \"payment_type\": \"monthly\"\n}"
         }
       },
       "response": [
@@ -41,7 +41,7 @@
           "status": "Created",
           "code": 201,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure created successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"basic_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n  }\n}"
+          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure created successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"actual_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n  }\n}"
         },
         {
           "name": "400 Bad Request – Missing required fields",
@@ -83,7 +83,7 @@
           "status": "OK",
           "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"basic_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n  }\n}"
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"actual_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n  }\n}"
         },
         {
           "name": "404 Not Found",
@@ -117,7 +117,7 @@
           "status": "OK",
           "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"effective_from\": \"2025-01-01\",\n      \"effective_to\": null,\n      \"basic_salary\": \"5000.00\",\n      \"housing_allowance\": \"1000.00\",\n      \"transport_allowance\": \"500.00\",\n      \"other_allowance\": \"250.00\",\n      \"overtime_enabled\": true,\n      \"overtime_rate_per_hour\": \"35.00\",\n      \"payment_type\": \"monthly\",\n      \"is_active\": true,\n      \"created_at\": \"2025-01-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000010\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"effective_from\": \"2024-01-01\",\n      \"effective_to\": \"2024-12-31\",\n      \"basic_salary\": \"4500.00\",\n      \"housing_allowance\": \"800.00\",\n      \"transport_allowance\": \"400.00\",\n      \"other_allowance\": \"200.00\",\n      \"overtime_enabled\": false,\n      \"overtime_rate_per_hour\": null,\n      \"payment_type\": \"monthly\",\n      \"is_active\": false,\n      \"created_at\": \"2024-01-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-01T07:59:00.000Z\"\n    }\n  ]\n}"
+          "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"effective_from\": \"2025-01-01\",\n      \"effective_to\": null,\n      \"actual_salary\": \"5000.00\",\n      \"housing_allowance\": \"1000.00\",\n      \"transport_allowance\": \"500.00\",\n      \"other_allowance\": \"250.00\",\n      \"overtime_enabled\": true,\n      \"overtime_rate_per_hour\": \"35.00\",\n      \"payment_type\": \"monthly\",\n      \"is_active\": true,\n      \"created_at\": \"2025-01-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0000-0000-0000-000000000010\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n      \"effective_from\": \"2024-01-01\",\n      \"effective_to\": \"2024-12-31\",\n      \"actual_salary\": \"4500.00\",\n      \"housing_allowance\": \"800.00\",\n      \"transport_allowance\": \"400.00\",\n      \"other_allowance\": \"200.00\",\n      \"overtime_enabled\": false,\n      \"overtime_rate_per_hour\": null,\n      \"payment_type\": \"monthly\",\n      \"is_active\": false,\n      \"created_at\": \"2024-01-01T08:00:00.000Z\",\n      \"updated_at\": \"2025-01-01T07:59:00.000Z\"\n    }\n  ]\n}"
         }
       ]
     },
@@ -145,7 +145,7 @@
           "status": "OK",
           "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_first_name\": \"John\",\n    \"employee_last_name\": \"Doe\",\n    \"employee_code\": \"EMP-001\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"basic_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n  }\n}"
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_first_name\": \"John\",\n    \"employee_last_name\": \"Doe\",\n    \"employee_code\": \"EMP-001\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"actual_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T08:00:00.000Z\"\n  }\n}"
         },
         {
           "name": "404 Not Found",
@@ -178,7 +178,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"basic_salary\": 5500.00,\n  \"housing_allowance\": 1200.00,\n  \"transport_allowance\": 600.00,\n  \"other_allowance\": 300.00,\n  \"overtime_enabled\": true,\n  \"overtime_rate_per_hour\": 40.00,\n  \"effective_to\": \"2025-12-31\"\n}"
+          "raw": "{\n  \"actual_salary\": 5500.00,\n  \"housing_allowance\": 1200.00,\n  \"transport_allowance\": 600.00,\n  \"other_allowance\": 300.00,\n  \"overtime_enabled\": true,\n  \"overtime_rate_per_hour\": 40.00,\n  \"effective_to\": \"2025-12-31\"\n}"
         }
       },
       "response": [
@@ -187,7 +187,7 @@
           "status": "OK",
           "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": \"2025-12-31\",\n    \"basic_salary\": \"5500.00\",\n    \"housing_allowance\": \"1200.00\",\n    \"transport_allowance\": \"600.00\",\n    \"other_allowance\": \"300.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"40.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-01T10:00:00.000Z\"\n  }\n}"
+          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure updated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": \"2025-12-31\",\n    \"actual_salary\": \"5500.00\",\n    \"housing_allowance\": \"1200.00\",\n    \"transport_allowance\": \"600.00\",\n    \"other_allowance\": \"300.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"40.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": true,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-01T10:00:00.000Z\"\n  }\n}"
         },
         {
           "name": "404 Not Found",
@@ -223,7 +223,7 @@
           "status": "OK",
           "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure deactivated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"basic_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": false,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-01T10:00:00.000Z\"\n  }\n}"
+          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure deactivated successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"actual_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": false,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-01T10:00:00.000Z\"\n  }\n}"
         },
         {
           "name": "404 Not Found",
@@ -258,7 +258,7 @@
           "status": "OK",
           "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure deleted successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"basic_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": false,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-01T10:00:00.000Z\"\n  }\n}"
+          "body": "{\n  \"success\": true,\n  \"message\": \"Salary structure deleted successfully\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-0000-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"effective_from\": \"2025-01-01\",\n    \"effective_to\": null,\n    \"actual_salary\": \"5000.00\",\n    \"housing_allowance\": \"1000.00\",\n    \"transport_allowance\": \"500.00\",\n    \"other_allowance\": \"250.00\",\n    \"overtime_enabled\": true,\n    \"overtime_rate_per_hour\": \"35.00\",\n    \"payment_type\": \"monthly\",\n    \"is_active\": false,\n    \"created_at\": \"2025-01-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-01T10:00:00.000Z\"\n  }\n}"
         },
         {
           "name": "404 Not Found",

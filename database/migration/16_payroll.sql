@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS payrolls (
     branch_id               UUID            REFERENCES branches(id) ON DELETE SET NULL,
 
     -- Salary
-    basic_salary            NUMERIC(12,2)   NOT NULL DEFAULT 0,
+    actual_salary            NUMERIC(12,2)   NOT NULL DEFAULT 0,
     gross_salary            NUMERIC(12,2)   NOT NULL DEFAULT 0,
 
     -- Attendance

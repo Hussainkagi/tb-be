@@ -17,18 +17,21 @@ const Branch = {
             latitude = null,
             longitude = null,
             attendance_radius = 100,
+            establishment_card_number = null,
         } = data;
 
         const result = await db.query(
             `INSERT INTO branches (
-                company_id, branch_name, branch_code, manager_name, is_head_office,
-                country, state, city, address, phone, email,
-                latitude, longitude, attendance_radius
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+            company_id, branch_name, branch_code, manager_name, is_head_office,
+            country, state, city, address, phone, email,
+            latitude, longitude, attendance_radius,
+            establishment_card_number
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
             [
                 company_id, branch_name, branch_code, manager_name, is_head_office,
                 country, state, city, address, phone, email,
                 latitude, longitude, attendance_radius,
+                establishment_card_number,  // ← new
             ]
         );
         return result.rows[0];

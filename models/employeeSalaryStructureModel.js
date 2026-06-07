@@ -8,7 +8,7 @@ const EmployeeSalaryStructure = {
             employee_id,
             effective_from,
             effective_to = null,
-            basic_salary = 0,
+            actual_salary = 0,
             housing_allowance = 0,
             transport_allowance = 0,
             other_allowance = 0,
@@ -22,7 +22,7 @@ const EmployeeSalaryStructure = {
             `INSERT INTO employee_salary_structures (
                 company_id, employee_id,
                 effective_from, effective_to,
-                basic_salary,
+                actual_salary,
                 housing_allowance, transport_allowance, other_allowance,
                 overtime_enabled, overtime_rate_per_hour,
                 payment_type, is_active
@@ -37,7 +37,7 @@ const EmployeeSalaryStructure = {
             [
                 company_id, employee_id,
                 effective_from, effective_to,
-                basic_salary,
+                actual_salary,
                 housing_allowance, transport_allowance, other_allowance,
                 overtime_enabled, overtime_rate_per_hour,
                 payment_type, is_active,

@@ -19,28 +19,32 @@ const Employee = {
             address = null,
             joining_date = null,
             employment_type = null,
+            employee_person_code = null,
             is_remote_job = false,
         } = data;
 
         const result = await db.query(
             `INSERT INTO employees (
-                company_id, branch_id, department_id, shift_id, user_id,
-                employee_code, first_name, last_name, email, phone,
-                gender, date_of_birth, address,
-                joining_date, employment_type,
-                is_remote_job
-            ) VALUES (
-                $1,  $2,  $3,  $4,  $5,
-                $6,  $7,  $8,  $9,  $10,
-                $11, $12, $13,
-                $14, $15,
-                $16
-            ) RETURNING *`,
+            company_id, branch_id, department_id, shift_id, user_id,
+            employee_code, first_name, last_name, email, phone,
+            gender, date_of_birth, address,
+            joining_date, employment_type,
+            employee_person_code,              -- ✅ 2. column
+            is_remote_job
+        ) VALUES (
+            $1,  $2,  $3,  $4,  $5,
+            $6,  $7,  $8,  $9,  $10,
+            $11, $12, $13,
+            $14, $15,
+            $16,                               -- ✅ 3. param
+            $17
+        ) RETURNING *`,
             [
                 company_id, branch_id, department_id, shift_id, user_id,
                 employee_code, first_name, last_name, email, phone,
                 gender, date_of_birth, address,
                 joining_date, employment_type,
+                employee_person_code,
                 is_remote_job,
             ]
         );
@@ -141,7 +145,7 @@ const Employee = {
     async update(id, data) {
         // Prevent updating salary/bank fields — managed via employee_salary_structures
         const SALARY_BANK_FIELDS = [
-            "basic_salary",
+            "actual_salary",
             "housing_allowance",
             "transport_allowance",
             "other_allowance",

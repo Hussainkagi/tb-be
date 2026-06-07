@@ -7,8 +7,7 @@ CREATE TABLE IF NOT EXISTS employee_salary_structures (
     effective_from          DATE NOT NULL,
     effective_to            DATE,
 
-    basic_salary            NUMERIC(12,2) NOT NULL DEFAULT 0,
-
+    actual_salary            NUMERIC(12,2) NOT NULL DEFAULT 0,
     housing_allowance       NUMERIC(12,2) NOT NULL DEFAULT 0,
     transport_allowance     NUMERIC(12,2) NOT NULL DEFAULT 0,
     other_allowance         NUMERIC(12,2) NOT NULL DEFAULT 0,

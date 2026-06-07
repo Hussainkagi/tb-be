@@ -34,7 +34,7 @@
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n      \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n      \"shift_id\": \"s1s2s3s4-0000-0000-0000-000000000001\",\n      \"user_id\": \"u1u2u3u4-0000-0000-0000-000000000001\",\n      \"employee_code\": \"EMP001\",\n      \"first_name\": \"Sarah\",\n      \"last_name\": \"Khan\",\n      \"email\": \"sarah.khan@acme.com\",\n      \"phone\": \"+971501234567\",\n      \"gender\": \"female\",\n      \"date_of_birth\": \"1995-06-15\",\n      \"joining_date\": \"2023-01-10\",\n      \"employment_type\": \"full_time\",\n      \"status\": \"active\",\n      \"basic_salary\": \"8500.00\",\n      \"is_active\": true,\n      \"created_at\": \"2023-01-10T08:00:00.000Z\",\n      \"updated_at\": \"2023-01-10T08:00:00.000Z\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n      \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n      \"shift_id\": \"s1s2s3s4-0000-0000-0000-000000000001\",\n      \"user_id\": \"u1u2u3u4-0000-0000-0000-000000000001\",\n      \"employee_code\": \"EMP001\",\n      \"first_name\": \"Sarah\",\n      \"last_name\": \"Khan\",\n      \"email\": \"sarah.khan@acme.com\",\n      \"phone\": \"+971501234567\",\n      \"gender\": \"female\",\n      \"date_of_birth\": \"1995-06-15\",\n      \"joining_date\": \"2023-01-10\",\n      \"employment_type\": \"full_time\",\n      \"status\": \"active\",\n      \"actual_salary\": \"8500.00\",\n      \"is_active\": true,\n      \"created_at\": \"2023-01-10T08:00:00.000Z\",\n      \"updated_at\": \"2023-01-10T08:00:00.000Z\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -62,7 +62,7 @@
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n    \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n    \"shift_id\": \"s1s2s3s4-0000-0000-0000-000000000001\",\n    \"user_id\": \"u1u2u3u4-0000-0000-0000-000000000001\",\n    \"employee_code\": \"EMP001\",\n    \"first_name\": \"Sarah\",\n    \"last_name\": \"Khan\",\n    \"email\": \"sarah.khan@acme.com\",\n    \"phone\": \"+971501234567\",\n    \"gender\": \"female\",\n    \"date_of_birth\": \"1995-06-15\",\n    \"address\": \"Apt 12, Marina Tower, Dubai\",\n    \"joining_date\": \"2023-01-10\",\n    \"employment_type\": \"full_time\",\n    \"status\": \"active\",\n    \"basic_salary\": \"8500.00\",\n    \"bank_name\": \"Emirates NBD\",\n    \"bank_account_number\": \"1234567890\",\n    \"iban\": \"AE070331234567890123456\",\n    \"is_active\": true,\n    \"created_at\": \"2023-01-10T08:00:00.000Z\",\n    \"updated_at\": \"2023-01-10T08:00:00.000Z\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2b3b4-0000-0000-0000-000000000001\",\n    \"department_id\": \"d1d2d3d4-0000-0000-0000-000000000001\",\n    \"shift_id\": \"s1s2s3s4-0000-0000-0000-000000000001\",\n    \"user_id\": \"u1u2u3u4-0000-0000-0000-000000000001\",\n    \"employee_code\": \"EMP001\",\n    \"first_name\": \"Sarah\",\n    \"last_name\": \"Khan\",\n    \"email\": \"sarah.khan@acme.com\",\n    \"phone\": \"+971501234567\",\n    \"gender\": \"female\",\n    \"date_of_birth\": \"1995-06-15\",\n    \"address\": \"Apt 12, Marina Tower, Dubai\",\n    \"joining_date\": \"2023-01-10\",\n    \"employment_type\": \"full_time\",\n    \"status\": \"active\",\n    \"actual_salary\": \"8500.00\",\n    \"bank_name\": \"Emirates NBD\",\n    \"bank_account_number\": \"1234567890\",\n    \"iban\": \"AE070331234567890123456\",\n    \"is_active\": true,\n    \"created_at\": \"2023-01-10T08:00:00.000Z\",\n    \"updated_at\": \"2023-01-10T08:00:00.000Z\"\n  }\n}"
             },
             {
               "name": "404 Not Found",
@@ -151,7 +151,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"+971509999999\",\n  \"address\": \"Villa 5, JVC, Dubai\",\n  \"basic_salary\": 9500,\n  \"bank_name\": \"ADCB\",\n  \"bank_account_number\": \"9876543210\",\n  \"iban\": \"AE250030009876543210123\"\n}"
+              "raw": "{\n  \"phone\": \"+971509999999\",\n  \"address\": \"Villa 5, JVC, Dubai\",\n  \"actual_salary\": 9500,\n  \"bank_name\": \"ADCB\",\n  \"bank_account_number\": \"9876543210\",\n  \"iban\": \"AE250030009876543210123\"\n}"
             }
           },
           "response": [
@@ -159,7 +159,7 @@
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"phone\": \"+971509999999\",\n    \"address\": \"Villa 5, JVC, Dubai\",\n    \"basic_salary\": \"9500.00\",\n    \"bank_name\": \"ADCB\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"phone\": \"+971509999999\",\n    \"address\": \"Villa 5, JVC, Dubai\",\n    \"actual_salary\": \"9500.00\",\n    \"bank_name\": \"ADCB\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  }\n}"
             },
             {
               "name": "404 Not Found",
