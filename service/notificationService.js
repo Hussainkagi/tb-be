@@ -6,7 +6,7 @@ const {
     EmployeeDeviceToken,
     NotificationPreference,
 } = require("../models/notificationModel");
-const fcmSender = require("../utils/fcmSender");
+const expoPushSender = require("../utils/expoPushSender");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: resolve {{mustache}} placeholders in a template string
@@ -294,7 +294,7 @@ const NotificationService = {
                 for (const recipient of recipients) {
                     if (!recipient?.device_token) continue;
                     try {
-                        await fcmSender.send(
+                        await expoPushSender.send(
                             recipient.device_token,
                             notification.title,
                             notification.body,
@@ -307,6 +307,9 @@ const NotificationService = {
                         );
                         await NotificationRecipient.markAsSent(recipient.id, recipient.device_token);
                     } catch (err) {
+
+                        console.error("[FCM ERROR] code:", err.code, "| message:", err.message, "| token:", recipient.device_token?.slice(0, 20));
+
                         const isInvalidToken =
                             err.code === "messaging/invalid-registration-token" ||
                             err.code === "messaging/registration-token-not-registered";
