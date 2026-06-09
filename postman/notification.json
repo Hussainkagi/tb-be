@@ -1,0 +1,1036 @@
+{
+  "info": {
+    "name": "Notification Module",
+    "description": "Complete API documentation for the Notification module.\n\nBase URL: {{base_url}}/api/companies/{{company_id}}/notifications\n\nAll routes require:\n- Authorization: Bearer {{token}}\n- Content-Type: application/json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    {
+      "key": "company_id",
+      "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "type": "string"
+    },
+    { "key": "token", "value": "your_jwt_token_here", "type": "string" },
+    {
+      "key": "template_id",
+      "value": "tpl-0001-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "notification_id",
+      "value": "ntf-0001-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "recipient_id",
+      "value": "rcp-0001-0000-0000-000000000001",
+      "type": "string"
+    },
+    {
+      "key": "employee_id",
+      "value": "emp-0001-0000-0000-000000000001",
+      "type": "string"
+    },
+    { "key": "device_id", "value": "device-uuid-abc-123", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "Get All Templates by Company",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/templates",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "templates"
+              ]
+            },
+            "description": "Fetch all notification templates for a company (includes global system templates + company overrides).\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"tpl-0001-0000-0000-000000000001\",\n      \"company_id\": null,\n      \"template_code\": \"leave_request_submitted\",\n      \"notification_type\": \"leave_request\",\n      \"channel\": \"push\",\n      \"title_template\": \"📋 New Leave Request\",\n      \"body_template\": \"{{employee_name}} has submitted a {{leave_type}} leave from {{start_date}} to {{end_date}}.\",\n      \"deep_link_template\": \"/admin/leaves/{{leave_id}}\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-01-01T00:00:00.000Z\",\n      \"updated_at\": \"2025-01-01T00:00:00.000Z\"\n    },\n    {\n      \"id\": \"tpl-0002-0000-0000-000000000002\",\n      \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"template_code\": \"leave_request_submitted\",\n      \"notification_type\": \"leave_request\",\n      \"channel\": \"push\",\n      \"title_template\": \"🆕 Leave Submitted — Company Override\",\n      \"body_template\": \"{{employee_name}} ({{employee_code}}) needs approval for {{leave_type}} leave.\",\n      \"deep_link_template\": \"/admin/leaves/{{leave_id}}\",\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-03-10T08:00:00.000Z\",\n      \"updated_at\": \"2025-03-10T08:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Template by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/templates/{{template_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "templates",
+                "{{template_id}}"
+              ]
+            },
+            "description": "Fetch a single notification template by its UUID.\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"tpl-0001-0000-0000-000000000001\",\n    \"company_id\": null,\n    \"template_code\": \"leave_request_submitted\",\n    \"notification_type\": \"leave_request\",\n    \"channel\": \"push\",\n    \"title_template\": \"📋 New Leave Request\",\n    \"body_template\": \"{{employee_name}} has submitted a {{leave_type}} leave from {{start_date}} to {{end_date}}.\",\n    \"deep_link_template\": \"/admin/leaves/{{leave_id}}\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2025-01-01T00:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Template not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Create Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"template_code\": \"leave_request_submitted\",\n  \"notification_type\": \"leave_request\",\n  \"channel\": \"push\",\n  \"title_template\": \"📋 New Leave Request\",\n  \"body_template\": \"{{employee_name}} has submitted a {{leave_type}} leave from {{start_date}} to {{end_date}}.\",\n  \"deep_link_template\": \"/admin/leaves/{{leave_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/templates",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "templates"
+              ]
+            },
+            "description": "Create a new notification template. Set company_id to null for a global system template, or provide a company_id to create a company-specific override.\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Template created successfully\",\n  \"data\": {\n    \"id\": \"tpl-0003-0000-0000-000000000003\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"template_code\": \"leave_request_submitted\",\n    \"notification_type\": \"leave_request\",\n    \"channel\": \"push\",\n    \"title_template\": \"📋 New Leave Request\",\n    \"body_template\": \"{{employee_name}} has submitted a {{leave_type}} leave from {{start_date}} to {{end_date}}.\",\n    \"deep_link_template\": \"/admin/leaves/{{leave_id}}\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-06-07T10:00:00.000Z\",\n    \"updated_at\": \"2025-06-07T10:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"duplicate key value violates unique constraint \\\"uq_template_code_channel_company\\\"\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Template",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title_template\": \"📋 Leave Request Pending Review\",\n  \"body_template\": \"{{employee_name}} ({{employee_code}}) applied for {{leave_type}} leave from {{start_date}} to {{end_date}}. Please review.\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/templates/{{template_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "templates",
+                "{{template_id}}"
+              ]
+            },
+            "description": "Update an existing template. template_code and company_id are immutable and will be ignored if provided.\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Template updated successfully\",\n  \"data\": {\n    \"id\": \"tpl-0001-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"template_code\": \"leave_request_submitted\",\n    \"notification_type\": \"leave_request\",\n    \"channel\": \"push\",\n    \"title_template\": \"📋 Leave Request Pending Review\",\n    \"body_template\": \"{{employee_name}} ({{employee_code}}) applied for {{leave_type}} leave from {{start_date}} to {{end_date}}. Please review.\",\n    \"deep_link_template\": \"/admin/leaves/{{leave_id}}\",\n    \"is_active\": true,\n    \"deleted_at\": null,\n    \"created_at\": \"2025-01-01T00:00:00.000Z\",\n    \"updated_at\": \"2025-06-07T10:05:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Template not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Template",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/templates/{{template_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "templates",
+                "{{template_id}}"
+              ]
+            },
+            "description": "Soft-delete a notification template (sets deleted_at).\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Template deleted successfully\",\n  \"data\": {\n    \"id\": \"tpl-0001-0000-0000-000000000001\",\n    \"deleted_at\": \"2025-06-07T10:10:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Template not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get All Notifications by Company",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "notifications"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Fetch all notifications for a company with pagination.\n\nRole required: Manager / Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"ntf-0001-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"branch_id\": null,\n      \"created_by_user_id\": \"usr-0001-0000-0000-000000000001\",\n      \"notification_type\": \"leave_request\",\n      \"channel\": \"push\",\n      \"template_id\": \"tpl-0001-0000-0000-000000000001\",\n      \"title\": \"📋 New Leave Request\",\n      \"body\": \"John Doe has submitted a Sick leave from 2025-06-10 to 2025-06-12.\",\n      \"deep_link\": \"/admin/leaves/lv-001\",\n      \"entity_type\": \"leave_requests\",\n      \"entity_id\": \"lv-001-0000-0000-000000000001\",\n      \"scheduled_at\": null,\n      \"timezone\": \"Asia/Dubai\",\n      \"delivery_window_start\": null,\n      \"delivery_window_end\": null,\n      \"recurrence_cron\": null,\n      \"recurrence_end_at\": null,\n      \"dispatch_status\": \"dispatched\",\n      \"dispatched_at\": \"2025-06-07T09:00:00.000Z\",\n      \"cancelled_at\": null,\n      \"cancellation_reason\": null,\n      \"is_active\": true,\n      \"deleted_at\": null,\n      \"created_at\": \"2025-06-07T09:00:00.000Z\",\n      \"updated_at\": \"2025-06-07T09:00:05.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Notification by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/{{notification_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "{{notification_id}}"
+              ]
+            },
+            "description": "Fetch a single notification (joined with its template info).\n\nRole required: Manager / Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"ntf-0001-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"branch_id\": null,\n    \"notification_type\": \"leave_request\",\n    \"channel\": \"push\",\n    \"title\": \"📋 New Leave Request\",\n    \"body\": \"John Doe has submitted a Sick leave from 2025-06-10 to 2025-06-12.\",\n    \"deep_link\": \"/admin/leaves/lv-001\",\n    \"entity_type\": \"leave_requests\",\n    \"entity_id\": \"lv-001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T09:00:00.000Z\",\n    \"template_code\": \"leave_request_submitted\",\n    \"title_template\": \"📋 New Leave Request\",\n    \"body_template\": \"{{employee_name}} has submitted a {{leave_type}} leave from {{start_date}} to {{end_date}}.\",\n    \"created_at\": \"2025-06-07T09:00:00.000Z\",\n    \"updated_at\": \"2025-06-07T09:00:05.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Notification not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Send Notification (General)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"notification_type\": \"leave_request\",\n  \"channel\": \"push\",\n  \"template_code\": \"leave_request_submitted\",\n  \"template_variables\": {\n    \"employee_name\": \"John Doe\",\n    \"employee_code\": \"EMP-001\",\n    \"leave_type\": \"Sick\",\n    \"start_date\": \"2025-06-10\",\n    \"end_date\": \"2025-06-12\",\n    \"leave_id\": \"lv-001-0000-0000-000000000001\"\n  },\n  \"entity_type\": \"leave_requests\",\n  \"entity_id\": \"lv-001-0000-0000-000000000001\",\n  \"timezone\": \"Asia/Dubai\",\n  \"audience\": {\n    \"type\": \"role_based\",\n    \"role\": \"admin\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/send",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "send"
+              ]
+            },
+            "description": "General-purpose notification send. Resolves a template by template_code, substitutes variables, fans out to recipients immediately (or schedules if scheduled_at is provided).\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "201 Created — Sent Immediately",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0002-0000-0000-000000000002\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"notification_type\": \"leave_request\",\n    \"channel\": \"push\",\n    \"title\": \"📋 New Leave Request\",\n    \"body\": \"John Doe has submitted a Sick leave from 2025-06-10 to 2025-06-12.\",\n    \"deep_link\": \"/admin/leaves/lv-001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T10:15:00.000Z\",\n    \"scheduled_at\": null,\n    \"created_at\": \"2025-06-07T10:15:00.000Z\",\n    \"updated_at\": \"2025-06-07T10:15:01.000Z\"\n  }\n}"
+            },
+            {
+              "name": "201 Created — Scheduled",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification scheduled successfully\",\n  \"data\": {\n    \"id\": \"ntf-0003-0000-0000-000000000003\",\n    \"dispatch_status\": \"queued\",\n    \"scheduled_at\": \"2025-06-08T06:00:00.000Z\",\n    \"created_at\": \"2025-06-07T10:15:00.000Z\",\n    \"updated_at\": \"2025-06-07T10:15:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Missing audience",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"audience.type is required\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Send Custom Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"title\": \"🎉 Office Closed Tomorrow\",\n  \"body\": \"The office will be closed on June 8th due to a public holiday. Enjoy the long weekend!\",\n  \"deep_link\": \"/announcements/ann-001\",\n  \"timezone\": \"Asia/Dubai\",\n  \"scheduled_at\": null,\n  \"audience\": {\n    \"type\": \"all_company\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/custom",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "custom"
+              ]
+            },
+            "description": "Admin sends an ad-hoc push notification to any audience segment. No template required — title and body are provided directly.\n\nAudience types: all_company | all_branch | specific_employee | role_based | department\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0004-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"notification_type\": \"custom\",\n    \"channel\": \"push\",\n    \"title\": \"🎉 Office Closed Tomorrow\",\n    \"body\": \"The office will be closed on June 8th due to a public holiday. Enjoy the long weekend!\",\n    \"deep_link\": \"/announcements/ann-001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T10:20:00.000Z\",\n    \"created_at\": \"2025-06-07T10:20:00.000Z\",\n    \"updated_at\": \"2025-06-07T10:20:01.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Missing title",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"title and body are required for custom notifications\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Cancel Notification",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"Holiday announcement was incorrect, will resend with corrected details.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/{{notification_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "{{notification_id}}",
+                "cancel"
+              ]
+            },
+            "description": "Cancel a queued or scheduled notification. Also cancels all pending recipient rows. Cannot cancel an already-dispatched notification.\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification cancelled successfully\",\n  \"data\": {\n    \"id\": \"ntf-0003-0000-0000-000000000003\",\n    \"dispatch_status\": \"cancelled\",\n    \"cancelled_at\": \"2025-06-07T10:25:00.000Z\",\n    \"cancellation_reason\": \"Holiday announcement was incorrect, will resend with corrected details.\"\n  }\n}"
+            },
+            {
+              "name": "400 Bad Request — Already Dispatched",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Notification already dispatched and cannot be cancelled\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/{{notification_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "{{notification_id}}"
+              ]
+            },
+            "description": "Soft-delete a notification (sets deleted_at).\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification deleted successfully\",\n  \"data\": {\n    \"id\": \"ntf-0001-0000-0000-000000000001\",\n    \"deleted_at\": \"2025-06-07T10:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Notification not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Domain Shortcuts",
+      "item": [
+        {
+          "name": "Notify — Leave Request Submitted",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"branch_id\": \"br-0001-0000-0000-000000000001\",\n  \"leave_id\": \"lv-001-0000-0000-000000000001\",\n  \"employee_name\": \"John Doe\",\n  \"employee_code\": \"EMP-001\",\n  \"leave_type\": \"Sick\",\n  \"start_date\": \"2025-06-10\",\n  \"end_date\": \"2025-06-12\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/leave-request",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "leave-request"
+              ]
+            },
+            "description": "Notify all admins when an employee submits a leave request. Internally uses the 'leave_request_submitted' template.\n\nRole required: Manager / Admin\nTypically called from the Leave controller after creating a leave."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0005-0000-0000-000000000005\",\n    \"notification_type\": \"leave_request\",\n    \"channel\": \"push\",\n    \"title\": \"📋 New Leave Request\",\n    \"body\": \"John Doe has submitted a Sick leave from 2025-06-10 to 2025-06-12.\",\n    \"deep_link\": \"/admin/leaves/lv-001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T11:00:00.000Z\",\n    \"created_at\": \"2025-06-07T11:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Notify — Leave Status Update (Approved / Rejected)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n  \"leave_id\": \"lv-001-0000-0000-000000000001\",\n  \"status\": \"approved\",\n  \"leave_type\": \"Sick\",\n  \"start_date\": \"2025-06-10\",\n  \"end_date\": \"2025-06-12\",\n  \"actioned_by\": \"Jane Smith\",\n  \"rejection_reason\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/leave-status",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "leave-status"
+              ]
+            },
+            "description": "Notify the employee when their leave is approved or rejected. Set status to 'approved' or 'rejected'. For rejections, provide rejection_reason.\n\nRole required: Manager / Admin"
+          },
+          "response": [
+            {
+              "name": "201 Created — Approved",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0006-0000-0000-000000000006\",\n    \"notification_type\": \"leave_status_update\",\n    \"channel\": \"push\",\n    \"title\": \"✅ Leave Approved\",\n    \"body\": \"Your Sick leave from 2025-06-10 to 2025-06-12 has been approved.\",\n    \"deep_link\": \"/leaves/lv-001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T11:05:00.000Z\",\n    \"created_at\": \"2025-06-07T11:05:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "201 Created — Rejected",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0007-0000-0000-000000000007\",\n    \"notification_type\": \"leave_status_update\",\n    \"channel\": \"push\",\n    \"title\": \"❌ Leave Not Approved\",\n    \"body\": \"Your Sick leave request (2025-06-10 – 2025-06-12) was not approved. Reason: Insufficient leave balance.\",\n    \"deep_link\": \"/leaves/lv-001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T11:05:30.000Z\",\n    \"created_at\": \"2025-06-07T11:05:30.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Notify — Holiday Created",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"branch_id\": null,\n  \"holiday_id\": \"hol-0001-0000-0000-000000000001\",\n  \"holiday_name\": \"UAE National Day\",\n  \"holiday_date\": \"2025-12-02\",\n  \"is_company_wide\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/holiday",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "holiday"
+              ]
+            },
+            "description": "Notify employees when a holiday is added. Set is_company_wide to true to target all employees, or false with a branch_id for branch-scoped holidays.\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0008-0000-0000-000000000008\",\n    \"notification_type\": \"holiday_created\",\n    \"channel\": \"push\",\n    \"title\": \"🎉 Holiday: UAE National Day\",\n    \"body\": \"A new holiday has been announced — UAE National Day on 2025-12-02. Enjoy!\",\n    \"deep_link\": \"/holidays/hol-0001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T11:10:00.000Z\",\n    \"created_at\": \"2025-06-07T11:10:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Notify — Holiday Request Submitted",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"branch_id\": \"br-0001-0000-0000-000000000001\",\n  \"request_id\": \"hreq-0001-0000-0000-000000000001\",\n  \"employee_name\": \"John Doe\",\n  \"holiday_date\": \"2025-06-15\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/holiday-request",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "holiday-request"
+              ]
+            },
+            "description": "Notify admins when an employee requests a day off as a holiday.\n\nRole required: Manager / Admin"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification sent successfully\",\n  \"data\": {\n    \"id\": \"ntf-0009-0000-0000-000000000009\",\n    \"notification_type\": \"holiday_request\",\n    \"channel\": \"push\",\n    \"title\": \"📅 Holiday Request\",\n    \"body\": \"John Doe has requested 2025-06-15 as a holiday. Tap to review.\",\n    \"deep_link\": \"/admin/holiday-requests/hreq-0001-0000-0000-000000000001\",\n    \"dispatch_status\": \"dispatched\",\n    \"dispatched_at\": \"2025-06-07T11:15:00.000Z\",\n    \"created_at\": \"2025-06-07T11:15:00.000Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Inbox",
+      "item": [
+        {
+          "name": "Get Employee Inbox",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/inbox/{{employee_id}}?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "inbox",
+                "{{employee_id}}"
+              ],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Fetch the notification inbox for an employee. Returns paginated notifications and the current unread count.\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"unread_count\": 2,\n    \"inbox\": [\n      {\n        \"id\": \"rcp-0001-0000-0000-000000000001\",\n        \"status\": \"delivered\",\n        \"read_at\": null,\n        \"created_at\": \"2025-06-07T11:00:00.000Z\",\n        \"title\": \"✅ Leave Approved\",\n        \"body\": \"Your Sick leave from 2025-06-10 to 2025-06-12 has been approved.\",\n        \"deep_link\": \"/leaves/lv-001-0000-0000-000000000001\",\n        \"notification_type\": \"leave_status_update\",\n        \"entity_type\": \"leave_requests\",\n        \"entity_id\": \"lv-001-0000-0000-000000000001\"\n      },\n      {\n        \"id\": \"rcp-0002-0000-0000-000000000002\",\n        \"status\": \"read\",\n        \"read_at\": \"2025-06-06T09:30:00.000Z\",\n        \"created_at\": \"2025-06-06T09:00:00.000Z\",\n        \"title\": \"🎉 Holiday: UAE National Day\",\n        \"body\": \"A new holiday has been announced — UAE National Day on 2025-12-02. Enjoy!\",\n        \"deep_link\": \"/holidays/hol-0001-0000-0000-000000000001\",\n        \"notification_type\": \"holiday_created\",\n        \"entity_type\": \"holidays\",\n        \"entity_id\": \"hol-0001-0000-0000-000000000001\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/inbox/{{employee_id}}/unread-count",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "inbox",
+                "{{employee_id}}",
+                "unread-count"
+              ]
+            },
+            "description": "Returns the unread notification count for the bell-icon badge.\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"unread_count\": 5\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/recipients/{{recipient_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "recipients",
+                "{{recipient_id}}",
+                "read"
+              ]
+            },
+            "description": "Mark a single notification recipient row as read. Called when the employee taps a notification.\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Notification marked as read\",\n  \"data\": {\n    \"id\": \"rcp-0001-0000-0000-000000000001\",\n    \"status\": \"read\",\n    \"read_at\": \"2025-06-07T11:20:00.000Z\",\n    \"updated_at\": \"2025-06-07T11:20:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Notification not found\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/inbox/{{employee_id}}/read-all",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "inbox",
+                "{{employee_id}}",
+                "read-all"
+              ]
+            },
+            "description": "Mark all unread notifications as read for an employee. Used by the 'Mark all as read' button in the notification bell.\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"All notifications marked as read\",\n  \"data\": [\n    {\n      \"id\": \"rcp-0001-0000-0000-000000000001\",\n      \"status\": \"read\",\n      \"read_at\": \"2025-06-07T11:22:00.000Z\"\n    },\n    {\n      \"id\": \"rcp-0003-0000-0000-000000000003\",\n      \"status\": \"read\",\n      \"read_at\": \"2025-06-07T11:22:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Device Tokens",
+      "item": [
+        {
+          "name": "Register Device Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"platform\": \"android\",\n  \"device_id\": \"device-uuid-abc-123\",\n  \"push_token\": \"fcm-token-xyz-987654321\",\n  \"app_version\": \"2.4.1\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/device-tokens",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "device-tokens"
+              ]
+            },
+            "description": "Register or update a push token for an employee's device. Upserts on (employee_id, device_id) — safe to call on every app login.\n\nplatform: ios | android | web\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Device token registered successfully\",\n  \"data\": {\n    \"id\": \"dvc-0001-0000-0000-000000000001\",\n    \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"platform\": \"android\",\n    \"device_id\": \"device-uuid-abc-123\",\n    \"push_token\": \"fcm-token-xyz-987654321\",\n    \"app_version\": \"2.4.1\",\n    \"is_active\": true,\n    \"last_used_at\": \"2025-06-07T11:25:00.000Z\",\n    \"created_at\": \"2025-05-01T08:00:00.000Z\",\n    \"updated_at\": \"2025-06-07T11:25:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Deactivate Device Token",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/device-tokens/{{employee_id}}/{{device_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "device-tokens",
+                "{{employee_id}}",
+                "{{device_id}}"
+              ]
+            },
+            "description": "Deactivate a push token when the employee logs out. Sets is_active = false (does not delete the row, preserving historical delivery records).\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Device token deactivated successfully\",\n  \"data\": {\n    \"id\": \"dvc-0001-0000-0000-000000000001\",\n    \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n    \"device_id\": \"device-uuid-abc-123\",\n    \"is_active\": false,\n    \"updated_at\": \"2025-06-07T11:30:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Device token not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Preferences",
+      "item": [
+        {
+          "name": "Get Preferences by Employee",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/preferences/{{employee_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "preferences",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "Fetch all notification preferences for an employee. Absence of a row for a type/channel means opted-in (default).\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"prf-0001-0000-0000-000000000001\",\n      \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"notification_type\": \"attendance_checkin_reminder\",\n      \"channel\": \"push\",\n      \"is_enabled\": true,\n      \"quiet_hours_start\": \"22:00\",\n      \"quiet_hours_end\": \"07:00\",\n      \"created_at\": \"2025-04-01T00:00:00.000Z\",\n      \"updated_at\": \"2025-04-01T00:00:00.000Z\"\n    },\n    {\n      \"id\": \"prf-0002-0000-0000-000000000002\",\n      \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n      \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"notification_type\": \"holiday_created\",\n      \"channel\": \"push\",\n      \"is_enabled\": false,\n      \"quiet_hours_start\": null,\n      \"quiet_hours_end\": null,\n      \"created_at\": \"2025-04-01T00:00:00.000Z\",\n      \"updated_at\": \"2025-05-10T14:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Upsert Preference",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n  \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"notification_type\": \"attendance_checkin_reminder\",\n  \"channel\": \"push\",\n  \"is_enabled\": true,\n  \"quiet_hours_start\": \"22:00\",\n  \"quiet_hours_end\": \"07:00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/preferences",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "preferences"
+              ]
+            },
+            "description": "Create or update a notification preference for an employee. Upserts on (employee_id, notification_type, channel).\n\nnotification_type: leave_request | leave_status_update | holiday_created | holiday_request | attendance_checkin_reminder | attendance_checkout_reminder | custom | system\nchannel: push | in_app | email | sms\n\nRole required: Employee (self)"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Preference updated successfully\",\n  \"data\": {\n    \"id\": \"prf-0001-0000-0000-000000000001\",\n    \"employee_id\": \"emp-0001-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"notification_type\": \"attendance_checkin_reminder\",\n    \"channel\": \"push\",\n    \"is_enabled\": true,\n    \"quiet_hours_start\": \"22:00\",\n    \"quiet_hours_end\": \"07:00\",\n    \"created_at\": \"2025-04-01T00:00:00.000Z\",\n    \"updated_at\": \"2025-06-07T11:35:00.000Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "Scheduler",
+      "item": [
+        {
+          "name": "Process Dispatch Queue",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/notifications/dispatch",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "notifications",
+                "dispatch"
+              ]
+            },
+            "description": "Manually trigger the dispatch queue processor. In production this is called by a cron job every minute — only expose this endpoint internally or protect it with an additional API key.\n\nRole required: Admin"
+          },
+          "response": [
+            {
+              "name": "200 OK — Notifications Processed",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"processed\": 3,\n  \"results\": [\n    {\n      \"notification_id\": \"ntf-0010-0000-0000-000000000010\",\n      \"success\": true,\n      \"recipients\": 42\n    },\n    {\n      \"notification_id\": \"ntf-0011-0000-0000-000000000011\",\n      \"success\": true,\n      \"recipients\": 1\n    },\n    {\n      \"notification_id\": \"ntf-0012-0000-0000-000000000012\",\n      \"success\": false,\n      \"message\": \"FCM delivery error: invalid token\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 OK — Nothing in Queue",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"processed\": 0,\n  \"results\": []\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

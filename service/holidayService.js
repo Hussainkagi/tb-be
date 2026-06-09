@@ -1,5 +1,6 @@
 const HolidayModel = require("../models/holidayModel");
 const BranchModel = require("../models/branchModel");
+const NotificationService = require("./notificationService");
 
 const HolidayService = {
     // --------------------------------------------------------
@@ -88,6 +89,22 @@ const HolidayService = {
                 ...data,
                 branch_id: is_company_wide ? null : branch_id,
             });
+
+            const isSingleDay = holiday_start_date === holiday_end_date;
+            const displayDate = isSingleDay
+                ? holiday_start_date
+                : `${holiday_start_date} – ${holiday_end_date}`;
+
+            NotificationService.notifyHolidayCreated({
+                company_id,
+                branch_id: is_company_wide ? null : branch_id,
+                holiday_id: result.id,
+                holiday_name: result.holiday_name,
+                holiday_date: displayDate,
+                is_company_wide,
+            }).catch((err) =>
+                console.error("[Notification] notifyHolidayCreated failed:", err.message)
+            );
 
             return {
                 success: true,

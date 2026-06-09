@@ -27,6 +27,9 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 // Security headers
 app.use(helmet());
 
+// server.js
+require("./jobs/attendanceReminderJob");
+
 // CORS configuration
 const corsOptions = {
     origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
@@ -126,6 +129,10 @@ app.use("/api/companies/:company_id/payroll-adjustments", payrollAdjustmentRoute
 
 const payslipRoutes = require("./routes/payslipRoute");
 app.use("/api/companies/:company_id/payslips", payslipRoutes);
+
+const notificationRoutes = require("./routes/notificationRoute");
+app.use("/api/companies/:company_id/notifications", notificationRoutes);
+
 
 
 

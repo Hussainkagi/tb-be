@@ -9,6 +9,7 @@ const EmployeeSalaryStructure = {
             effective_from,
             effective_to = null,
             actual_salary = 0,
+            basic_salary = 0,          // ← add this
             housing_allowance = 0,
             transport_allowance = 0,
             other_allowance = 0,
@@ -20,24 +21,24 @@ const EmployeeSalaryStructure = {
 
         const result = await db.query(
             `INSERT INTO employee_salary_structures (
-                company_id, employee_id,
-                effective_from, effective_to,
-                actual_salary,
-                housing_allowance, transport_allowance, other_allowance,
-                overtime_enabled, overtime_rate_per_hour,
-                payment_type, is_active
-            ) VALUES (
-                $1,  $2,
-                $3,  $4,
-                $5,
-                $6,  $7,  $8,
-                $9,  $10,
-                $11, $12
-            ) RETURNING *`,
+            company_id, employee_id,
+            effective_from, effective_to,
+            actual_salary, basic_salary,       
+            housing_allowance, transport_allowance, other_allowance,
+            overtime_enabled, overtime_rate_per_hour,
+            payment_type, is_active
+        ) VALUES (
+            $1,  $2,
+            $3,  $4,
+            $5,  $6,                             
+            $7,  $8,  $9,
+            $10, $11,
+            $12, $13
+        ) RETURNING *`,
             [
                 company_id, employee_id,
                 effective_from, effective_to,
-                actual_salary,
+                actual_salary, basic_salary,
                 housing_allowance, transport_allowance, other_allowance,
                 overtime_enabled, overtime_rate_per_hour,
                 payment_type, is_active,

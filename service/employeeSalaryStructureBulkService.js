@@ -11,6 +11,7 @@ const REQUIRED_COLUMNS = [
 ];
 
 const OPTIONAL_COLUMNS = [
+    "basic_salary",
     "housing_allowance",
     "transport_allowance",
     "other_allowance",
@@ -79,6 +80,7 @@ function validateRow(raw, rowIndex) {
             ? raw.effective_from.toISOString().split("T")[0]
             : String(raw.effective_from).trim(),
         actual_salary: parseFloat(raw.actual_salary) || 0,
+        basic_salary: parseFloat(raw.basic_salary) || 0,
         housing_allowance: parseFloat(raw.housing_allowance) || 0,
         transport_allowance: parseFloat(raw.transport_allowance) || 0,
         other_allowance: parseFloat(raw.other_allowance) || 0,
@@ -111,7 +113,7 @@ function validateRow(raw, rowIndex) {
     }
 
     // Validate numeric salaries are non-negative
-    for (const field of ["actual_salary", "housing_allowance", "transport_allowance", "other_allowance"]) {
+    for (const field of ["actual_salary", "basic_salary", "housing_allowance", "transport_allowance", "other_allowance"]) {
         if (data[field] < 0) {
             errors.push(`${field} cannot be negative`);
         }
@@ -175,6 +177,8 @@ const EmployeeSalaryStructureBulkService = {
             try {
                 // Verify employee exists and belongs to company
                 const employee = await EmployeeModel.findById(data.employee_id);
+                console.log("Found employee:", employee?.id, "type:", typeof employee?.id);
+                console.log("data.employee_id:", data.employee_id, "type:", typeof data.employee_id)
                 if (!employee) {
                     errors.push({ row: rowNum, employee_id: data.employee_id, error: "Employee not found." });
                     continue;
@@ -190,6 +194,7 @@ const EmployeeSalaryStructureBulkService = {
 
                 // Deactivate existing active structure before inserting
                 await EmployeeSalaryStructureModel.deactivateAllByEmployee(data.employee_id);
+                console.log("Deactivated rows for employee_id:", data.employee_id);
 
                 const record = await EmployeeSalaryStructureModel.create({
                     ...data,
@@ -222,7 +227,7 @@ const EmployeeSalaryStructureBulkService = {
         const header = ALL_COLUMNS.join(",");
         const example = [
             "EMP001", "COMP001", "2025-01-01", "5000",
-            "1500", "500", "250",
+            "3000", "1500", "500", "250",
             "", "false", "", "monthly",
         ].join(",");
         return `${header}\n${example}\n`;

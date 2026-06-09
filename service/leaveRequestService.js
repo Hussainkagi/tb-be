@@ -1,13 +1,12 @@
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const LeaveTypeModel = require("../models/leaveTypeModel");
 const EmployeeModel = require("../models/employeeModel");
-
+const NotificationService = require("./notificationService");
 
 const LeaveRequestService = {
     // --------------------------------------------------------
     // CREATE
     // --------------------------------------------------------
-
 
     async createLeaveRequest(data) {
         try {
@@ -24,7 +23,6 @@ const LeaveRequestService = {
             } = data;
 
             const is_half_day = _is_half_day === true || _is_half_day === "true";
-
 
             let uploadedDocUrl = document_url;
             if (document_file) {
@@ -62,7 +60,6 @@ const LeaveRequestService = {
             }
 
             // Half-day validation
-            console.log("is_half_day:", is_half_day);
             if (is_half_day) {
                 if (!leaveType.is_half_day_allowed) {
                     return { success: false, message: "Half-day leave is not allowed for this leave type" };
@@ -93,10 +90,26 @@ const LeaveRequestService = {
                 return { success: false, message: "Employee already has a pending or approved leave request overlapping these dates" };
             }
 
+            // Create the leave request
             const result = await LeaveRequestModel.create({
                 ...data,
                 document_url: uploadedDocUrl,
             });
+
+            // ── Notify admin that a new leave request was submitted ──────
+            // Fire-and-forget: notification failure must NOT break leave creation
+            NotificationService.notifyLeaveRequest({
+                company_id: employee.company_id,
+                branch_id: employee.branch_id,
+                leave_id: result.id,
+                employee_name: `${employee.first_name} ${employee.last_name}`,
+                employee_code: employee.employee_code,
+                leave_type: leaveType.leave_name,
+                start_date: from_date,
+                end_date: to_date,
+            }).catch((err) =>
+                console.error("[Notification] notifyLeaveRequest failed:", err.message)
+            );
 
             return {
                 success: true,
@@ -321,6 +334,21 @@ const LeaveRequestService = {
             }
 
             const result = await LeaveRequestModel.approve(id, approved_by);
+            const leaveType = await LeaveTypeModel.findById(leaveRequest.leave_type_id);
+            // ── Notify employee their leave was approved ─────────────────
+            NotificationService.notifyLeaveStatusUpdate({
+                company_id: leaveRequest.company_id,
+                employee_id: leaveRequest.employee_id,
+                leave_id: id,
+                status: "approved",
+                leave_type: leaveType.leave_name,
+                start_date: leaveRequest.from_date,
+                end_date: leaveRequest.to_date,
+                actioned_by: approved_by,
+            }).catch((err) =>
+                console.error("[Notification] notifyLeaveStatusUpdate (approved) failed:", err.message)
+            );
+
             return {
                 success: true,
                 message: "Leave request approved successfully",
@@ -360,6 +388,23 @@ const LeaveRequestService = {
             }
 
             const result = await LeaveRequestModel.reject(id, approved_by, rejection_reason);
+            const leaveType = await LeaveTypeModel.findById(leaveRequest.leave_type_id);
+
+            // ── Notify employee their leave was rejected ─────────────────
+            NotificationService.notifyLeaveStatusUpdate({
+                company_id: leaveRequest.company_id,
+                employee_id: leaveRequest.employee_id,
+                leave_id: id,
+                status: "rejected",
+                leave_type: leaveType.leave_name,
+                start_date: leaveRequest.from_date,
+                end_date: leaveRequest.to_date,
+                actioned_by: approved_by,
+                rejection_reason: rejection_reason,
+            }).catch((err) =>
+                console.error("[Notification] notifyLeaveStatusUpdate (rejected) failed:", err.message)
+            );
+
             return {
                 success: true,
                 message: "Leave request rejected successfully",
@@ -374,6 +419,10 @@ const LeaveRequestService = {
         }
     },
 
+    // --------------------------------------------------------
+    // The rest of the methods are unchanged
+    // --------------------------------------------------------
+
     async cancelLeaveRequest(id, employee_id) {
         try {
             const leaveRequest = await LeaveRequestModel.findById(id);
@@ -384,7 +433,6 @@ const LeaveRequestService = {
                 };
             }
 
-            // Only the owning employee can cancel their request
             if (leaveRequest.employee_id !== employee_id) {
                 return {
                     success: false,
@@ -414,10 +462,6 @@ const LeaveRequestService = {
         }
     },
 
-    // --------------------------------------------------------
-    // UPDATE — general field update (only while pending)
-    // --------------------------------------------------------
-
     async updateLeaveRequest(id, employee_id, data) {
         try {
             const leaveRequest = await LeaveRequestModel.findById(id);
@@ -428,7 +472,6 @@ const LeaveRequestService = {
                 };
             }
 
-            // Only the owning employee can edit their request
             if (leaveRequest.employee_id !== employee_id) {
                 return {
                     success: false,
@@ -443,7 +486,6 @@ const LeaveRequestService = {
                 };
             }
 
-            // If dates are being updated, re-run overlap check (excluding this request)
             const from_date = data.from_date ?? leaveRequest.from_date;
             const to_date = data.to_date ?? leaveRequest.to_date;
 
@@ -459,7 +501,7 @@ const LeaveRequestService = {
                     leaveRequest.employee_id,
                     from_date,
                     to_date,
-                    id   // exclude current record
+                    id
                 );
                 if (overlapping.length > 0) {
                     return {
@@ -469,7 +511,6 @@ const LeaveRequestService = {
                 }
             }
 
-            // Document validation if leave type requires it
             const document_url = data.document_url ?? leaveRequest.document_url;
             if (leaveRequest.requires_document && !document_url) {
                 return {
@@ -492,10 +533,6 @@ const LeaveRequestService = {
             };
         }
     },
-
-    // --------------------------------------------------------
-    // DELETE — soft delete
-    // --------------------------------------------------------
 
     async deleteLeaveRequest(id) {
         try {
