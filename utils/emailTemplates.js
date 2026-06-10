@@ -1,5 +1,5 @@
 /**
- * HRMS Email Templates
+ * TeamBook Email Templates
  * All templates return HTML strings.
  * Used by: userCompanyService.js via utils/mailer.js
  */
@@ -16,7 +16,7 @@ const baseStyle = `
 const header = (company_name) => `
   <div style="background: #1a1a2e; padding: 28px 32px;">
     <h1 style="color: #ffffff; margin: 0; font-size: 20px;">${company_name}</h1>
-    <p style="color: #a0a0b0; margin: 4px 0 0; font-size: 13px;">HRMS Platform</p>
+    <p style="color: #a0a0b0; margin: 4px 0 0; font-size: 13px;">TeamBook Platform</p>
   </div>
 `;
 
@@ -45,7 +45,7 @@ const registrationOtpTemplate = ({ first_name, otp, company_name, expires_minute
     <h2 style="color:#1a1a2e; margin-top:0;">Verify your email</h2>
     <p style="color:#333;">Hi ${first_name},</p>
     <p style="color:#333;">
-      Your company <strong>${company_name}</strong> has been registered on HRMS.
+      Your company <strong>${company_name}</strong> has been registered on TeamBook.
       Use the OTP below to verify your email address.
     </p>
     <div style="text-align:center; margin: 32px 0;">
@@ -72,7 +72,7 @@ const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_lin
     <h2 style="color:#1a1a2e; margin-top:0;">You've been added to ${company_name}</h2>
     <p style="color:#333;">Hi ${first_name},</p>
     <p style="color:#333;">
-      You have been added to <strong>${company_name}</strong> on the HRMS platform.
+      You have been added to <strong>${company_name}</strong> on the TeamBook platform.
       Your login username is:
     </p>
     <div style="text-align:center; margin: 20px 0;">
@@ -106,7 +106,7 @@ const passwordResetTemplate = ({ first_name, company_name, reset_link, expires_h
     <p style="color:#333;">Hi ${first_name},</p>
     <p style="color:#333;">
       We received a request to reset your password for your
-      <strong>${company_name}</strong> account on HRMS.
+      <strong>${company_name}</strong> account on TeamBook.
     </p>
     <div style="text-align:center; margin: 24px 0;">
       ${button("Reset My Password", reset_link)}
@@ -125,14 +125,14 @@ const welcomeTemplate = ({ first_name, company_name, username, login_url }) => `
  
   <div style="background: #1a1a2e; padding: 28px 32px;">
     <h1 style="color: #ffffff; margin: 0; font-size: 20px;">${company_name}</h1>
-    <p style="color: #a0a0b0; margin: 4px 0 0; font-size: 13px;">HRMS Platform</p>
+    <p style="color: #a0a0b0; margin: 4px 0 0; font-size: 13px;">TeamBook Platform</p>
   </div>
  
   <div style="padding: 32px;">
     <h2 style="color: #1a1a2e; margin-top: 0;">Welcome aboard, ${first_name}! 🎉</h2>
     <p style="color: #333;">
       Your email has been verified and your company <strong>${company_name}</strong>
-      is now active on HRMS.
+      is now active on TeamBook.
     </p>
     <p style="color: #333;">Your login username is:</p>
  
@@ -169,8 +169,8 @@ const welcomeTemplate = ({ first_name, company_name, username, login_url }) => `
 `;
 
 module.exports = {
-    registrationOtpTemplate,
-    inviteEmployeeTemplate,
-    passwordResetTemplate,
-    welcomeTemplate
+  registrationOtpTemplate,
+  inviteEmployeeTemplate,
+  passwordResetTemplate,
+  welcomeTemplate
 };
