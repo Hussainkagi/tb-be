@@ -85,18 +85,16 @@ async function fetchEligibleEmployees() {
             s.friday,
             s.saturday,
             s.sunday,
-            b.timezone          AS timezone
+            c.timezone          AS timezone   
         FROM employees e
         JOIN shifts   s ON e.shift_id  = s.id
-        JOIN branches b ON e.branch_id = b.id
+        JOIN companies c ON e.company_id = c.id  
         WHERE e.is_active   = TRUE
           AND e.deleted_at  IS NULL
           AND e.shift_id    IS NOT NULL
           AND s.is_active   = TRUE
           AND s.deleted_at  IS NULL
     `);
-
-    return rows;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,7 +107,7 @@ async function fetchHolidayKeys() {
             company_id,
             branch_id   -- NULL means company-wide holiday
         FROM holidays
-        WHERE date::date = CURRENT_DATE
+        WHERE CURRENT_DATE BETWEEN holiday_start_date AND holiday_end_date
           AND is_active  = TRUE
           AND deleted_at IS NULL
     `);
