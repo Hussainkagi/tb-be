@@ -95,6 +95,8 @@ async function fetchEligibleEmployees() {
           AND s.is_active   = TRUE
           AND s.deleted_at  IS NULL
     `);
+
+    return rows;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
