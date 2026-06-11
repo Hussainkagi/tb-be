@@ -404,10 +404,11 @@ const NotificationRecipient = {
 
         const result = await db.query(
             `INSERT INTO notification_recipients
-                (notification_id, employee_id, company_id, channel, device_token)
-             VALUES ${placeholders.join(", ")}
-             ON CONFLICT (notification_id, employee_id, channel) DO NOTHING
-             RETURNING *`,
+            (notification_id, employee_id, company_id, channel, device_token)
+            VALUES ${placeholders.join(", ")}
+            ON CONFLICT (notification_id, employee_id, channel) 
+            DO UPDATE SET device_token = EXCLUDED.device_token
+            RETURNING *`,
             values
         );
         return result.rows;
