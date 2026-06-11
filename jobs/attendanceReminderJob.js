@@ -39,10 +39,21 @@ function computeReminderUTC(timeStr, timezone, offsetMinutes = 15) {
 
         const reminderLocal = DateTime.now()
             .setZone(timezone)
+            .plus({ days: 1 })
             .set({ hour: hours, minute: minutes, second: seconds, millisecond: 0 })
             .minus({ minutes: offsetMinutes });
 
-        return reminderLocal.toUTC().toISO();
+        const reminderUTC = reminderLocal.toUTC();
+
+        // If already past, skip — don't fall back to null (which = send immediately)
+        if (reminderUTC <= DateTime.utc()) {
+            console.warn(
+                `[CRON] Skipping past reminder: ${timeStr} in ${timezone} → ${reminderUTC.toISO()}`
+            );
+            return "SKIP";
+        }
+
+        return reminderUTC.toISO();
     } catch {
         return null;
     }
@@ -180,24 +191,24 @@ async function runAttendanceReminderJob() {
         const CHECKIN_REMINDER_BEFORE_MINUTES = 15; // notify 15 min before shift start
         const CHECKOUT_REMINDER_BEFORE_MINUTES = 5; // notify 5 min before shift end
 
-        const enriched = eligible.map((emp) => ({
-            id: emp.id,
-            company_id: emp.company_id,
-            branch_id: emp.branch_id,
-            timezone: emp.timezone,
-            shift_start_time: emp.shift_start_time,
-            shift_end_time: emp.shift_end_time,
-            checkin_reminder_at: computeReminderUTC(
-                emp.shift_start_time,
-                emp.timezone,
-                CHECKIN_REMINDER_BEFORE_MINUTES
-            ),
-            checkout_reminder_at: computeReminderUTC(
-                emp.shift_end_time,
-                emp.timezone,
-                CHECKOUT_REMINDER_BEFORE_MINUTES
-            ),
-        }));
+        const enriched = eligible
+            .map((emp) => ({
+                ...emp,
+                checkin_reminder_at: computeReminderUTC(
+                    emp.shift_start_time, emp.timezone, CHECKIN_REMINDER_BEFORE_MINUTES
+                ),
+                checkout_reminder_at: computeReminderUTC(
+                    emp.shift_end_time, emp.timezone, CHECKOUT_REMINDER_BEFORE_MINUTES
+                ),
+            }))
+            .filter((emp) => {
+                // Drop employees where BOTH reminders are in the past
+                const skipCheckin = !emp.shift_start_time || emp.checkin_reminder_at === "SKIP";
+                const skipCheckout = !emp.shift_end_time || emp.checkout_reminder_at === "SKIP";
+                if (skipCheckin) emp.checkin_reminder_at = null; // null = don't schedule
+                if (skipCheckout) emp.checkout_reminder_at = null;
+                return true; // keep all — individual nulls are handled in scheduleAttendanceReminders
+            });
 
         // 5. Hand off to notification service — it creates one queued notification per employee
         const result = await NotificationService.scheduleAttendanceReminders(
@@ -259,7 +270,7 @@ async function runDispatchQueueJob() {
 // Job 1: Schedule attendance reminders — runs once daily at 00:01 AM UTC
 // All employees across all companies are processed in one pass
 // Adjust time to run before the earliest possible shift start across all timezones
-cron.schedule("1 0 * * *", runAttendanceReminderJob, {
+cron.schedule("1 18 * * *", runAttendanceReminderJob, {
     timezone: "UTC",
 });
 
