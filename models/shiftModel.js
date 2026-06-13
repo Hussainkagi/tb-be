@@ -8,6 +8,7 @@ const Shift = {
             shift_name,
             start_time,
             end_time,
+            timezone = 'Asia/Dubai',
             late_grace_minutes = 0,
             half_day_hours = 0.00,
             working_hours = 8.00,
@@ -23,14 +24,14 @@ const Shift = {
 
         const result = await db.query(
             `INSERT INTO shifts (
-                company_id, branch_id, shift_name,
-                start_time, end_time,
-                late_grace_minutes, half_day_hours, working_hours, is_night_shift,
-                monday, tuesday, wednesday, thursday, friday, saturday, sunday
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+            company_id, branch_id, shift_name,
+            start_time, end_time, timezone,
+            late_grace_minutes, half_day_hours, working_hours, is_night_shift,
+            monday, tuesday, wednesday, thursday, friday, saturday, sunday
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
             [
                 company_id, branch_id, shift_name,
-                start_time, end_time,
+                start_time, end_time, timezone,
                 late_grace_minutes, half_day_hours, working_hours, is_night_shift,
                 monday, tuesday, wednesday, thursday, friday, saturday, sunday
             ]

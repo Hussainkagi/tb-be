@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS shifts (
 
     -- State
     is_active           BOOLEAN         NOT NULL DEFAULT TRUE,
-    deleted_at          TIMESTAMP,                                          -- soft delete
+    deleted_at          TIMESTAMP,                                        
 
     -- Audit
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -80,3 +80,11 @@ DROP TRIGGER IF EXISTS trg_shifts_updated_at ON shifts;
 CREATE TRIGGER trg_shifts_updated_at
     BEFORE UPDATE ON shifts
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- ------------------------------------------------------------
+-- 3. ADD TIMEZONE COLUMN (added post-deploy)
+-- ------------------------------------------------------------
+
+ALTER TABLE shifts
+    ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'Asia/Dubai';
