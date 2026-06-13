@@ -57,7 +57,7 @@ router.get(
     "/active",
     verifyToken,
     validateTenant,
-    isAdmin,
+    isEmployee,
     LeaveTypeController.getActive
 );
 
