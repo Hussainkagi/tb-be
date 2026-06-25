@@ -307,14 +307,17 @@ const NotificationService = {
                         );
                         await NotificationRecipient.markAsSent(recipient.id, recipient.device_token);
                     } catch (err) {
-
-                        console.error("[FCM ERROR] code:", err.code, "| message:", err.message, "| token:", recipient.device_token?.slice(0, 20));
+                        console.error("[EXPO ERROR] code:", err.code, "| message:", err.message, "| token:", recipient.device_token?.slice(0, 20));
 
                         const isInvalidToken =
                             err.code === "messaging/invalid-registration-token" ||
-                            err.code === "messaging/registration-token-not-registered";
+                            err.code === "messaging/registration-token-not-registered" ||
+                            err.code === "DeviceNotRegistered" ||
+                            err.code === "InvalidCredentials" ||
+                            err.code === "expo/unknown";
 
-                        const retryAt = isInvalidToken
+                        const MAX_RETRIES = 3;
+                        const retryAt = isInvalidToken || recipient.retry_count >= MAX_RETRIES
                             ? null
                             : new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
@@ -325,7 +328,13 @@ const NotificationService = {
                         }
                     }
                 }
+            } else {
+                // in_app / email / sms — mark all as sent immediately
+                for (const recipient of recipients) {
+                    await NotificationRecipient.markAsSent(recipient.id);
+                }
             }
+
 
             // 7. Mark notification as dispatched
             await Notification.updateDispatchStatus(
@@ -347,6 +356,13 @@ const NotificationService = {
     // ─────────────────────────────────────────────────────────────────────────
     async processDispatchQueue() {
         try {
+            await db.query(`
+                        UPDATE notifications
+                        SET dispatch_status = 'queued'
+                        WHERE dispatch_status = 'processing'
+                        AND updated_at < NOW() - INTERVAL '10 minutes'
+                        AND deleted_at IS NULL
+                    `);
             const queue = await Notification.getDispatchQueue();
             const results = [];
 
