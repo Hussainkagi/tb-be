@@ -133,8 +133,8 @@ app.use("/api/companies/:company_id/payslips", payslipRoutes);
 const notificationRoutes = require("./routes/notificationRoute");
 app.use("/api/companies/:company_id/notifications", notificationRoutes);
 
-
-
+const payrollBreakdownRouter = require("./routes/payrollBreakdownRoute");
+app.use("/api/companies/:company_id/payroll-breakdown", payrollBreakdownRouter);
 
 
 
