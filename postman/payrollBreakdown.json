@@ -1,0 +1,475 @@
+{
+  "info": {
+    "name": "Payroll Breakdown",
+    "description": "Day-by-day payroll breakdown APIs.\n\nBase URL: {{base_url}}\nAll routes are scoped under: /api/companies/:company_id/payrolls\n\nAuth: Bearer token via Authorization header (verifyToken middleware)\nRole: isManager minimum for GET, isAdmin for mutations",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000", "type": "string" },
+    {
+      "key": "company_id",
+      "value": "b1c2d3e4-f5a6-7890-bcde-f01234567891",
+      "type": "string"
+    },
+    {
+      "key": "payroll_id",
+      "value": "c2d3e4f5-a6b7-8901-cdef-012345678912",
+      "type": "string"
+    },
+    {
+      "key": "payroll_period_id",
+      "value": "d3e4f5a6-b7c8-9012-defa-123456789023",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "1. Get Breakdown — Single Payroll",
+      "item": [
+        {
+          "name": "✅ Success — Full daily breakdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/{{payroll_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "{{payroll_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "Returns a day-by-day salary breakdown for a single payroll record.\n\nEach day shows:\n- day_type: present | absent | holiday | week_off | paid_leave | half_day_leave | unpaid_leave | half_day | comp_off | sandwich\n- payable_amount: salary earned for that day\n- deduction_amount: salary deducted for that day\n- net_day_amount: payable + overtime for that day\n- is_sandwich: true if the day was caught by the sandwich leave rule"
+          },
+          "response": [
+            {
+              "name": "200 OK — Breakdown for employee (25-day period, 4000 AED salary)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"payroll_id\": \"c2d3e4f5-a6b7-8901-cdef-012345678912\",\n    \"employee\": {\n      \"id\": \"e3f4a5b6-c7d8-9012-efab-234567890134\",\n      \"name\": \"Ahmed Al Mansoori\",\n      \"employee_code\": \"EMP-0042\"\n    },\n    \"period\": {\n      \"id\": \"d3e4f5a6-b7c8-9012-defa-123456789023\",\n      \"period_name\": \"June 2026 (1–25)\",\n      \"start_date\": \"2026-06-01\",\n      \"end_date\": \"2026-06-25\",\n      \"status\": \"processing\"\n    },\n    \"salary_info\": {\n      \"actual_salary\": 2500,\n      \"housing_allowance\": 800,\n      \"transport_allowance\": 500,\n      \"other_allowance\": 200,\n      \"gross_salary\": 4000,\n      \"per_day_salary\": 160.0000\n    },\n    \"stored_payroll\": {\n      \"gross_salary\": 4000,\n      \"net_salary\": 3360,\n      \"payroll_status\": \"processed\"\n    },\n    \"summary\": {\n      \"total_payable\": 3680,\n      \"total_deduction\": 320,\n      \"total_overtime_amt\": 0,\n      \"total_overtime_hrs\": 0,\n      \"total_present\": 19,\n      \"total_absent\": 1,\n      \"total_sandwich\": 0,\n      \"total_unpaid_leave\": 1,\n      \"total_paid_leave\": 1,\n      \"total_holidays\": 1,\n      \"total_week_off\": 3,\n      \"total_comp_off\": 0,\n      \"gross_salary\": 4000,\n      \"per_day_salary\": 160.0000,\n      \"total_days\": 25,\n      \"net_salary\": 3360\n    },\n    \"daily_breakdown\": [\n      {\n        \"date\": \"2026-06-01\",\n        \"day_of_week\": \"monday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8.5,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-02\",\n        \"day_of_week\": \"tuesday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-03\",\n        \"day_of_week\": \"wednesday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 9,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-04\",\n        \"day_of_week\": \"thursday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-05\",\n        \"day_of_week\": \"friday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-06\",\n        \"day_of_week\": \"saturday\",\n        \"day_type\": \"week_off\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-07\",\n        \"day_of_week\": \"sunday\",\n        \"day_type\": \"week_off\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-08\",\n        \"day_of_week\": \"monday\",\n        \"day_type\": \"holiday\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-09\",\n        \"day_of_week\": \"tuesday\",\n        \"day_type\": \"absent\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 0,\n        \"deduct_fraction\": 1,\n        \"payable_amount\": 0,\n        \"deduction_amount\": 160,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 0,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-10\",\n        \"day_of_week\": \"wednesday\",\n        \"day_type\": \"paid_leave\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-11\",\n        \"day_of_week\": \"thursday\",\n        \"day_type\": \"unpaid_leave\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 0,\n        \"deduct_fraction\": 1,\n        \"payable_amount\": 0,\n        \"deduction_amount\": 160,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 0,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-12\",\n        \"day_of_week\": \"friday\",\n        \"day_type\": \"half_day\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 0.5,\n        \"deduct_fraction\": 0.5,\n        \"payable_amount\": 80,\n        \"deduction_amount\": 80,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 80,\n        \"total_hours\": 3.5,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-13\",\n        \"day_of_week\": \"saturday\",\n        \"day_type\": \"week_off\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-14\",\n        \"day_of_week\": \"sunday\",\n        \"day_type\": \"sandwich\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 0,\n        \"deduct_fraction\": 1,\n        \"payable_amount\": 0,\n        \"deduction_amount\": 160,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 0,\n        \"total_hours\": null,\n        \"is_sandwich\": true\n      },\n      {\n        \"date\": \"2026-06-15\",\n        \"day_of_week\": \"monday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 1.5,\n        \"overtime_amount\": 30,\n        \"net_day_amount\": 190,\n        \"total_hours\": 9.5,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-16\",\n        \"day_of_week\": \"tuesday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-17\",\n        \"day_of_week\": \"wednesday\",\n        \"day_type\": \"half_day_leave\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 0.5,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 80,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 80,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-18\",\n        \"day_of_week\": \"thursday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-19\",\n        \"day_of_week\": \"friday\",\n        \"day_type\": \"comp_off\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": null,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-20\",\n        \"day_of_week\": \"saturday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-21\",\n        \"day_of_week\": \"sunday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-22\",\n        \"day_of_week\": \"monday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-23\",\n        \"day_of_week\": \"tuesday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8.25,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-24\",\n        \"day_of_week\": \"wednesday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      },\n      {\n        \"date\": \"2026-06-25\",\n        \"day_of_week\": \"thursday\",\n        \"day_type\": \"present\",\n        \"per_day_salary\": 160.0000,\n        \"pay_fraction\": 1,\n        \"deduct_fraction\": 0,\n        \"payable_amount\": 160,\n        \"deduction_amount\": 0,\n        \"overtime_hours\": 0,\n        \"overtime_amount\": 0,\n        \"net_day_amount\": 160,\n        \"total_hours\": 8,\n        \"is_sandwich\": false\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — Payroll not found",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/00000000-0000-0000-0000-000000000000/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "00000000-0000-0000-0000-000000000000",
+                "breakdown"
+              ]
+            },
+            "description": "Pass a non-existent payroll UUID to trigger a 404."
+          },
+          "response": [
+            {
+              "name": "404 Not Found — Payroll record not found",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payroll record not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — No salary structure",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/{{payroll_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "{{payroll_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "Triggered when the employee has no active salary structure effective for the payroll period start date."
+          },
+          "response": [
+            {
+              "name": "404 Not Found — No salary structure",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"No active salary structure found for this employee\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — Unauthorized (no token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/{{payroll_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "{{payroll_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "No Authorization header — verifyToken middleware rejects the request."
+          },
+          "response": [
+            {
+              "name": "401 Unauthorized — Missing token",
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. No token provided.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — Server error (500)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/not-a-uuid/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "not-a-uuid",
+                "breakdown"
+              ]
+            },
+            "description": "Passing a malformed UUID causes a PostgreSQL error which is caught and returned as 500."
+          },
+          "response": [
+            {
+              "name": "500 Internal Server Error — Invalid UUID",
+              "status": "Internal Server Error",
+              "code": 500,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Server error\",\n  \"error\": \"invalid input syntax for type uuid: \\\"not-a-uuid\\\"\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Get Breakdown — All Employees in Period",
+      "item": [
+        {
+          "name": "✅ Success — All employees breakdown",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/period/{{payroll_period_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "period",
+                "{{payroll_period_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "Returns daily breakdowns for every employee in the given payroll period.\n\nEmployees with errors (missing salary structure, DB issues) are returned in the `failed` array — other employees still succeed.\n\nUseful for the admin review screen before approving/paying payroll."
+          },
+          "response": [
+            {
+              "name": "200 OK — Period breakdown (2 employees shown)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"period\": {\n      \"id\": \"d3e4f5a6-b7c8-9012-defa-123456789023\",\n      \"period_name\": \"June 2026 (1–25)\",\n      \"start_date\": \"2026-06-01\",\n      \"end_date\": \"2026-06-25\",\n      \"status\": \"processing\"\n    },\n    \"total_employees\": 2,\n    \"successful_count\": 2,\n    \"failed_count\": 0,\n    \"failed\": [],\n    \"employees\": [\n      {\n        \"payroll_id\": \"c2d3e4f5-a6b7-8901-cdef-012345678912\",\n        \"employee_id\": \"e3f4a5b6-c7d8-9012-efab-234567890134\",\n        \"employee_code\": \"EMP-0042\",\n        \"name\": \"Ahmed Al Mansoori\",\n        \"payroll_status\": \"processed\",\n        \"salary_info\": {\n          \"gross_salary\": 4000,\n          \"per_day_salary\": 160.0000\n        },\n        \"summary\": {\n          \"total_payable\": 3680,\n          \"total_deduction\": 320,\n          \"total_overtime_amt\": 30,\n          \"total_overtime_hrs\": 1.5,\n          \"total_present\": 19,\n          \"total_absent\": 1,\n          \"total_sandwich\": 0,\n          \"total_unpaid_leave\": 1,\n          \"total_paid_leave\": 1,\n          \"total_holidays\": 1,\n          \"total_week_off\": 3,\n          \"total_comp_off\": 0,\n          \"gross_salary\": 4000,\n          \"per_day_salary\": 160.0000,\n          \"total_days\": 25,\n          \"net_salary\": 3390\n        },\n        \"daily_breakdown\": [\n          {\n            \"date\": \"2026-06-01\",\n            \"day_of_week\": \"monday\",\n            \"day_type\": \"present\",\n            \"per_day_salary\": 160.0000,\n            \"pay_fraction\": 1,\n            \"deduct_fraction\": 0,\n            \"payable_amount\": 160,\n            \"deduction_amount\": 0,\n            \"overtime_hours\": 0,\n            \"overtime_amount\": 0,\n            \"net_day_amount\": 160,\n            \"total_hours\": 8.5,\n            \"is_sandwich\": false\n          },\n          {\n            \"date\": \"2026-06-02\",\n            \"day_of_week\": \"tuesday\",\n            \"day_type\": \"absent\",\n            \"per_day_salary\": 160.0000,\n            \"pay_fraction\": 0,\n            \"deduct_fraction\": 1,\n            \"payable_amount\": 0,\n            \"deduction_amount\": 160,\n            \"overtime_hours\": 0,\n            \"overtime_amount\": 0,\n            \"net_day_amount\": 0,\n            \"total_hours\": null,\n            \"is_sandwich\": false\n          },\n          { \"date\": \"2026-06-03\", \"day_of_week\": \"wednesday\", \"day_type\": \"present\", \"per_day_salary\": 160.0000, \"pay_fraction\": 1, \"deduct_fraction\": 0, \"payable_amount\": 160, \"deduction_amount\": 0, \"overtime_hours\": 0, \"overtime_amount\": 0, \"net_day_amount\": 160, \"total_hours\": 8, \"is_sandwich\": false },\n          { \"date\": \"...\", \"day_of_week\": \"...\", \"day_type\": \"...\", \"note\": \"Remaining 22 days follow the same shape\" }\n        ]\n      },\n      {\n        \"payroll_id\": \"f4a5b6c7-d8e9-0123-fab0-345678901245\",\n        \"employee_id\": \"a5b6c7d8-e9f0-1234-0abc-456789012356\",\n        \"employee_code\": \"EMP-0078\",\n        \"name\": \"Sara Khalid\",\n        \"payroll_status\": \"processed\",\n        \"salary_info\": {\n          \"gross_salary\": 6000,\n          \"per_day_salary\": 240.0000\n        },\n        \"summary\": {\n          \"total_payable\": 5760,\n          \"total_deduction\": 240,\n          \"total_overtime_amt\": 0,\n          \"total_overtime_hrs\": 0,\n          \"total_present\": 22,\n          \"total_absent\": 1,\n          \"total_sandwich\": 0,\n          \"total_unpaid_leave\": 0,\n          \"total_paid_leave\": 0,\n          \"total_holidays\": 1,\n          \"total_week_off\": 1,\n          \"total_comp_off\": 0,\n          \"gross_salary\": 6000,\n          \"per_day_salary\": 240.0000,\n          \"total_days\": 25,\n          \"net_salary\": 5760\n        },\n        \"daily_breakdown\": [\n          { \"date\": \"2026-06-01\", \"day_of_week\": \"monday\", \"day_type\": \"present\", \"per_day_salary\": 240.0000, \"pay_fraction\": 1, \"deduct_fraction\": 0, \"payable_amount\": 240, \"deduction_amount\": 0, \"overtime_hours\": 0, \"overtime_amount\": 0, \"net_day_amount\": 240, \"total_hours\": 8, \"is_sandwich\": false },\n          { \"date\": \"...\", \"note\": \"Remaining days follow the same shape\" }\n        ]\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "✅ Success — Period breakdown with partial failure",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/period/{{payroll_period_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "period",
+                "{{payroll_period_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "When some employees succeed and some fail (e.g. missing salary structure), the response still returns 200. Check failed_count and the failed array."
+          },
+          "response": [
+            {
+              "name": "200 OK — 1 success, 1 failed (missing salary structure)",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"period\": {\n      \"id\": \"d3e4f5a6-b7c8-9012-defa-123456789023\",\n      \"period_name\": \"June 2026 (1–25)\",\n      \"start_date\": \"2026-06-01\",\n      \"end_date\": \"2026-06-25\",\n      \"status\": \"processing\"\n    },\n    \"total_employees\": 2,\n    \"successful_count\": 1,\n    \"failed_count\": 1,\n    \"failed\": [\n      {\n        \"employee_id\": \"a5b6c7d8-e9f0-1234-0abc-456789012356\",\n        \"employee_code\": \"EMP-0078\",\n        \"name\": \"Sara Khalid\",\n        \"error\": \"No active salary structure found\"\n      }\n    ],\n    \"employees\": [\n      {\n        \"payroll_id\": \"c2d3e4f5-a6b7-8901-cdef-012345678912\",\n        \"employee_id\": \"e3f4a5b6-c7d8-9012-efab-234567890134\",\n        \"employee_code\": \"EMP-0042\",\n        \"name\": \"Ahmed Al Mansoori\",\n        \"payroll_status\": \"processed\",\n        \"salary_info\": { \"gross_salary\": 4000, \"per_day_salary\": 160.0000 },\n        \"summary\": {\n          \"gross_salary\": 4000, \"per_day_salary\": 160.0000, \"total_days\": 25,\n          \"net_salary\": 3520, \"total_present\": 22, \"total_absent\": 0,\n          \"total_deduction\": 480, \"total_overtime_amt\": 0\n        },\n        \"daily_breakdown\": [{ \"date\": \"...\", \"note\": \"25 day entries\" }]\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — No payrolls found for period",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/period/00000000-0000-0000-0000-000000000000/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "period",
+                "00000000-0000-0000-0000-000000000000",
+                "breakdown"
+              ]
+            },
+            "description": "Period UUID exists but has no payroll records generated yet (payroll not run for this period)."
+          },
+          "response": [
+            {
+              "name": "404 Not Found — No payroll records for this period",
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"No payroll records found for this period\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — Forbidden (insufficient role)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payrolls/period/{{payroll_period_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payrolls",
+                "period",
+                "{{payroll_period_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "Token belongs to a role below isManager (e.g. a regular employee). The authorizeRoles middleware rejects."
+          },
+          "response": [
+            {
+              "name": "403 Forbidden — Insufficient role",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Insufficient permissions.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "❌ Error — Invalid tenant (validateTenant fail)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/99999999-9999-9999-9999-999999999999/payrolls/period/{{payroll_period_id}}/breakdown",
+              "host": ["{{base_url}}"],
+              "path": [
+                "api",
+                "companies",
+                "99999999-9999-9999-9999-999999999999",
+                "payrolls",
+                "period",
+                "{{payroll_period_id}}",
+                "breakdown"
+              ]
+            },
+            "description": "company_id in the URL does not match the company_id in the verified token — validateTenant rejects."
+          },
+          "response": [
+            {
+              "name": "403 Forbidden — Tenant mismatch",
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access denied. Company mismatch.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📖 Reference — Day Type Glossary",
+      "item": [
+        {
+          "name": "Day Type Reference (read description)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "# day_type field values\n\n| day_type        | Deduction? | Description |\n|-----------------|------------|-------------|\n| `present`       | ❌         | Employee checked in/out with sufficient hours |\n| `half_day`      | ✅ 0.5×    | Checked in but total_hours < shift.half_day_hours |\n| `absent`        | ✅ 1×      | No attendance record on a working day |\n| `holiday`       | ❌         | Company-declared or public holiday — fully paid |\n| `week_off`      | ❌         | Day not in shift working days (e.g. Sat/Sun) — fully paid |\n| `paid_leave`    | ❌         | Approved leave where leave_type.is_paid = true |\n| `half_day_leave`| ❌         | Approved half-day paid leave |\n| `unpaid_leave`  | ✅ 1×      | Approved leave where leave_type.is_paid = false |\n| `comp_off`      | ❌         | Compensatory off — treated same as week_off |\n| `sandwich`      | ✅ 1×      | Week-off/holiday between two deductible days — sandwich leave rule applied |\n\n# is_sandwich flag\nWhen `is_sandwich: true`, the day was originally a `week_off`, `holiday`, or `comp_off` but fell between two consecutive deductible days (absent/unpaid_leave), so the sandwich rule converts it to a deductible day.\n\n# pay_fraction vs deduct_fraction\n- `pay_fraction`: portion of per_day_salary the employee earns (0, 0.5, or 1)\n- `deduct_fraction`: portion deducted (0, 0.5, or 1)\n- For a normal present day: pay=1, deduct=0\n- For half-day: pay=0.5, deduct=0.5\n- For absent/unpaid: pay=0, deduct=1\n\n# net_day_amount\n= payable_amount + overtime_amount\n\n# Summary net_salary formula\ngross_salary − total_deduction + total_overtime_amt"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
