@@ -2,6 +2,8 @@ const db = require("../config/database");
 const PayrollModel = require("../models/payrollModel");
 const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
 const PayslipModel = require("../models/payslipModel");
+const PayrollDailyLineModel = require("../models/payrollDailyLineModel");
+const { buildShift, buildDailyBreakdown } = require("./payrollEngineService");
 
 // ============================================================
 // UTILITY: Generate unique payslip number
@@ -441,18 +443,7 @@ const PayrollService = {
                     }
 
                     // Shift — embedded in employee row from JOIN
-                    const shift = {
-                        working_hours: employee.working_hours || 8,
-                        half_day_hours: employee.half_day_hours || 0,
-                        monday: employee.monday ?? true,
-                        tuesday: employee.tuesday ?? true,
-                        wednesday: employee.wednesday ?? true,
-                        thursday: employee.thursday ?? true,
-                        friday: employee.friday ?? true,
-                        saturday: employee.saturday ?? false,
-                        sunday: employee.sunday ?? false,
-                    };
-
+                    const shift = buildShift(employee);
                     const empBranchId = employee.branch_id;
 
                     // Fetch attendance, holidays, leaves in parallel
@@ -462,9 +453,10 @@ const PayrollService = {
                         fetchApprovedLeaves(employee.id, period.start_date, period.end_date),
                     ]);
 
-                    // Calculate payroll figures
-                    const calc = await calculateEmployeePayroll(
-                        employee,
+                    // Calculate payroll figures + day-by-day breakdown
+                    // using the SAME engine the breakdown service reads from —
+                    // this is what keeps the list view and breakdown view in sync.
+                    const breakdown = buildDailyBreakdown(
                         period,
                         shift,
                         salaryStructure,
@@ -472,6 +464,7 @@ const PayrollService = {
                         approvedLeaves,
                         holidaySet
                     );
+                    const calc = breakdown.summary;
 
                     // Create payroll record
                     const payroll = await PayrollModel.create({
@@ -479,13 +472,29 @@ const PayrollService = {
                         payroll_period_id,
                         employee_id: employee.id,
                         branch_id: empBranchId,
-                        ...calc,
+                        actual_salary: calc.actual_salary,
+                        gross_salary: calc.gross_salary,
+                        total_working_days: calc.total_working_days,
+                        total_present_days: calc.total_present_days,
+                        total_absent_days: calc.total_absent_days,
+                        total_paid_leave_days: calc.total_paid_leave_days,
+                        total_unpaid_leave_days: calc.total_unpaid_leave_days,
+                        total_holidays: calc.total_holidays,
+                        overtime_hours: calc.overtime_hours,
+                        overtime_amount: calc.overtime_amount,
+                        deduction_amount: calc.deduction_amount,
+                        net_salary: calc.net_salary,
                         base_deduction_amount: calc.deduction_amount,
                         base_bonus_amount: 0,
                         bonus_amount: 0,
                         tax_amount: 0,
                         payroll_status: "processed",
                     });
+
+                    // Freeze the day-by-day snapshot so the breakdown page
+                    // always matches what was generated here, regardless of
+                    // later attendance/leave/holiday edits.
+                    await PayrollDailyLineModel.bulkInsert(payroll.id, breakdown.daily);
 
                     generated.push(payroll);
                 } catch (empError) {
@@ -500,8 +509,8 @@ const PayrollService = {
             // ── Mark period as completed ──────────────────────
             await db.query(
                 `UPDATE payroll_periods 
-         SET status = 'processing', processed_at = NOW(), processed_by = $2 
-         WHERE id = $1`,
+     SET status = 'processing', processed_at = NOW(), processed_by = $2 
+     WHERE id = $1`,
                 [payroll_period_id, user_id]
             );
 
