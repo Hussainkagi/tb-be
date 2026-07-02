@@ -1,282 +1,7 @@
 const db = require("../config/database");
-
-// ============================================================
-// UTILITY — reused from payrollService (keep in sync)
-// ============================================================
-
-function getDateRange(start, end) {
-    const dates = [];
-    const current = new Date(start);
-    const endDate = new Date(end);
-    while (current <= endDate) {
-        dates.push(current.toISOString().split("T")[0]);
-        current.setDate(current.getDate() + 1);
-    }
-    return dates;
-}
-
-function calculateSandwichLeaves(allDates, deductDates, middleDates) {
-    const sandwichDates = new Set();
-    let i = 0;
-    while (i < allDates.length) {
-        const date = allDates[i];
-        if (!middleDates.has(date)) { i++; continue; }
-        const runStart = i;
-        while (i < allDates.length && middleDates.has(allDates[i])) i++;
-        const runEnd = i - 1;
-        const beforeDate = runStart > 0 ? allDates[runStart - 1] : null;
-        const afterDate = runEnd + 1 < allDates.length ? allDates[runEnd + 1] : null;
-        if (beforeDate && deductDates.has(beforeDate) && afterDate && deductDates.has(afterDate)) {
-            for (let j = runStart; j <= runEnd; j++) sandwichDates.add(allDates[j]);
-        }
-    }
-    return sandwichDates;
-}
-
-// ============================================================
-// DAY CLASSIFICATION CONSTANTS — readable labels
-// ============================================================
-
-const DAY_TYPE = {
-    HOLIDAY: "holiday",          // company/public holiday — paid
-    WEEK_OFF: "week_off",         // shift-level week off — paid
-    COMP_OFF: "comp_off",         // comp-off (treated as non-deductible)
-    PAID_LEAVE: "paid_leave",       // approved paid leave — no deduction
-    HALF_DAY_LEAVE: "half_day_leave",   // approved half-day leave (paid)
-    UNPAID_LEAVE: "unpaid_leave",     // approved unpaid leave — deducted
-    PRESENT: "present",          // full day present
-    HALF_DAY: "half_day",         // present < half_day_hours threshold
-    ABSENT: "absent",           // no attendance record
-    SANDWICH: "sandwich",         // middle day caught by sandwich rule
-};
-
-// ============================================================
-// BREAKDOWN ENGINE — returns daily array for ONE employee
-// ============================================================
-
-async function buildDailyBreakdown(employee, period, shift, salaryStructure, attendanceMap, approvedLeaves, holidaySet) {
-    const allDates = getDateRange(period.start_date, period.end_date);
-    const totalDays = allDates.length;
-
-    // ── Salary base ──────────────────────────────────────────
-    const basicSalary = parseFloat(salaryStructure.actual_salary) || 0;
-    const housingAllowance = parseFloat(salaryStructure.housing_allowance) || 0;
-    const transportAllowance = parseFloat(salaryStructure.transport_allowance) || 0;
-    const otherAllowance = parseFloat(salaryStructure.other_allowance) || 0;
-    const grossSalary = basicSalary + housingAllowance + transportAllowance + otherAllowance;
-    const perDaySalary = totalDays > 0 ? grossSalary / totalDays : 0;
-
-    // ── Week-off day numbers ──────────────────────────────────
-    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    const weekOffDayNumbers = new Set(
-        [0, 1, 2, 3, 4, 5, 6].filter(d => !shift[dayNames[d]])
-    );
-
-    // ── Approved leave lookup ─────────────────────────────────
-    const leaveDateMap = {};
-    for (const leave of approvedLeaves) {
-        const leaveDates = getDateRange(leave.from_date, leave.to_date);
-        for (const d of leaveDates) {
-            leaveDateMap[d] = { is_paid: leave.is_paid, is_half_day: leave.is_half_day };
-        }
-    }
-
-    // ── PASS 1 — classify every date ────────────────────────────
-    const deductDates = new Set();
-    const middleDates = new Set();
-
-    // Temporary store for classification before sandwich pass
-    const rawClassification = {};
-
-    for (const date of allDates) {
-        const jsDate = new Date(date);
-        const dayOfWeek = jsDate.getDay();
-        const isWeekOff = weekOffDayNumbers.has(dayOfWeek);
-        const isHoliday = holidaySet.has(date);
-        const attendance = attendanceMap[date];
-        const leaveInfo = leaveDateMap[date];
-
-        // ── Holiday ──────────────────────────────────────────
-        if (isHoliday) {
-            middleDates.add(date);
-            rawClassification[date] = { type: DAY_TYPE.HOLIDAY, payFraction: 1, deduct: false };
-            continue;
-        }
-
-        // ── Week-off ─────────────────────────────────────────
-        if (isWeekOff) {
-            middleDates.add(date);
-            rawClassification[date] = { type: DAY_TYPE.WEEK_OFF, payFraction: 1, deduct: false };
-            continue;
-        }
-
-        // ── Approved Leave ────────────────────────────────────
-        if (leaveInfo) {
-            if (leaveInfo.is_paid) {
-                const type = leaveInfo.is_half_day ? DAY_TYPE.HALF_DAY_LEAVE : DAY_TYPE.PAID_LEAVE;
-                rawClassification[date] = { type, payFraction: leaveInfo.is_half_day ? 0.5 : 1, deduct: false };
-            } else {
-                const days = leaveInfo.is_half_day ? 0.5 : 1;
-                rawClassification[date] = {
-                    type: DAY_TYPE.UNPAID_LEAVE,
-                    payFraction: 1 - days,   // 0 for full-day, 0.5 for half-day unpaid
-                    deductFraction: days,
-                    deduct: true,
-                };
-                deductDates.add(date);
-            }
-            continue;
-        }
-
-        // ── Attendance-based ──────────────────────────────────
-        if (!attendance) {
-            rawClassification[date] = { type: DAY_TYPE.ABSENT, payFraction: 0, deductFraction: 1, deduct: true };
-            deductDates.add(date);
-            continue;
-        }
-
-        const status = attendance.status;
-
-        if (status === "checked-in" || status === "checked-out") {
-            const totalHoursWorked = parseFloat(attendance.total_hours) || 0;
-            const halfDayThreshold = parseFloat(shift.half_day_hours) || 0;
-
-            if (halfDayThreshold > 0 && totalHoursWorked < halfDayThreshold) {
-                // Half-day present → deduct 0.5
-                rawClassification[date] = {
-                    type: DAY_TYPE.HALF_DAY,
-                    payFraction: 0.5,
-                    deductFraction: 0.5,
-                    deduct: true,
-                    total_hours: totalHoursWorked,
-                };
-                deductDates.add(date);
-            } else {
-                // Full present
-                let overtimeHours = 0;
-                if (salaryStructure.overtime_enabled) {
-                    const fullDayHours = parseFloat(shift.working_hours) || 8;
-                    overtimeHours = Math.max(0, totalHoursWorked - fullDayHours);
-                }
-                rawClassification[date] = {
-                    type: DAY_TYPE.PRESENT,
-                    payFraction: 1,
-                    deduct: false,
-                    total_hours: totalHoursWorked,
-                    overtime_hours: parseFloat(overtimeHours.toFixed(2)),
-                };
-            }
-        } else if (status === "absent") {
-            rawClassification[date] = { type: DAY_TYPE.ABSENT, payFraction: 0, deductFraction: 1, deduct: true };
-            deductDates.add(date);
-        } else if (status === "comp-off") {
-            middleDates.add(date);
-            rawClassification[date] = { type: DAY_TYPE.COMP_OFF, payFraction: 1, deduct: false };
-        } else if (status === "leave") {
-            // Leave without matching leave_request → absent
-            rawClassification[date] = { type: DAY_TYPE.ABSENT, payFraction: 0, deductFraction: 1, deduct: true };
-            deductDates.add(date);
-        }
-    }
-
-    // ── PASS 2 — apply sandwich rule ─────────────────────────
-    const sandwichDates = calculateSandwichLeaves(allDates, deductDates, middleDates);
-    for (const d of sandwichDates) {
-        if (!deductDates.has(d)) {
-            deductDates.add(d);
-            // Override the day's classification to sandwich
-            rawClassification[d] = {
-                ...rawClassification[d],
-                type: DAY_TYPE.SANDWICH,
-                payFraction: 0,
-                deductFraction: 1,
-                deduct: true,
-            };
-        }
-    }
-
-    // ── PASS 3 — build final daily rows ──────────────────────
-    const overtimeRatePerHour = parseFloat(salaryStructure.overtime_rate_per_hour) || 0;
-
-    const dailyRows = allDates.map(date => {
-        const cls = rawClassification[date] || { type: "unknown", payFraction: 0, deduct: false };
-        const jsDate = new Date(date);
-        const dayOfWeek = dayNames[jsDate.getDay()];
-
-        const deductFraction = cls.deductFraction || 0;
-        const deductionAmt = parseFloat((perDaySalary * deductFraction).toFixed(2));
-        const payableAmt = parseFloat((perDaySalary * cls.payFraction).toFixed(2));
-
-        const overtimeHrs = cls.overtime_hours || 0;
-        const overtimeAmt = parseFloat((overtimeHrs * overtimeRatePerHour).toFixed(2));
-
-        return {
-            date,
-            day_of_week: dayOfWeek,
-            day_type: cls.type,
-            // --- monetary ---
-            per_day_salary: parseFloat(perDaySalary.toFixed(4)),
-            pay_fraction: cls.payFraction,
-            deduct_fraction: deductFraction,
-            payable_amount: payableAmt,
-            deduction_amount: deductionAmt,
-            overtime_hours: overtimeHrs,
-            overtime_amount: overtimeAmt,
-            net_day_amount: parseFloat((payableAmt + overtimeAmt).toFixed(2)),
-            // --- attendance detail ---
-            total_hours: cls.total_hours || null,
-            is_sandwich: cls.type === DAY_TYPE.SANDWICH,
-        };
-    });
-
-    // ── Summary totals (should match payrollService output) ──
-    const summary = dailyRows.reduce((acc, row) => {
-        acc.total_payable += row.payable_amount;
-        acc.total_deduction += row.deduction_amount;
-        acc.total_overtime_amt += row.overtime_amount;
-        acc.total_overtime_hrs += row.overtime_hours;
-
-        if (row.day_type === DAY_TYPE.PRESENT) acc.total_present++;
-        else if (row.day_type === DAY_TYPE.HALF_DAY) acc.total_present += 0.5;
-        else if (row.day_type === DAY_TYPE.ABSENT) acc.total_absent++;
-        else if (row.day_type === DAY_TYPE.SANDWICH) acc.total_sandwich++;
-        else if (row.day_type === DAY_TYPE.UNPAID_LEAVE) acc.total_unpaid_leave += row.deduct_fraction;
-        else if ([DAY_TYPE.PAID_LEAVE, DAY_TYPE.HALF_DAY_LEAVE].includes(row.day_type))
-            acc.total_paid_leave += row.pay_fraction;
-        else if (row.day_type === DAY_TYPE.HOLIDAY) acc.total_holidays++;
-        else if (row.day_type === DAY_TYPE.WEEK_OFF) acc.total_week_off++;
-        else if (row.day_type === DAY_TYPE.COMP_OFF) acc.total_comp_off++;
-
-        return acc;
-    }, {
-        total_payable: 0,
-        total_deduction: 0,
-        total_overtime_amt: 0,
-        total_overtime_hrs: 0,
-        total_present: 0,
-        total_absent: 0,
-        total_sandwich: 0,
-        total_unpaid_leave: 0,
-        total_paid_leave: 0,
-        total_holidays: 0,
-        total_week_off: 0,
-        total_comp_off: 0,
-    });
-
-    // Round summary
-    for (const key of Object.keys(summary)) {
-        summary[key] = parseFloat(summary[key].toFixed(2));
-    }
-
-    summary.gross_salary = parseFloat(grossSalary.toFixed(2));
-    summary.per_day_salary = parseFloat(perDaySalary.toFixed(4));
-    summary.total_days = totalDays;
-    summary.net_salary = parseFloat(
-        (summary.gross_salary - summary.total_deduction + summary.total_overtime_amt).toFixed(2)
-    );
-
-    return { daily: dailyRows, summary };
-}
+const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
+const PayrollDailyLineModel = require("../models/payrollDailyLineModel");
+const { buildShift, buildDailyBreakdown } = require("./payrollEngineService");
 
 // ============================================================
 // DB FETCHERS — minimal, scoped to what breakdown needs
@@ -387,26 +112,127 @@ async function fetchApprovedLeaves(employee_id, startDate, endDate) {
     return result.rows;
 }
 
+// Small local copy needed by fetchHolidaysForPeriod above.
+// (Kept identical to the one inside payrollEngine.js.)
+function getDateRange(start, end) {
+    const dates = [];
+    const current = new Date(start);
+    const endDate = new Date(end);
+    while (current <= endDate) {
+        dates.push(current.toISOString().split("T")[0]);
+        current.setDate(current.getDate() + 1);
+    }
+    return dates;
+}
+
 // ============================================================
-// Helper — build shift object from employee row
+// SUMMARY — aggregate persisted daily lines into totals
 // ============================================================
-function buildShift(row) {
+
+function summarizeFromLines(lines, payroll) {
+    const summary = lines.reduce((acc, row) => {
+        acc.total_payable += parseFloat(row.payable_amount);
+        acc.total_deduction += parseFloat(row.deduction_amount);
+        acc.total_overtime_amt += parseFloat(row.overtime_amount);
+        acc.total_overtime_hrs += parseFloat(row.overtime_hours);
+
+        if (row.day_type === "present") acc.total_present++;
+        else if (row.day_type === "half_day") acc.total_present += 0.5;
+        else if (row.day_type === "absent") acc.total_absent++;
+        else if (row.day_type === "sandwich") acc.total_sandwich++;
+        else if (row.day_type === "unpaid_leave") acc.total_unpaid_leave += parseFloat(row.deduct_fraction);
+        else if (["paid_leave", "half_day_leave"].includes(row.day_type)) acc.total_paid_leave += parseFloat(row.pay_fraction);
+        else if (row.day_type === "holiday") acc.total_holidays++;
+        else if (row.day_type === "week_off") acc.total_week_off++;
+        else if (row.day_type === "comp_off") acc.total_comp_off++;
+
+        return acc;
+    }, {
+        total_payable: 0, total_deduction: 0, total_overtime_amt: 0, total_overtime_hrs: 0,
+        total_present: 0, total_absent: 0, total_sandwich: 0, total_unpaid_leave: 0,
+        total_paid_leave: 0, total_holidays: 0, total_week_off: 0, total_comp_off: 0,
+    });
+
+    for (const key of Object.keys(summary)) summary[key] = parseFloat(summary[key].toFixed(2));
+
+    summary.gross_salary = parseFloat(payroll.gross_salary);
+    summary.per_day_salary = lines.length ? parseFloat(lines[0].per_day_salary) : 0;
+    summary.total_days = lines.length;
+    // Base net salary from attendance only — adjustments layered separately below
+    summary.net_salary = parseFloat(
+        (summary.gross_salary - summary.total_deduction + summary.total_overtime_amt).toFixed(2)
+    );
+    return summary;
+}
+
+// ============================================================
+// Layer manual adjustments (bonus/commission/deduction/penalty/loan)
+// on top of an attendance-based summary.
+// ============================================================
+
+async function attachAdjustments(summary, payroll, payroll_id) {
+    const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll_id);
+    let bonusTotal = 0, deductionTotal = 0;
+    for (const adj of adjustments) {
+        if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) deductionTotal += parseFloat(adj.amount);
+        else if (["bonus", "commission"].includes(adj.adjustment_type)) bonusTotal += parseFloat(adj.amount);
+    }
+    summary.adjustment_bonus = parseFloat(bonusTotal.toFixed(2));
+    summary.adjustment_deduction = parseFloat(deductionTotal.toFixed(2));
+    summary.final_net_salary = parseFloat(payroll.net_salary); // stored, authoritative
+    return adjustments;
+}
+
+// ============================================================
+// Snapshot loader — read persisted lines, or backfill once
+// for legacy payrolls generated before this migration.
+// ============================================================
+
+async function getOrBackfillLines(payroll) {
+    let lines = await PayrollDailyLineModel.findByPayrollId(payroll.id);
+    if (lines.length > 0) return lines;
+
+    // Legacy payroll generated before this migration — backfill once,
+    // using attendance/leave/holiday state AS IT WAS, best-effort.
+    // After this, the snapshot becomes the permanent source of truth.
+    const period = { start_date: payroll.start_date, end_date: payroll.end_date };
+    const salaryStructure = await fetchSalaryStructure(payroll.employee_id, period.start_date);
+    if (!salaryStructure) return [];
+
+    const shift = buildShift(payroll);
+    const branchId = payroll.emp_branch_id || payroll.branch_id;
+    const [attendanceMap, holidaySet, approvedLeaves] = await Promise.all([
+        fetchAttendanceForPeriod(payroll.employee_id, period.start_date, period.end_date),
+        fetchHolidaysForPeriod(payroll.company_id, branchId, period.start_date, period.end_date),
+        fetchApprovedLeaves(payroll.employee_id, period.start_date, period.end_date),
+    ]);
+    const breakdown = buildDailyBreakdown(period, shift, salaryStructure, attendanceMap, approvedLeaves, holidaySet);
+    lines = await PayrollDailyLineModel.bulkInsert(payroll.id, breakdown.daily);
+    return lines;
+}
+
+function formatLineForResponse(l) {
     return {
-        working_hours: row.working_hours || 8,
-        half_day_hours: row.half_day_hours || 0,
-        monday: row.monday ?? true,
-        tuesday: row.tuesday ?? true,
-        wednesday: row.wednesday ?? true,
-        thursday: row.thursday ?? true,
-        friday: row.friday ?? true,
-        saturday: row.saturday ?? false,
-        sunday: row.sunday ?? false,
+        date: l.date,
+        day_of_week: l.day_of_week,
+        day_type: l.day_type,
+        per_day_salary: parseFloat(l.per_day_salary),
+        pay_fraction: parseFloat(l.pay_fraction),
+        deduct_fraction: parseFloat(l.deduct_fraction),
+        payable_amount: parseFloat(l.payable_amount),
+        deduction_amount: parseFloat(l.deduction_amount),
+        overtime_hours: parseFloat(l.overtime_hours),
+        overtime_amount: parseFloat(l.overtime_amount),
+        net_day_amount: parseFloat(l.net_day_amount),
+        total_hours: l.total_hours !== null ? parseFloat(l.total_hours) : null,
+        is_sandwich: l.is_sandwich,
     };
 }
 
 // ============================================================
 // MAIN SERVICE
 // ============================================================
+
 const PayrollBreakdownService = {
 
     // ----------------------------------------------------------
@@ -415,32 +241,14 @@ const PayrollBreakdownService = {
     async getBreakdownByPayrollId(payroll_id) {
         try {
             const payroll = await fetchPayrollById(payroll_id);
-            if (!payroll) {
-                return { success: false, message: "Payroll record not found" };
-            }
+            if (!payroll) return { success: false, message: "Payroll record not found" };
 
-            const period = {
-                start_date: payroll.start_date,
-                end_date: payroll.end_date,
-            };
+            const lines = await getOrBackfillLines(payroll);
+            const summary = summarizeFromLines(lines, payroll);
 
-            const salaryStructure = await fetchSalaryStructure(payroll.employee_id, period.start_date);
-            if (!salaryStructure) {
-                return { success: false, message: "No active salary structure found for this employee" };
-            }
-
-            const shift = buildShift(payroll);
-            const branchId = payroll.emp_branch_id || payroll.branch_id;
-
-            const [attendanceMap, holidaySet, approvedLeaves] = await Promise.all([
-                fetchAttendanceForPeriod(payroll.employee_id, period.start_date, period.end_date),
-                fetchHolidaysForPeriod(payroll.company_id, branchId, period.start_date, period.end_date),
-                fetchApprovedLeaves(payroll.employee_id, period.start_date, period.end_date),
-            ]);
-
-            const breakdown = await buildDailyBreakdown(
-                payroll, period, shift, salaryStructure, attendanceMap, approvedLeaves, holidaySet
-            );
+            // Layer adjustments on top, same as getPayrollById, so this page's
+            // net salary matches the list/grid view exactly.
+            const adjustments = await attachAdjustments(summary, payroll, payroll_id);
 
             return {
                 success: true,
@@ -459,20 +267,17 @@ const PayrollBreakdownService = {
                         status: payroll.period_status,
                     },
                     salary_info: {
-                        actual_salary: parseFloat(salaryStructure.actual_salary) || 0,
-                        housing_allowance: parseFloat(salaryStructure.housing_allowance) || 0,
-                        transport_allowance: parseFloat(salaryStructure.transport_allowance) || 0,
-                        other_allowance: parseFloat(salaryStructure.other_allowance) || 0,
-                        gross_salary: breakdown.summary.gross_salary,
-                        per_day_salary: breakdown.summary.per_day_salary,
+                        gross_salary: summary.gross_salary,
+                        per_day_salary: summary.per_day_salary,
                     },
                     stored_payroll: {
                         gross_salary: parseFloat(payroll.gross_salary),
                         net_salary: parseFloat(payroll.net_salary),
                         payroll_status: payroll.payroll_status,
                     },
-                    summary: breakdown.summary,
-                    daily_breakdown: breakdown.daily,
+                    adjustments,
+                    summary,
+                    daily_breakdown: lines.map(formatLineForResponse),
                 },
             };
         } catch (error) {
@@ -482,6 +287,8 @@ const PayrollBreakdownService = {
 
     // ----------------------------------------------------------
     // Breakdown for ALL employees in a payroll period
+    // Same snapshot-first pattern as getBreakdownByPayrollId,
+    // applied per employee.
     // ----------------------------------------------------------
     async getBreakdownByPeriod(company_id, payroll_period_id) {
         try {
@@ -490,35 +297,20 @@ const PayrollBreakdownService = {
                 return { success: false, message: "No payroll records found for this period" };
             }
 
-            const period = {
-                start_date: payrolls[0].start_date,
-                end_date: payrolls[0].end_date,
-            };
-
             const results = await Promise.all(payrolls.map(async (payroll) => {
                 try {
-                    const salaryStructure = await fetchSalaryStructure(payroll.employee_id, period.start_date);
-                    if (!salaryStructure) {
+                    const lines = await getOrBackfillLines(payroll);
+                    if (!lines.length) {
                         return {
                             employee_id: payroll.employee_id,
                             employee_code: payroll.employee_code,
                             name: `${payroll.first_name} ${payroll.last_name}`,
-                            error: "No active salary structure found",
+                            error: "No active salary structure found, or no daily lines could be generated",
                         };
                     }
 
-                    const shift = buildShift(payroll);
-                    const branchId = payroll.emp_branch_id || payroll.branch_id;
-
-                    const [attendanceMap, holidaySet, approvedLeaves] = await Promise.all([
-                        fetchAttendanceForPeriod(payroll.employee_id, period.start_date, period.end_date),
-                        fetchHolidaysForPeriod(company_id, branchId, period.start_date, period.end_date),
-                        fetchApprovedLeaves(payroll.employee_id, period.start_date, period.end_date),
-                    ]);
-
-                    const breakdown = await buildDailyBreakdown(
-                        payroll, period, shift, salaryStructure, attendanceMap, approvedLeaves, holidaySet
-                    );
+                    const summary = summarizeFromLines(lines, payroll);
+                    const adjustments = await attachAdjustments(summary, payroll, payroll.id);
 
                     return {
                         payroll_id: payroll.id,
@@ -527,11 +319,17 @@ const PayrollBreakdownService = {
                         name: `${payroll.first_name} ${payroll.last_name}`,
                         payroll_status: payroll.payroll_status,
                         salary_info: {
-                            gross_salary: breakdown.summary.gross_salary,
-                            per_day_salary: breakdown.summary.per_day_salary,
+                            gross_salary: summary.gross_salary,
+                            per_day_salary: summary.per_day_salary,
                         },
-                        summary: breakdown.summary,
-                        daily_breakdown: breakdown.daily,
+                        stored_payroll: {
+                            gross_salary: parseFloat(payroll.gross_salary),
+                            net_salary: parseFloat(payroll.net_salary),
+                            payroll_status: payroll.payroll_status,
+                        },
+                        adjustments,
+                        summary,
+                        daily_breakdown: lines.map(formatLineForResponse),
                     };
                 } catch (empError) {
                     return {
@@ -553,8 +351,8 @@ const PayrollBreakdownService = {
                     period: {
                         id: payroll_period_id,
                         period_name: payrolls[0].period_name,
-                        start_date: period.start_date,
-                        end_date: period.end_date,
+                        start_date: payrolls[0].start_date,
+                        end_date: payrolls[0].end_date,
                         status: payrolls[0].period_status,
                     },
                     total_employees: payrolls.length,
