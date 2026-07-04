@@ -1,8 +1,7 @@
 const db = require("../config/database");
 const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
 const PayrollDailyLineModel = require("../models/payrollDailyLineModel");
-const { buildShift, buildDailyBreakdown } = require("./payrollEngineService");
-
+const { buildShift, buildDailyBreakdown, getDateRange } = require("./payrollEngineService");
 // ============================================================
 // DB FETCHERS — minimal, scoped to what breakdown needs
 // ============================================================
@@ -16,13 +15,15 @@ async function fetchPayrollById(payroll_id) {
             s.working_hours, s.half_day_hours,
             s.monday, s.tuesday, s.wednesday, s.thursday,
             s.friday, s.saturday, s.sunday,
-            pp.period_name, pp.start_date, pp.end_date,
+            pp.period_name,
+            pp.start_date::date::text AS start_date,   -- ← changed
+            pp.end_date::date::text   AS end_date,     -- ← changed
             pp.status AS period_status
-         FROM payrolls p
-         JOIN employees e        ON p.employee_id = e.id
-         LEFT JOIN shifts s      ON e.shift_id = s.id
-         JOIN payroll_periods pp ON p.payroll_period_id = pp.id
-         WHERE p.id = $1`,
+        FROM payrolls p
+        JOIN employees e        ON p.employee_id = e.id
+        LEFT JOIN shifts s      ON e.shift_id = s.id
+        JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+        WHERE p.id = $1`,
         [payroll_id]
     );
     return result.rows[0] || null;
@@ -37,7 +38,7 @@ async function fetchPayrollsByPeriod(company_id, payroll_period_id) {
             s.working_hours, s.half_day_hours,
             s.monday, s.tuesday, s.wednesday, s.thursday,
             s.friday, s.saturday, s.sunday,
-            pp.period_name, pp.start_date, pp.end_date,
+            pp.period_name, pp.start_date::date::text AS start_date, pp.end_date::date::text   AS end_date,
             pp.status AS period_status
          FROM payrolls p
          JOIN employees e        ON p.employee_id = e.id
@@ -114,16 +115,7 @@ async function fetchApprovedLeaves(employee_id, startDate, endDate) {
 
 // Small local copy needed by fetchHolidaysForPeriod above.
 // (Kept identical to the one inside payrollEngine.js.)
-function getDateRange(start, end) {
-    const dates = [];
-    const current = new Date(start);
-    const endDate = new Date(end);
-    while (current <= endDate) {
-        dates.push(current.toISOString().split("T")[0]);
-        current.setDate(current.getDate() + 1);
-    }
-    return dates;
-}
+
 
 // ============================================================
 // SUMMARY — aggregate persisted daily lines into totals
@@ -211,9 +203,9 @@ async function getOrBackfillLines(payroll) {
     return lines;
 }
 
-function formatLineForResponse(l) {
+function formatLineForResponse(l, date) {
     return {
-        date: l.date,
+        date,
         day_of_week: l.day_of_week,
         day_type: l.day_type,
         per_day_salary: parseFloat(l.per_day_salary),
@@ -226,6 +218,24 @@ function formatLineForResponse(l) {
         net_day_amount: parseFloat(l.net_day_amount),
         total_hours: l.total_hours !== null ? parseFloat(l.total_hours) : null,
         is_sandwich: l.is_sandwich,
+    };
+}
+
+function attachDates(lines, payroll) {
+    const allDates = getDateRange(payroll.start_date, payroll.end_date);
+    return lines.map((l, i) => formatLineForResponse(l, allDates[i]));
+}
+
+
+async function buildSalaryInfo(payroll, summary) {
+    const salaryStructure = await fetchSalaryStructure(payroll.employee_id, payroll.start_date);
+    return {
+        actual_salary: parseFloat(salaryStructure?.actual_salary) || 0,
+        housing_allowance: parseFloat(salaryStructure?.housing_allowance) || 0,
+        transport_allowance: parseFloat(salaryStructure?.transport_allowance) || 0,
+        other_allowance: parseFloat(salaryStructure?.other_allowance) || 0,
+        gross_salary: summary.gross_salary,
+        per_day_salary: summary.per_day_salary,
     };
 }
 
@@ -266,10 +276,7 @@ const PayrollBreakdownService = {
                         end_date: payroll.end_date,
                         status: payroll.period_status,
                     },
-                    salary_info: {
-                        gross_salary: summary.gross_salary,
-                        per_day_salary: summary.per_day_salary,
-                    },
+                    salary_info: await buildSalaryInfo(payroll, summary),
                     stored_payroll: {
                         gross_salary: parseFloat(payroll.gross_salary),
                         net_salary: parseFloat(payroll.net_salary),
@@ -277,7 +284,7 @@ const PayrollBreakdownService = {
                     },
                     adjustments,
                     summary,
-                    daily_breakdown: lines.map(formatLineForResponse),
+                    daily_breakdown: attachDates(lines, payroll),
                 },
             };
         } catch (error) {
@@ -318,10 +325,7 @@ const PayrollBreakdownService = {
                         employee_code: payroll.employee_code,
                         name: `${payroll.first_name} ${payroll.last_name}`,
                         payroll_status: payroll.payroll_status,
-                        salary_info: {
-                            gross_salary: summary.gross_salary,
-                            per_day_salary: summary.per_day_salary,
-                        },
+                        salary_info: await buildSalaryInfo(payroll, summary),
                         stored_payroll: {
                             gross_salary: parseFloat(payroll.gross_salary),
                             net_salary: parseFloat(payroll.net_salary),
@@ -329,7 +333,7 @@ const PayrollBreakdownService = {
                         },
                         adjustments,
                         summary,
-                        daily_breakdown: lines.map(formatLineForResponse),
+                        daily_breakdown: attachDates(lines, payroll),
                     };
                 } catch (empError) {
                     return {

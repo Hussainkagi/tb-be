@@ -276,7 +276,12 @@ async function calculateEmployeePayroll(employee, period, shift, salaryStructure
 
 async function fetchPayrollPeriod(payroll_period_id) {
     const result = await db.query(
-        `SELECT * FROM payroll_periods WHERE id = $1`,
+        `SELECT
+                *,
+                start_date::date::text AS start_date,
+                end_date::date::text   AS end_date
+            FROM payroll_periods
+            WHERE id = $1`,
         [payroll_period_id]
     );
     return result.rows[0] || null;
