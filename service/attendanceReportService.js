@@ -642,8 +642,8 @@ const AttendanceReportService = {
 
             const formattedRows = result.rows.map((row) => ({
                 ...row,
-                check_in: extractNaiveDateTime(row.check_in),
-                check_out: extractNaiveDateTime(row.check_out),
+                check_in: row.check_in ? toLocalISOString(row.check_in, timezone) : null,
+                check_out: row.check_out ? toLocalISOString(row.check_out, timezone) : null,
                 attendance_date: row.attendance_date instanceof Date
                     ? row.attendance_date.toISOString().slice(0, 10)
                     : row.attendance_date,
