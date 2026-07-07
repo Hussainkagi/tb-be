@@ -182,7 +182,7 @@ const AttendanceReportController = {
      */
     async getCasualReport(req, res) {
         try {
-            const { startDate, endDate, employeeId, branchId, departmentId } = req.query;
+            const { startDate, endDate, timezone, employeeId, branchId, departmentId } = req.query;
             const err = validateDateRange(startDate, endDate);
             if (err) return res.status(400).json({ success: false, message: err });
 
@@ -193,6 +193,7 @@ const AttendanceReportController = {
                 departmentId: departmentId || null,
                 startDate,
                 endDate,
+                timezone: timezone || "UTC",
             });
 
             if (!result.success) {

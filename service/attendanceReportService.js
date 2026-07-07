@@ -596,7 +596,7 @@ const AttendanceReportService = {
     // -----------------------------------------------------------------------
     async getCasualReport(filters) {
         try {
-            const { companyId, employeeId, branchId, departmentId, startDate, endDate } = filters;
+            const { companyId, employeeId, branchId, departmentId, startDate, endDate, timezone = "UTC" } = filters;
             if (!companyId || !startDate || !endDate) {
                 return { success: false, message: "companyId, startDate, and endDate are required" };
             }
@@ -626,7 +626,16 @@ const AttendanceReportService = {
                 ORDER BY a.attendance_date, e.employee_code
             `;
             const result = await db.query(query, values);
-            return { success: true, data: result.rows };
+
+            const formattedRows = result.rows.map((row) => ({
+                ...row,
+                check_in: row.check_in ? toLocalISOString(row.check_in, timezone) : null,
+                check_out: row.check_out ? toLocalISOString(row.check_out, timezone) : null,
+                attendance_date: row.attendance_date instanceof Date
+                    ? row.attendance_date.toISOString().slice(0, 10)
+                    : row.attendance_date,
+            }));
+            return { success: true, data: formattedRows };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
