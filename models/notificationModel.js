@@ -378,7 +378,7 @@ const NotificationRecipient = {
             `INSERT INTO notification_recipients (
                 notification_id, employee_id, company_id, channel, device_token
             ) VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (notification_id, employee_id, channel) DO NOTHING
+            ON CONFLICT (notification_id, employee_id, channel, device_token) DO NOTHING
             RETURNING *`,
             [notification_id, employee_id, company_id, channel, device_token]
         );
@@ -406,8 +406,8 @@ const NotificationRecipient = {
             `INSERT INTO notification_recipients
             (notification_id, employee_id, company_id, channel, device_token)
             VALUES ${placeholders.join(", ")}
-            ON CONFLICT (notification_id, employee_id, channel) 
-            DO UPDATE SET device_token = EXCLUDED.device_token
+            ON CONFLICT (notification_id, employee_id, channel, device_token) 
+            DO NOTHING
             RETURNING *`,
             values
         );
@@ -581,18 +581,18 @@ const NotificationRecipient = {
 const EmployeeDeviceToken = {
 
     // Upsert: insert on first login, update token on subsequent logins
-        async upsert(data) {
-            const {
-                employee_id,
-                company_id,
-                platform,
-                device_id,
-                push_token,
-                app_version = null,
-            } = data;
+    async upsert(data) {
+        const {
+            employee_id,
+            company_id,
+            platform,
+            device_id,
+            push_token,
+            app_version = null,
+        } = data;
 
-            const result = await db.query(
-                `INSERT INTO employee_device_tokens
+        const result = await db.query(
+            `INSERT INTO employee_device_tokens
                     (employee_id, company_id, platform, device_id, push_token, app_version, last_used_at)
                 VALUES ($1, $2, $3, $4, $5, $6, NOW())
                 ON CONFLICT (employee_id, device_id)
@@ -602,10 +602,10 @@ const EmployeeDeviceToken = {
                     is_active    = TRUE,
                     last_used_at = NOW()
                 RETURNING *`,
-                [employee_id, company_id, platform, device_id, push_token, app_version]
-            );
-            return result.rows[0];
-        },
+            [employee_id, company_id, platform, device_id, push_token, app_version]
+        );
+        return result.rows[0];
+    },
 
     // All active tokens for a single employee (may have multiple devices)
     async findActiveByEmployee(employee_id) {
