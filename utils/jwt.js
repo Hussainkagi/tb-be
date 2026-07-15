@@ -4,10 +4,10 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
-const JWT_EXPIRE = process.env.JWT_EXPIRE || "24h";
+
 const JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET || "your_refresh_secret_key";
-const JWT_REFRESH_EXPIRE = process.env.JWT_REFRESH_EXPIRE || "7d";
+
 
 /**
  * Generate JWT access token
@@ -15,9 +15,7 @@ const JWT_REFRESH_EXPIRE = process.env.JWT_REFRESH_EXPIRE || "7d";
  * @returns {String} - JWT token
  */
 const generateAccessToken = (payload) => {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRE,
-  });
+  return jwt.sign(payload, JWT_SECRET);
 };
 
 /**
@@ -26,9 +24,7 @@ const generateAccessToken = (payload) => {
  * @returns {String} - JWT refresh token
  */
 const generateRefreshToken = (payload) => {
-  return jwt.sign(payload, JWT_REFRESH_SECRET, {
-    expiresIn: JWT_REFRESH_EXPIRE,
-  });
+  return jwt.sign(payload, JWT_REFRESH_SECRET);
 };
 
 /**
