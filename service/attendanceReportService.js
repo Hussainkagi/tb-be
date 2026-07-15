@@ -102,13 +102,36 @@ function dateToMinutesInTz(date, timezone) {
  *   HP  – half-present         (status = 'half-present')
  *   A   – absent               (status = 'absent' OR no row)
  */
-function getAttendanceCode(row) {
-    if (!row) return "A";
+function getAttendanceCode(row, dateStr, emp) {
+    // Derive weekday name from dateStr (YYYY-MM-DD)
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const dayIndex = new Date(dateStr + "T00:00:00Z").getUTCDay();
+    const dayName = dayNames[dayIndex];
+
+    // Helper: determine if employee shift marks this day as working
+    const isWorkingDay = emp && typeof emp[dayName] !== 'undefined' ? Boolean(emp[dayName]) : true;
+
+    // No attendance row -> decide based on shift weekday
+    if (!row) {
+        return isWorkingDay ? "A" : "WO";
+    }
+
+    // If row explicitly marks holiday or leave, preserve it
+    if (row.status === "holiday") return "H";
+    if (row.status === "leave") return "L";
+
+    // If attendance row marks week-off / comp-off but current shift says this
+    // day is a working day, treat as absent (unless there is actual check-in)
+    if (row.status === "week-off" || row.status === "comp-off") {
+        if (isWorkingDay) {
+            if (row.check_in || row.check_out) return "P";
+            return "A";
+        }
+        return row.status === "comp-off" ? "CO" : "WO";
+    }
+
+    // Present-like statuses
     switch (row.status) {
-        case "week-off": return "WO";
-        case "holiday": return "H";
-        case "leave": return "L";
-        case "comp-off": return "CO";
         case "checked-in":
         case "checked-out": return "P";
         case "half-present": return "HP";
@@ -178,7 +201,8 @@ async function fetchEmployeesAndAttendance(filters) {
             s.late_grace_minutes,
             s.working_hours         AS shift_working_hours,   -- expected hrs per day e.g. 8.00
             s.half_day_hours,
-            s.is_night_shift
+            s.is_night_shift,
+            s.monday, s.tuesday, s.wednesday, s.thursday, s.friday, s.saturday, s.sunday
 
          FROM employees e
          LEFT JOIN shifts s
@@ -275,7 +299,7 @@ const AttendanceReportService = {
 
                 for (const dateStr of dates) {
                     const row = empAttMap.get(dateStr) ?? null;
-                    const code = getAttendanceCode(row);
+                    const code = getAttendanceCode(row, dateStr, emp);
 
                     // Non-working days — just return the code
                     if (["WO", "H", "L", "CO", "A"].includes(code)) {
@@ -339,7 +363,7 @@ const AttendanceReportService = {
 
                 for (const dateStr of dates) {
                     const row = empAttMap.get(dateStr) ?? null;
-                    const code = getAttendanceCode(row);
+                    const code = getAttendanceCode(row, dateStr, emp);
 
                     switch (code) {
                         case "WO": weekOff++; break;
@@ -401,7 +425,7 @@ const AttendanceReportService = {
 
                 for (const dateStr of dates) {
                     const row = empAttMap.get(dateStr) ?? null;
-                    const code = getAttendanceCode(row);
+                    const code = getAttendanceCode(row, dateStr, emp);
 
                     // Eligible = any day that is NOT week-off / holiday / comp-off
                     // (leave days are borderline — employee was rostered but on leave)
@@ -544,7 +568,7 @@ const AttendanceReportService = {
 
                 for (const dateStr of dates) {
                     const row = empAttMap.get(dateStr) ?? null;
-                    const code = getAttendanceCode(row);
+                    const code = getAttendanceCode(row, dateStr, emp);
 
                     // Scheduled = all days except week-off and holidays
                     if (!["WO", "H", "CO"].includes(code)) {
