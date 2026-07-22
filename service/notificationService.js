@@ -7,6 +7,7 @@ const {
     NotificationPreference,
 } = require("../models/notificationModel");
 const expoPushSender = require("../utils/expoPushSender");
+const db = require("../config/database")
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: resolve {{mustache}} placeholders in a template string
