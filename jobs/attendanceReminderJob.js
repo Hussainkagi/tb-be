@@ -239,7 +239,8 @@ async function runAttendanceReminderJob() {
 // DISPATCH JOB: Flush the notification dispatch queue every minute
 //
 // Picks up queued notification rows whose scheduled_at has passed
-// and fans them out to notification_recipients
+// and fans them out to notification_recipients, then retries any
+// previously-failed sends whose next_retry_at has passed.
 // ─────────────────────────────────────────────────────────────────────────────
 async function runDispatchQueueJob() {
     try {
@@ -261,13 +262,32 @@ async function runDispatchQueueJob() {
     } catch (error) {
         console.error("[CRON] Dispatch queue job FAILED:", error.message);
     }
+
+    try {
+        const retryResult = await NotificationService.processRetryQueue();
+        if (retryResult.processed > 0) {
+            console.log(
+                `[CRON][${new Date().toISOString()}] Retried ${retryResult.processed} failed deliveries`
+            );
+
+            const stillFailed = retryResult.results?.filter((r) => !r.success) || [];
+            if (stillFailed.length) {
+                console.warn(`[CRON] ${stillFailed.length} retries failed again:`);
+                stillFailed.forEach((f) =>
+                    console.warn(`  → recipient_id: ${f.recipient_id} | ${f.message}`)
+                );
+            }
+        }
+    } catch (error) {
+        console.error("[CRON] Retry queue job FAILED:", error.message);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REGISTER CRON SCHEDULES
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Job 1: Schedule attendance reminders — runs once daily at 00:01 AM UTC
+// Job 1: Schedule attendance reminders — runs once daily at 18:01 UTC
 // All employees across all companies are processed in one pass
 // Adjust time to run before the earliest possible shift start across all timezones
 cron.schedule("1 18 * * *", runAttendanceReminderJob, {
