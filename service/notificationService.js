@@ -32,6 +32,19 @@ const isWithinDeliveryWindow = (windowStart, windowEnd) => {
     return hhmm >= windowStart && hhmm <= windowEnd;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: does this Expo send error mean the token is permanently dead?
+// "expo/unknown" is expoPushSender's fallback code for ANY unrecognized
+// error (rate limiting, oversized payload, transient Expo API failures,
+// etc.) — it must NOT be treated as an invalid token, or a single transient
+// hiccup permanently deactivates a perfectly working device.
+// ─────────────────────────────────────────────────────────────────────────────
+const isInvalidTokenError = (err) =>
+    err.code === "messaging/invalid-registration-token" ||
+    err.code === "messaging/registration-token-not-registered" ||
+    err.code === "DeviceNotRegistered" ||
+    err.code === "InvalidCredentials";
+
 
 const NotificationService = {
 
@@ -176,15 +189,30 @@ const NotificationService = {
             }
 
             // ── Step 2: Insert notification row ───────────────────────────
-            const notification = await Notification.create({
-                company_id, branch_id, created_by_user_id,
-                notification_type, channel, template_id,
-                title, body, deep_link,
-                entity_type, entity_id,
-                scheduled_at, timezone,
-                delivery_window_start, delivery_window_end,
-                recurrence_cron, recurrence_end_at,
-            });
+            let notification;
+            try {
+                notification = await Notification.create({
+                    company_id, branch_id, created_by_user_id,
+                    notification_type, channel, template_id,
+                    title, body, deep_link,
+                    entity_type, entity_id,
+                    scheduled_at, timezone,
+                    delivery_window_start, delivery_window_end,
+                    recurrence_cron, recurrence_end_at,
+                });
+            } catch (error) {
+                // 23505 = unique_violation — e.g. uq_attendance_reminder_once_per_day.
+                // A reminder for this employee/day already exists; treat as a
+                // no-op instead of creating a duplicate notification.
+                if (error.code === "23505") {
+                    return {
+                        success: true,
+                        message: "Reminder already scheduled — skipped duplicate",
+                        skipped: true,
+                    };
+                }
+                throw error;
+            }
 
             // ── Step 3: Insert audience rule ──────────────────────────────
             await NotificationAudienceRule.create({
@@ -310,12 +338,7 @@ const NotificationService = {
                     } catch (err) {
                         console.error("[EXPO ERROR] code:", err.code, "| message:", err.message, "| token:", recipient.device_token?.slice(0, 20));
 
-                        const isInvalidToken =
-                            err.code === "messaging/invalid-registration-token" ||
-                            err.code === "messaging/registration-token-not-registered" ||
-                            err.code === "DeviceNotRegistered" ||
-                            err.code === "InvalidCredentials" ||
-                            err.code === "expo/unknown";
+                        const isInvalidToken = isInvalidTokenError(err);
 
                         const MAX_RETRIES = 3;
                         const retryAt = isInvalidToken || recipient.retry_count >= MAX_RETRIES
@@ -385,6 +408,59 @@ const NotificationService = {
 
 
     // ─────────────────────────────────────────────────────────────────────────
+    // SCHEDULER: Retry failed push deliveries whose next_retry_at has passed
+    // Previously dead code — NotificationRecipient.getRetryQueue() existed
+    // but nothing ever called it, so failed sends (transient network errors,
+    // Expo hiccups, etc.) were marked "failed" and never retried, even
+    // though they still showed up in the employee's in-app inbox.
+    // Called by the same per-minute cron as processDispatchQueue().
+    // ─────────────────────────────────────────────────────────────────────────
+    async processRetryQueue() {
+        try {
+            const queue = await NotificationRecipient.getRetryQueue();
+            const results = [];
+
+            for (const recipient of queue) {
+                if (!recipient.device_token) continue;
+
+                try {
+                    await expoPushSender.send(
+                        recipient.device_token,
+                        recipient.title,
+                        recipient.body,
+                        {
+                            notification_id: recipient.notification_id,
+                            entity_type: recipient.entity_type ?? "",
+                            entity_id: recipient.entity_id ?? "",
+                            deep_link: recipient.deep_link ?? "",
+                        }
+                    );
+                    await NotificationRecipient.markAsSent(recipient.id, recipient.device_token);
+                    results.push({ recipient_id: recipient.id, success: true });
+                } catch (err) {
+                    const isInvalidToken = isInvalidTokenError(err);
+                    const MAX_RETRIES = 3;
+                    const retryAt = isInvalidToken || recipient.retry_count >= MAX_RETRIES
+                        ? null
+                        : new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+                    await NotificationRecipient.markAsFailed(recipient.id, err.message, retryAt);
+
+                    if (isInvalidToken) {
+                        await EmployeeDeviceToken.deactivateByToken(recipient.device_token);
+                    }
+                    results.push({ recipient_id: recipient.id, success: false, message: err.message });
+                }
+            }
+
+            return { success: true, processed: results.length, results };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+
+    // ─────────────────────────────────────────────────────────────────────────
     // SCHEDULER: Schedule attendance check-in/out reminders for a given day
     //
     // Called daily by a cron job.
@@ -401,7 +477,14 @@ const NotificationService = {
                 const tz = emp.timezone || "UTC";
 
                 // ── Check-in reminder ─────────────────────────────────────
-                if (emp.shift_start_time) {
+                // checkin_reminder_at is only ever a real future UTC ISO string
+                // or null (the caller already collapsed "SKIP"/invalid times to
+                // null). scheduled_at=null means "send immediately" to
+                // NotificationService.send(), so a null reminder time must be
+                // skipped entirely here rather than passed through — otherwise
+                // employees with a past/invalid reminder time get an immediate
+                // out-of-band push instead of no reminder at all.
+                if (emp.shift_start_time && emp.checkin_reminder_at) {
                     const checkinResult = await NotificationService.send({
                         company_id: emp.company_id,
                         notification_type: "attendance_checkin_reminder",
@@ -413,9 +496,11 @@ const NotificationService = {
                         timezone: tz,
                         // scheduled_at is computed by the caller using the employee's
                         // branch timezone — passed in as a UTC ISO string
-                        scheduled_at: emp.checkin_reminder_at || null,
+                        scheduled_at: emp.checkin_reminder_at,
                         delivery_window_start: "06:00",
                         delivery_window_end: "22:00",
+                        entity_type: "attendance_reminder",
+                        entity_id: emp.id,
                         audience: {
                             type: "specific_employee",
                             employee_id: emp.id,
@@ -425,7 +510,7 @@ const NotificationService = {
                 }
 
                 // ── Check-out reminder ────────────────────────────────────
-                if (emp.shift_end_time) {
+                if (emp.shift_end_time && emp.checkout_reminder_at) {
                     const checkoutResult = await NotificationService.send({
                         company_id: emp.company_id,
                         notification_type: "attendance_checkout_reminder",
@@ -435,9 +520,11 @@ const NotificationService = {
                             shift_end_time: emp.shift_end_time,
                         },
                         timezone: tz,
-                        scheduled_at: emp.checkout_reminder_at || null,
+                        scheduled_at: emp.checkout_reminder_at,
                         delivery_window_start: "06:00",
                         delivery_window_end: "22:00",
+                        entity_type: "attendance_reminder",
+                        entity_id: emp.id,
                         audience: {
                             type: "specific_employee",
                             employee_id: emp.id,

@@ -475,14 +475,18 @@ const NotificationRecipient = {
         return result.rows;
     },
 
-    // Retry queue — failed deliveries whose next_retry_at has passed
+    // Retry queue — failed deliveries whose next_retry_at has passed.
+    // Joined with notifications for the content needed to resend the push.
     async getRetryQueue({ limit = 50 } = {}) {
         const result = await db.query(
-            `SELECT * FROM notification_recipients
-             WHERE status        = 'failed'
-               AND next_retry_at IS NOT NULL
-               AND next_retry_at <= NOW()
-             ORDER BY next_retry_at ASC
+            `SELECT nr.*, n.title, n.body, n.deep_link, n.entity_type, n.entity_id
+             FROM notification_recipients nr
+             JOIN notifications n ON nr.notification_id = n.id
+             WHERE nr.status        = 'failed'
+               AND nr.next_retry_at IS NOT NULL
+               AND nr.next_retry_at <= NOW()
+               AND n.deleted_at IS NULL
+             ORDER BY nr.next_retry_at ASC
              LIMIT $1`,
             [limit]
         );
