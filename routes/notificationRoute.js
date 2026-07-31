@@ -52,6 +52,7 @@ router.patch("/inbox/:employee_id/read-all", verifyToken, validateTenant, isEmpl
 // DEVICE TOKENS (Employee — self-service)
 // ─────────────────────────────────────────────
 router.post("/device-tokens", verifyToken, validateTenant, isEmployee, NotificationController.registerDeviceToken);
+router.get("/device-tokens/:employee_id/:device_id", verifyToken, validateTenant, isEmployee, NotificationController.getDeviceTokenStatus);
 router.delete("/device-tokens/:employee_id/:device_id", verifyToken, validateTenant, isEmployee, NotificationController.deactivateDeviceToken);
 
 

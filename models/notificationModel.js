@@ -639,6 +639,20 @@ const EmployeeDeviceToken = {
         }
     },
 
+    // Look up this specific device's token row (active or not) — lets the
+    // client know whether to silently re-register on login vs. treat this
+    // as a brand-new device, without the backend having any say over the
+    // OS-level permission prompt itself.
+    async findByEmployeeAndDevice(employee_id, device_id) {
+        const result = await db.query(
+            `SELECT id, platform, is_active, last_used_at, app_version
+             FROM employee_device_tokens
+             WHERE employee_id = $1 AND device_id = $2`,
+            [employee_id, device_id]
+        );
+        return result.rows[0];
+    },
+
     // All active tokens for a single employee (may have multiple devices)
     async findActiveByEmployee(employee_id) {
         const result = await db.query(
