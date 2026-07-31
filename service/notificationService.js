@@ -797,6 +797,30 @@ const NotificationService = {
         }
     },
 
+    // Tells the caller whether THIS device already has a token on file for
+    // this employee, and whether it's currently active. registered=false
+    // means the client should treat this as a brand-new device. This says
+    // nothing about OS-level notification permission — that's client-only.
+    async getDeviceTokenStatus(employee_id, device_id) {
+        try {
+            const token = await EmployeeDeviceToken.findByEmployeeAndDevice(employee_id, device_id);
+            if (!token) {
+                return { success: true, data: { registered: false } };
+            }
+            return {
+                success: true,
+                data: {
+                    registered: true,
+                    is_active: token.is_active,
+                    platform: token.platform,
+                    last_used_at: token.last_used_at,
+                },
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // PREFERENCES: Employee notification opt-in/out

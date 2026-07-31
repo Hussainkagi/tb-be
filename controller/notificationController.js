@@ -336,6 +336,21 @@ const NotificationController = {
         }
     },
 
+    // GET /notifications/device-tokens/:employee_id/:device_id
+    async getDeviceTokenStatus(req, res) {
+        try {
+            const { employee_id, device_id } = req.params;
+            const result = await NotificationService.getDeviceTokenStatus(employee_id, device_id);
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(500).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // PREFERENCES
