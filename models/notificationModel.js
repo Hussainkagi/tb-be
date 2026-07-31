@@ -584,7 +584,13 @@ const NotificationRecipient = {
 // ─────────────────────────────────────────────────────────────────────────────
 const EmployeeDeviceToken = {
 
-    // Upsert: insert on first login, update token on subsequent logins
+    // Upsert: insert on first login, update token on subsequent logins.
+    // Also deactivates the employee's other active tokens on the same
+    // platform (different device_id) — without this, a client that doesn't
+    // persist a stable device_id across reinstalls/relogins (a new device_id
+    // is generated each time) accumulates unlimited "active" token rows for
+    // what is really the same physical device, and every notification fans
+    // out into one push per stale row.
     async upsert(data) {
         const {
             employee_id,
@@ -595,20 +601,42 @@ const EmployeeDeviceToken = {
             app_version = null,
         } = data;
 
-        const result = await db.query(
-            `INSERT INTO employee_device_tokens
-                    (employee_id, company_id, platform, device_id, push_token, app_version, last_used_at)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                ON CONFLICT (employee_id, device_id)
-                DO UPDATE SET
-                    push_token   = EXCLUDED.push_token,
-                    app_version  = EXCLUDED.app_version,
-                    is_active    = TRUE,
-                    last_used_at = NOW()
-                RETURNING *`,
-            [employee_id, company_id, platform, device_id, push_token, app_version]
-        );
-        return result.rows[0];
+        const client = await db.getClient();
+        try {
+            await client.query("BEGIN");
+
+            const result = await client.query(
+                `INSERT INTO employee_device_tokens
+                        (employee_id, company_id, platform, device_id, push_token, app_version, last_used_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                    ON CONFLICT (employee_id, device_id)
+                    DO UPDATE SET
+                        push_token   = EXCLUDED.push_token,
+                        app_version  = EXCLUDED.app_version,
+                        is_active    = TRUE,
+                        last_used_at = NOW()
+                    RETURNING *`,
+                [employee_id, company_id, platform, device_id, push_token, app_version]
+            );
+
+            await client.query(
+                `UPDATE employee_device_tokens
+                 SET is_active = FALSE
+                 WHERE employee_id = $1
+                   AND platform    = $2
+                   AND device_id  != $3
+                   AND is_active   = TRUE`,
+                [employee_id, platform, device_id]
+            );
+
+            await client.query("COMMIT");
+            return result.rows[0];
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        } finally {
+            client.release();
+        }
     },
 
     // All active tokens for a single employee (may have multiple devices)
