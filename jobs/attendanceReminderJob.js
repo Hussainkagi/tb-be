@@ -4,7 +4,7 @@ const db = require("../config/database");
 const NotificationService = require("../service/notificationService");
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: map shift's boolean day columns → today's day name
+// Helper: map shift's boolean day columns → a given date's day name
 // Shifts table uses: monday, tuesday, wednesday, thursday, friday, saturday, sunday
 // ─────────────────────────────────────────────────────────────────────────────
 const DAY_COLUMNS = [
@@ -17,9 +17,10 @@ const DAY_COLUMNS = [
     "saturday",  // luxon weekday 6 → index 6
 ];
 
-function getTodayDayColumn(timezone) {
+// dt = a Luxon DateTime already in the employee's timezone
+function getDayColumnForDate(dt) {
     // luxon weekday: 1=Monday ... 7=Sunday
-    const weekday = DateTime.now().setZone(timezone).weekday;
+    const weekday = dt.weekday;
     // Convert to JS day index: Sunday=0, Monday=1 ... Saturday=6
     const jsDay = weekday === 7 ? 0 : weekday;
     return DAY_COLUMNS[jsDay]; // e.g. "monday"
@@ -28,18 +29,17 @@ function getTodayDayColumn(timezone) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: compute UTC ISO timestamp for a reminder
 // timeStr = "08:00:00" (shift start_time or end_time from DB)
-// timezone = "Asia/Dubai"
+// targetDate = Luxon DateTime for the calendar day the reminder is FOR
+//              (already in the employee's timezone — see runAttendanceReminderJob)
 // offsetMinutes = how many minutes BEFORE that time to send the reminder
 // ─────────────────────────────────────────────────────────────────────────────
-function computeReminderUTC(timeStr, timezone, offsetMinutes = 15) {
-    if (!timeStr || !timezone) return null;
+function computeReminderUTC(timeStr, targetDate, offsetMinutes = 15) {
+    if (!timeStr || !targetDate) return null;
 
     try {
         const [hours, minutes, seconds = 0] = timeStr.split(":").map(Number);
 
-        const reminderLocal = DateTime.now()
-            .setZone(timezone)
-            .plus({ days: 1 })
+        const reminderLocal = targetDate
             .set({ hour: hours, minute: minutes, second: seconds, millisecond: 0 })
             .minus({ minutes: offsetMinutes });
 
@@ -48,7 +48,7 @@ function computeReminderUTC(timeStr, timezone, offsetMinutes = 15) {
         // If already past, skip — don't fall back to null (which = send immediately)
         if (reminderUTC <= DateTime.utc()) {
             console.warn(
-                `[CRON] Skipping past reminder: ${timeStr} in ${timezone} → ${reminderUTC.toISO()}`
+                `[CRON] Skipping past reminder: ${timeStr} → ${reminderUTC.toISO()}`
             );
             return "SKIP";
         }
@@ -66,8 +66,8 @@ function computeReminderUTC(timeStr, timezone, offsetMinutes = 15) {
 //   ✅ Employee is active and not deleted
 //   ✅ Employee has a shift assigned
 //   ✅ Shift is active and not deleted
-//   ✅ Today (in branch timezone) is a working day per shift's day columns
-//   ✅ Today is NOT a public/company holiday for that branch
+//   ✅ The TARGET day (tomorrow, in branch timezone) is a working day per shift's day columns
+//   ✅ The TARGET day is NOT a public/company holiday for that branch
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchEligibleEmployees() {
     const { rows } = await db.query(`
@@ -100,60 +100,53 @@ async function fetchEligibleEmployees() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Core: check if today is a holiday for a given company+branch
-// Returns a Set of company_id+branch_id keys that have a holiday today
+// Core: fetch upcoming holidays (raw date ranges, not tied to "today").
+// Eligibility is evaluated per-employee against the TARGET reminder date
+// (tomorrow, in that employee's own timezone) — which can already be a
+// different calendar date than the DB server's CURRENT_DATE depending on
+// timezone and what time the job runs — so the actual "is this date a
+// holiday" comparison happens in isHoliday() below, per employee.
 // ─────────────────────────────────────────────────────────────────────────────
-async function fetchHolidayKeys() {
+async function fetchHolidays() {
     const { rows } = await db.query(`
-        SELECT DISTINCT
-            company_id,
-            branch_id   -- NULL means company-wide holiday
+        SELECT company_id, branch_id, holiday_start_date, holiday_end_date
         FROM holidays
-        WHERE CURRENT_DATE BETWEEN holiday_start_date AND holiday_end_date
-          AND is_active  = TRUE
+        WHERE is_active  = TRUE
           AND deleted_at IS NULL
+          AND holiday_end_date >= CURRENT_DATE
     `);
-
-    // Build a quick lookup set
-    // Key format: "companyId:branchId" or "companyId:null" for company-wide
-    const keys = new Set();
-    for (const row of rows) {
-        keys.add(`${row.company_id}:${row.branch_id ?? "null"}`);
-    }
-    return keys;
+    return rows;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Check if an employee's branch has a holiday today
+// Check if an employee's branch has a holiday on the given target date.
 // Company-wide holiday (branch_id = null) blocks ALL branches of that company
 // ─────────────────────────────────────────────────────────────────────────────
-function isHoliday(holidayKeys, company_id, branch_id) {
-    // Check branch-specific holiday
-    if (holidayKeys.has(`${company_id}:${branch_id}`)) return true;
-    // Check company-wide holiday
-    if (holidayKeys.has(`${company_id}:null`)) return true;
-    return false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Check if today is a working day for this employee based on shift day columns
-// e.g. if today is Monday → checks shift.monday === true
-// ─────────────────────────────────────────────────────────────────────────────
-function isTodayWorkingDay(emp) {
-    const dayColumn = getTodayDayColumn(emp.timezone); // e.g. "monday"
-    return emp[dayColumn] === true;
+function isHoliday(holidays, company_id, branch_id, targetDate) {
+    const targetISO = targetDate.toISODate();
+    return holidays.some((h) => {
+        if (h.company_id !== company_id) return false;
+        if (h.branch_id !== null && h.branch_id !== branch_id) return false;
+        const startISO = h.holiday_start_date.toISOString().slice(0, 10);
+        const endISO = h.holiday_end_date.toISOString().slice(0, 10);
+        return targetISO >= startISO && targetISO <= endISO;
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN JOB: Schedule attendance check-in / check-out reminders
 //
-// Runs daily at 00:01 AM UTC (adjust as needed)
+// Runs daily at 18:01 UTC (adjust as needed)
 // Logic:
 //   1. Fetch all active employees with a shift
-//   2. Fetch today's holidays
-//   3. Filter out: holidays + non-working days
-//   4. Compute reminder UTC timestamps per employee
-//   5. Hand off to NotificationService.scheduleAttendanceReminders()
+//   2. Fetch upcoming holidays
+//   3. For each employee, compute TOMORROW's date in their own timezone
+//      once, then check working-day + holiday eligibility AND compute
+//      reminder times against that SAME date (previously these used
+//      "today" for eligibility but "tomorrow" for the reminder itself —
+//      that mismatch dropped reminders on real working days and sent them
+//      on real off days whenever today's/tomorrow's day-of-week differed)
+//   4. Hand off to NotificationService.scheduleAttendanceReminders()
 // ─────────────────────────────────────────────────────────────────────────────
 async function runAttendanceReminderJob() {
     console.log(`[CRON][${new Date().toISOString()}] Attendance reminder job started`);
@@ -163,54 +156,48 @@ async function runAttendanceReminderJob() {
         const allEmployees = await fetchEligibleEmployees();
         console.log(`[CRON] Total employees with shifts: ${allEmployees.length}`);
 
-        // 2. Fetch today's holiday keys once (not per employee)
-        const holidayKeys = await fetchHolidayKeys();
-        console.log(`[CRON] Holiday entries today: ${holidayKeys.size}`);
+        // 2. Fetch upcoming holidays once (not per employee)
+        const holidays = await fetchHolidays();
+        console.log(`[CRON] Upcoming holiday entries: ${holidays.length}`);
 
-        // 3. Filter to employees who actually need reminders today
-        const eligible = allEmployees.filter((emp) => {
-            // Skip if today is a holiday for their branch/company
-            if (isHoliday(holidayKeys, emp.company_id, emp.branch_id)) {
-                return false;
-            }
-            // Skip if today is not a working day per their shift
-            if (!isTodayWorkingDay(emp)) {
-                return false;
-            }
-            return true;
-        });
+        const CHECKIN_REMINDER_BEFORE_MINUTES = 15; // notify 15 min before shift start
+        const CHECKOUT_REMINDER_BEFORE_MINUTES = 5; // notify 5 min before shift end
 
-        console.log(`[CRON] Eligible employees for reminders today: ${eligible.length}`);
+        // 3. Evaluate eligibility and compute reminder times against the
+        //    same target date (tomorrow, in the employee's own timezone)
+        const enriched = [];
+        for (const emp of allEmployees) {
+            const tz = emp.timezone || "UTC";
+            const targetDate = DateTime.now().setZone(tz).plus({ days: 1 }).startOf("day");
 
-        if (!eligible.length) {
+            const dayColumn = getDayColumnForDate(targetDate); // e.g. "monday"
+            if (emp[dayColumn] !== true) continue; // tomorrow is not a working day
+
+            if (isHoliday(holidays, emp.company_id, emp.branch_id, targetDate)) continue; // tomorrow is a holiday
+
+            const checkin_reminder_at = computeReminderUTC(
+                emp.shift_start_time, targetDate, CHECKIN_REMINDER_BEFORE_MINUTES
+            );
+            const checkout_reminder_at = computeReminderUTC(
+                emp.shift_end_time, targetDate, CHECKOUT_REMINDER_BEFORE_MINUTES
+            );
+
+            enriched.push({
+                ...emp,
+                // "SKIP" (already past) collapses to null = don't schedule
+                checkin_reminder_at: checkin_reminder_at === "SKIP" ? null : checkin_reminder_at,
+                checkout_reminder_at: checkout_reminder_at === "SKIP" ? null : checkout_reminder_at,
+            });
+        }
+
+        console.log(`[CRON] Eligible employees for reminders tomorrow: ${enriched.length}`);
+
+        if (!enriched.length) {
             console.log("[CRON] No reminders to schedule. Job complete.");
             return;
         }
 
-        // 4. Enrich each employee with pre-computed UTC reminder timestamps
-        const CHECKIN_REMINDER_BEFORE_MINUTES = 15; // notify 15 min before shift start
-        const CHECKOUT_REMINDER_BEFORE_MINUTES = 5; // notify 5 min before shift end
-
-        const enriched = eligible
-            .map((emp) => ({
-                ...emp,
-                checkin_reminder_at: computeReminderUTC(
-                    emp.shift_start_time, emp.timezone, CHECKIN_REMINDER_BEFORE_MINUTES
-                ),
-                checkout_reminder_at: computeReminderUTC(
-                    emp.shift_end_time, emp.timezone, CHECKOUT_REMINDER_BEFORE_MINUTES
-                ),
-            }))
-            .filter((emp) => {
-                // Drop employees where BOTH reminders are in the past
-                const skipCheckin = !emp.shift_start_time || emp.checkin_reminder_at === "SKIP";
-                const skipCheckout = !emp.shift_end_time || emp.checkout_reminder_at === "SKIP";
-                if (skipCheckin) emp.checkin_reminder_at = null; // null = don't schedule
-                if (skipCheckout) emp.checkout_reminder_at = null;
-                return true; // keep all — individual nulls are handled in scheduleAttendanceReminders
-            });
-
-        // 5. Hand off to notification service — it creates one queued notification per employee
+        // 4. Hand off to notification service — it creates one queued notification per employee
         const result = await NotificationService.scheduleAttendanceReminders(
             enriched,
             CHECKIN_REMINDER_BEFORE_MINUTES
