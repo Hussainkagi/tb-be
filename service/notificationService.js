@@ -45,6 +45,80 @@ const isInvalidTokenError = (err) =>
     err.code === "DeviceNotRegistered" ||
     err.code === "InvalidCredentials";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: validate an `audience` object before any DB writes happen.
+// Without this, a malformed payload (e.g. all_branch with no branch_id)
+// silently created a notification that resolved to zero recipients instead
+// of failing loudly — send() would report "success" for a message nobody
+// ever received.
+// ─────────────────────────────────────────────────────────────────────────────
+const VALID_AUDIENCE_TYPES = [
+    "all_company",
+    "all_branch",
+    "specific_employee",
+    "specific_employees",
+    "role_based",
+    "department",
+];
+const MAX_SPECIFIC_EMPLOYEES = 500;
+
+const validateAudience = (audience) => {
+    if (!audience || !audience.type) return "audience.type is required";
+    if (!VALID_AUDIENCE_TYPES.includes(audience.type)) {
+        return `audience.type must be one of: ${VALID_AUDIENCE_TYPES.join(", ")}`;
+    }
+    switch (audience.type) {
+        case "all_branch":
+            if (!audience.branch_id) return "audience.branch_id is required when audience.type is 'all_branch'";
+            break;
+        case "specific_employee":
+            if (!audience.employee_id) return "audience.employee_id is required when audience.type is 'specific_employee'";
+            break;
+        case "specific_employees":
+            if (!Array.isArray(audience.employee_ids) || audience.employee_ids.length === 0) {
+                return "audience.employee_ids must be a non-empty array when audience.type is 'specific_employees'";
+            }
+            if (audience.employee_ids.length > MAX_SPECIFIC_EMPLOYEES) {
+                return `audience.employee_ids cannot exceed ${MAX_SPECIFIC_EMPLOYEES} entries — use audience.type 'all_company'/'all_branch'/'department'/'role_based' for larger targeting`;
+            }
+            break;
+        case "role_based":
+            if (!audience.role) return "audience.role is required when audience.type is 'role_based'";
+            break;
+        case "department":
+            if (!audience.department_id) return "audience.department_id is required when audience.type is 'department'";
+            break;
+    }
+    return null;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: turn one `audience` object into one-or-more notification_audience_rules
+// rows. 'specific_employees' is an application-level convenience type — it
+// fans out to one 'specific_employee' row per employee_id (a DB value that
+// already exists), so no schema/constraint change is needed to support it.
+// ─────────────────────────────────────────────────────────────────────────────
+const buildAudienceRuleRows = (notification_id, audience) => {
+    if (audience.type === "specific_employees") {
+        return audience.employee_ids.map((employee_id) => ({
+            notification_id,
+            audience_type: "specific_employee",
+            target_branch_id: null,
+            target_employee_id: employee_id,
+            target_role: null,
+            target_department_id: null,
+        }));
+    }
+    return [{
+        notification_id,
+        audience_type: audience.type,
+        target_branch_id: audience.branch_id || null,
+        target_employee_id: audience.employee_id || null,
+        target_role: audience.role || null,
+        target_department_id: audience.department_id || null,
+    }];
+};
+
 
 const NotificationService = {
 
@@ -130,8 +204,13 @@ const NotificationService = {
     //   delivery_window_start?, delivery_window_end?,
     //   recurrence_cron?, recurrence_end_at?,
     //   audience: {
-    //     type: 'all_company' | 'all_branch' | 'specific_employee' | 'role_based' | 'department'
-    //     branch_id?, employee_id?, role?, department_id?
+    //     type: 'all_company' | 'all_branch' | 'specific_employee' | 'specific_employees'
+    //         | 'role_based' | 'department'
+    //     branch_id?,          // required for 'all_branch'
+    //     employee_id?,        // required for 'specific_employee'
+    //     employee_ids?,       // required for 'specific_employees' (array, max 500)
+    //     role?,               // required for 'role_based' — Role enum value as a string: "0" admin | "1" manager | "2" employee
+    //     department_id?,      // required for 'department'
     //   }
     // }
     // ─────────────────────────────────────────────────────────────────────────
@@ -156,8 +235,9 @@ const NotificationService = {
                 audience,
             } = data;
 
-            if (!audience || !audience.type) {
-                return { success: false, message: "audience.type is required" };
+            const audienceError = validateAudience(audience);
+            if (audienceError) {
+                return { success: false, message: audienceError };
             }
 
             // ── Step 1: Resolve template (if template_code provided) ───────
@@ -214,15 +294,12 @@ const NotificationService = {
                 throw error;
             }
 
-            // ── Step 3: Insert audience rule ──────────────────────────────
-            await NotificationAudienceRule.create({
-                notification_id: notification.id,
-                audience_type: audience.type,
-                target_branch_id: audience.branch_id || null,
-                target_employee_id: audience.employee_id || null,
-                target_role: audience.role || null,
-                target_department_id: audience.department_id || null,
-            });
+            // ── Step 3: Insert audience rule(s) ─────────────────────────────
+            // 'specific_employees' fans out to one row per employee_id
+            const audienceRows = buildAudienceRuleRows(notification.id, audience);
+            for (const row of audienceRows) {
+                await NotificationAudienceRule.create(row);
+            }
 
             // ── Step 4: Fan-out (only for immediate notifications) ─────────
             if (!scheduled_at) {
