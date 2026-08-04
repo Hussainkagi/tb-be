@@ -33,13 +33,22 @@ const UserCompany = {
         const result = await db.query(
             `SELECT uc.*,
                     u.first_name, u.last_name, u.email,
-                    u.is_active AS user_is_active
+                    u.is_active AS user_is_active,
+                    u.is_super_admin,
+                    c.company_name,
+                    c.company_code,
+                    c.logo_url        AS company_logo_url,
+                    c.is_active       AS company_is_active,
+                    c.disabled_at     AS company_disabled_at,
+                    c.disabled_reason AS company_disabled_reason
              FROM user_companies uc
              JOIN users u ON u.id = uc.user_id
+             JOIN companies c ON c.id = uc.company_id
              WHERE uc.username = $1
                AND uc.is_active = true
                AND uc.deleted_at IS NULL
-               AND u.deleted_at IS NULL`,
+               AND u.deleted_at IS NULL
+               AND c.deleted_at IS NULL`,
             [username]
         );
         return result.rows[0];
@@ -57,7 +66,10 @@ const UserCompany = {
     // All companies a user belongs to (for multi-company switcher)
     async findAllByUserId(user_id) {
         const result = await db.query(
-            `SELECT uc.*, c.company_name, c.company_code, c.logo_url
+            `SELECT uc.*, c.company_name, c.company_code, c.logo_url,
+                    c.is_active       AS company_is_active,
+                    c.disabled_at     AS company_disabled_at,
+                    c.disabled_reason AS company_disabled_reason
              FROM user_companies uc
              JOIN companies c ON c.id = uc.company_id
              WHERE uc.user_id = $1

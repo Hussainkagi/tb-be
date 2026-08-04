@@ -533,6 +533,8 @@ async bulkInviteEmployees(rows, company_id) {
             // Success — reset failed attempts, issue tokens
             await UserCompanyModel.resetFailedLogins(uc.id);
 
+            const isSuperAdmin = uc.is_super_admin === true;
+
             const payload = {
                 user_id: uc.user_id,
                 uc_id: uc.id,
@@ -540,6 +542,7 @@ async bulkInviteEmployees(rows, company_id) {
                 branch_id: uc.branch_id,
                 role: uc.role,
                 username: uc.username,
+                is_super_admin: isSuperAdmin,
             };
 
             const accessToken = generateAccessToken(payload);
@@ -547,9 +550,16 @@ async bulkInviteEmployees(rows, company_id) {
 
             await UserModel.setRefreshToken(uc.user_id, refreshToken);
 
+            // A disabled company does NOT block login — the user must be able to
+            // reach the app to see WHY they are locked out. Every write request is
+            // rejected downstream by the enforceCompanyActive middleware.
+            const companyDisabled = uc.company_is_active === false;
+
             return {
                 success: true,
-                message: "Login successful",
+                message: companyDisabled
+                    ? "Login successful, but your company has been disabled by the platform administrator."
+                    : "Login successful",
                 data: {
                     access_token: accessToken,
                     refresh_token: refreshToken,
@@ -562,6 +572,17 @@ async bulkInviteEmployees(rows, company_id) {
                         role: uc.role,
                         company_id: uc.company_id,
                         branch_id: uc.branch_id,
+                        is_super_admin: isSuperAdmin,
+                    },
+                    company: {
+                        id: uc.company_id,
+                        company_name: uc.company_name,
+                        company_code: uc.company_code,
+                        logo_url: uc.company_logo_url,
+                        is_active: uc.company_is_active,
+                        is_disabled: companyDisabled,
+                        disabled_at: uc.company_disabled_at,
+                        disabled_reason: uc.company_disabled_reason,
                     },
                 },
             };
@@ -659,6 +680,9 @@ async bulkInviteEmployees(rows, company_id) {
                 return { success: false, message: "Password not set for this company. Check your invite email." };
             }
 
+            const user = await UserModel.findById(user_id);
+            const isSuperAdmin = user?.is_super_admin === true;
+
             const payload = {
                 user_id,
                 uc_id: target.id,
@@ -666,6 +690,7 @@ async bulkInviteEmployees(rows, company_id) {
                 branch_id: target.branch_id,
                 role: target.role,
                 username: target.username,
+                is_super_admin: isSuperAdmin,
             };
 
             const accessToken = generateAccessToken(payload);
@@ -682,6 +707,15 @@ async bulkInviteEmployees(rows, company_id) {
                     company_id: target.company_id,
                     company_name: target.company_name,
                     role: target.role,
+                    is_super_admin: isSuperAdmin,
+                    company: {
+                        id: target.company_id,
+                        company_name: target.company_name,
+                        is_active: target.company_is_active,
+                        is_disabled: target.company_is_active === false,
+                        disabled_at: target.company_disabled_at,
+                        disabled_reason: target.company_disabled_reason,
+                    },
                 },
             };
         } catch (error) {
