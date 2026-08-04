@@ -62,7 +62,20 @@ app.get("/health", (req, res) => {
     });
 });
 
+// Blocks every state-changing request made against a company that a Super Admin
+// has disabled. Must be mounted BEFORE the route table so it covers all modules.
+const { enforceCompanyActive } = require("./middleware/enforceCompanyActive");
+app.use("/api", enforceCompanyActive);
+
+// Records every state-changing request into activity_logs. Runs after the
+// response is sent, so it never slows down or breaks a request.
+const { activityLogger } = require("./middleware/activityLogger");
+app.use("/api", activityLogger);
+
 //All Routes
+const SuperAdminRoutes = require("./routes/superAdminRoute");
+app.use("/api/super-admin", SuperAdminRoutes);
+
 const UserRoutes = require("./routes/userRoute");
 app.use("/api/users", UserRoutes);
 
@@ -135,6 +148,9 @@ app.use("/api/companies/:company_id/notifications", notificationRoutes);
 
 const payrollBreakdownRouter = require("./routes/payrollBreakdownRoute");
 app.use("/api/companies/:company_id/payroll-breakdown", payrollBreakdownRouter);
+
+const activityLogRoutes = require("./routes/activityLogRoute");
+app.use("/api/companies/:company_id/activity-logs", activityLogRoutes);
 
 
 
