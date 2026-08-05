@@ -29,6 +29,7 @@ app.use(helmet());
 
 // server.js
 require("./jobs/attendanceReminderJob");
+require("./jobs/birthdayNotificationJob");
 
 // CORS configuration
 const corsOptions = {
@@ -105,6 +106,9 @@ app.use("/api/companies/:company_id/employees/:employee_id/documents", EmployeeD
 
 const EmployeeSalaryStructureRoutes = require("./routes/employeeSalaryStructureRoute");
 app.use("/api/companies/:company_id/employees/:employee_id/salary-structures", EmployeeSalaryStructureRoutes);
+
+const EmployeeBankAccountRoutes = require("./routes/employeeBankAccountRoute");
+app.use("/api/companies/:company_id/bank-accounts", EmployeeBankAccountRoutes);
 
 const EmployeeSalaryStructureBulkRoutes = require("./routes/employeeSalaryStructureBulkRoute");
 app.use("/api/companies/:company_id/salary-structures/bulk-upload", EmployeeSalaryStructureBulkRoutes);
