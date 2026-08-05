@@ -2,6 +2,10 @@ const XLSX = require("xlsx");
 const { parse } = require("csv-parse/sync");
 const EmployeeSalaryStructureModel = require("../models/employeeSalaryStructureModel");
 const EmployeeModel = require("../models/employeeModel");
+const CompanyModel = require("../models/companyModel");
+const EmployeeBankAccountModel = require("../models/employeeBankAccountModel");
+const { normalizeCountry } = require("../utils/bankDetailsValidator");
+const { resolveCountryCode } = require("../enums/bankFieldSpecs");
 
 const REQUIRED_COLUMNS = [
     "employee_id",
@@ -19,6 +23,7 @@ const OPTIONAL_COLUMNS = [
     "overtime_enabled",
     "overtime_rate_per_hour",
     "payment_type",
+    "work_country",
 ];
 
 const ALL_COLUMNS = [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS];
@@ -107,6 +112,16 @@ function validateRow(raw, rowIndex) {
         data.payment_type = String(raw.payment_type).trim().toLowerCase();
     }
 
+    // Where the employee works from — 2-letter ISO code. Bank details themselves
+    // are not bulk-uploadable; they are captured per employee in the salary form.
+    if (raw.work_country && String(raw.work_country).trim() !== "") {
+        const wc = String(raw.work_country).trim().toUpperCase();
+        if (!/^[A-Z]{2}$/.test(wc)) {
+            return { error: `Invalid work_country "${raw.work_country}" — use a 2-letter ISO code (e.g. AE, IN)` };
+        }
+        data.work_country = wc;
+    }
+
     // Validate effective_from is a real date
     if (isNaN(Date.parse(data.effective_from))) {
         return { error: `Invalid effective_from date: "${raw.effective_from}"` };
@@ -155,6 +170,14 @@ const EmployeeSalaryStructureBulkService = {
         const errors = [];
         let created = 0;
 
+        // Salary amounts in a bulk upload are in the company's currency, same as
+        // the single-create path. Resolve once rather than per row.
+        const company = requestingCompanyId
+            ? await CompanyModel.findById(requestingCompanyId)
+            : null;
+        const companyCurrency = company ? company.currency : null;
+        const companyCurrencyCountry = company ? resolveCountryCode(company.country) : null;
+
         for (let i = 0; i < rows.length; i++) {
             const rowNum = i + 2; // 1-based + header row
             const { data, error } = validateRow(rows[i], i);
@@ -196,9 +219,21 @@ const EmployeeSalaryStructureBulkService = {
                 await EmployeeSalaryStructureModel.deactivateAllByEmployee(data.employee_id);
                 console.log("Deactivated rows for employee_id:", data.employee_id);
 
+                // Salary is always in the company currency — snapshot it here too,
+                // and carry forward any bank account already on file.
+                const bankAccount = await EmployeeBankAccountModel.findPrimaryByEmployee(
+                    data.employee_id
+                );
+
                 const record = await EmployeeSalaryStructureModel.create({
                     ...data,
                     is_active: true,
+                    work_country:
+                        normalizeCountry(data.work_country) ||
+                        (bankAccount ? bankAccount.work_country : null) ||
+                        companyCurrencyCountry,
+                    salary_currency: companyCurrency,
+                    bank_account_id: bankAccount ? bankAccount.id : null,
                 });
 
                 results.push({ row: rowNum, employee_id: data.employee_id, id: record.id, status: "created" });
@@ -228,7 +263,7 @@ const EmployeeSalaryStructureBulkService = {
         const example = [
             "EMP001", "COMP001", "2025-01-01", "5000",
             "3000", "1500", "500", "250",
-            "", "false", "", "monthly",
+            "", "false", "", "monthly", "AE",
         ].join(",");
         return `${header}\n${example}\n`;
     },

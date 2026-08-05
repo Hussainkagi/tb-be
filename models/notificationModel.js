@@ -277,19 +277,22 @@ const NotificationAudienceRule = {
             target_employee_id = null,
             target_role = null,
             target_department_id = null,
+            exclude_employee_id = null,
         } = data;
 
         const result = await db.query(
             `INSERT INTO notification_audience_rules (
                 notification_id, audience_type,
                 target_branch_id, target_employee_id,
-                target_role, target_department_id
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                target_role, target_department_id,
+                exclude_employee_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *`,
             [
                 notification_id, audience_type,
                 target_branch_id, target_employee_id,
                 target_role, target_department_id,
+                exclude_employee_id,
             ]
         );
         return result.rows[0];
@@ -340,7 +343,10 @@ const NotificationAudienceRule = {
                 OR -- department: all employees in the target department
                    (nar.audience_type = 'department'
                     AND e.department_id = nar.target_department_id)
-               )`,
+               )
+               -- Optional exclusion, e.g. a birthday announcement must not go
+               -- to the person whose birthday it is.
+               AND (nar.exclude_employee_id IS NULL OR e.id <> nar.exclude_employee_id)`,
             [notification_id, company_id]
         );
         return result.rows.map((r) => r.employee_id);

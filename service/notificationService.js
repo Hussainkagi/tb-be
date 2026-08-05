@@ -107,6 +107,7 @@ const buildAudienceRuleRows = (notification_id, audience) => {
             target_employee_id: employee_id,
             target_role: null,
             target_department_id: null,
+            exclude_employee_id: null,
         }));
     }
     return [{
@@ -116,6 +117,8 @@ const buildAudienceRuleRows = (notification_id, audience) => {
         target_employee_id: audience.employee_id || null,
         target_role: audience.role || null,
         target_department_id: audience.department_id || null,
+        // Optional: drop one employee from an otherwise broad audience.
+        exclude_employee_id: audience.exclude_employee_id || null,
     }];
 };
 
@@ -612,6 +615,105 @@ const NotificationService = {
             }
 
             return { success: true, scheduled: results.length, results };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // BIRTHDAYS: wish the employee + tell their branch colleagues
+    //
+    // Called by birthdayNotificationJob once the job has worked out whose
+    // birthday it is today in their company's own timezone.
+    //
+    // Two notifications per employee:
+    //   1. birthday_wish         → the employee alone
+    //   2. birthday_announcement → everyone else in their branch
+    //
+    // Both are tagged entity_type = 'employee_birthday' with the employee id,
+    // so uq_birthday_notification_once_per_day makes re-runs a no-op.
+    //
+    // `employees` rows must carry: id, company_id, branch_id, first_name,
+    // last_name, company_name, branch_name, timezone, send_at (UTC ISO).
+    // ─────────────────────────────────────────────────────────────────────────
+    async sendBirthdayNotifications(employees = []) {
+        try {
+            const results = [];
+
+            for (const emp of employees) {
+                const tz = emp.timezone || "UTC";
+                const fullName = `${emp.first_name} ${emp.last_name}`.trim();
+
+                // ── 1. The wish, to the birthday employee ──────────────────
+                const wish = await NotificationService.send({
+                    company_id: emp.company_id,
+                    branch_id: emp.branch_id || null,
+                    notification_type: "birthday_wish",
+                    channel: "push",
+                    template_code: "birthday_wish",
+                    template_variables: {
+                        employee_first_name: emp.first_name,
+                        employee_name: fullName,
+                        company_name: emp.company_name || "your team",
+                    },
+                    timezone: tz,
+                    scheduled_at: emp.send_at,
+                    entity_type: "employee_birthday",
+                    entity_id: emp.id,
+                    audience: { type: "specific_employee", employee_id: emp.id },
+                });
+                results.push({ type: "wish", employee_id: emp.id, ...wish });
+
+                // ── 2. The announcement, to branch colleagues ──────────────
+                // Skipped when the employee has no branch — there is no
+                // sensible audience to announce to, and falling back to the
+                // whole company would surprise people in other locations.
+                if (!emp.branch_id) {
+                    results.push({
+                        type: "announcement",
+                        employee_id: emp.id,
+                        success: true,
+                        skipped: true,
+                        message: "Employee has no branch — announcement skipped",
+                    });
+                    continue;
+                }
+
+                const announcement = await NotificationService.send({
+                    company_id: emp.company_id,
+                    branch_id: emp.branch_id,
+                    notification_type: "birthday_announcement",
+                    channel: "push",
+                    template_code: "birthday_announcement",
+                    template_variables: {
+                        employee_name: fullName,
+                        employee_first_name: emp.first_name,
+                        employee_id: emp.id,
+                        branch_name: emp.branch_name || "your branch",
+                        company_name: emp.company_name || "your team",
+                        // employees has no job-title column; department is the
+                        // closest useful context. Empty string when unknown.
+                        job_title_suffix: emp.department_name ? ` from ${emp.department_name}` : "",
+                    },
+                    timezone: tz,
+                    scheduled_at: emp.send_at,
+                    entity_type: "employee_birthday",
+                    entity_id: emp.id,
+                    audience: {
+                        type: "all_branch",
+                        branch_id: emp.branch_id,
+                        // Don't tell someone about their own birthday
+                        exclude_employee_id: emp.id,
+                    },
+                });
+                results.push({ type: "announcement", employee_id: emp.id, ...announcement });
+            }
+
+            const sent = results.filter((r) => r.success && !r.skipped).length;
+            const skipped = results.filter((r) => r.skipped).length;
+
+            return { success: true, scheduled: sent, skipped, results };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

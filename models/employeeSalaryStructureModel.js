@@ -17,23 +17,28 @@ const EmployeeSalaryStructure = {
             overtime_rate_per_hour = null,
             payment_type = "monthly",
             is_active = true,
+            work_country = null,        // where the employee works from
+            salary_currency = null,     // snapshot of companies.currency
+            bank_account_id = null,     // optional payout account
         } = data;
 
         const result = await db.query(
             `INSERT INTO employee_salary_structures (
             company_id, employee_id,
             effective_from, effective_to,
-            actual_salary, basic_salary,       
+            actual_salary, basic_salary,
             housing_allowance, transport_allowance, other_allowance,
             overtime_enabled, overtime_rate_per_hour,
-            payment_type, is_active
+            payment_type, is_active,
+            work_country, salary_currency, bank_account_id
         ) VALUES (
             $1,  $2,
             $3,  $4,
-            $5,  $6,                             
+            $5,  $6,
             $7,  $8,  $9,
             $10, $11,
-            $12, $13
+            $12, $13,
+            $14, $15, $16
         ) RETURNING *`,
             [
                 company_id, employee_id,
@@ -42,6 +47,7 @@ const EmployeeSalaryStructure = {
                 housing_allowance, transport_allowance, other_allowance,
                 overtime_enabled, overtime_rate_per_hour,
                 payment_type, is_active,
+                work_country, salary_currency, bank_account_id,
             ]
         );
         return result.rows[0];
@@ -53,9 +59,15 @@ const EmployeeSalaryStructure = {
                 ess.*,
                 e.first_name        AS employee_first_name,
                 e.last_name         AS employee_last_name,
-                e.employee_code     AS employee_code
+                e.employee_code     AS employee_code,
+                bk.bank             AS bank_account
              FROM employee_salary_structures ess
              LEFT JOIN employees e ON ess.employee_id = e.id
+             LEFT JOIN LATERAL (
+                 SELECT to_jsonb(b) - 'company_id' - 'deleted_at' AS bank
+                 FROM employee_bank_accounts b
+                 WHERE b.id = ess.bank_account_id AND b.deleted_at IS NULL
+             ) bk ON TRUE
              WHERE ess.id = $1`,
             [id]
         );
@@ -69,12 +81,18 @@ const EmployeeSalaryStructure = {
      */
     async findActiveByEmployee(employee_id) {
         const result = await db.query(
-            `SELECT * FROM employee_salary_structures
-             WHERE employee_id = $1
-               AND is_active = true
-               AND effective_from <= CURRENT_DATE
-               AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)
-             ORDER BY effective_from DESC
+            `SELECT ess.*, bk.bank AS bank_account
+             FROM employee_salary_structures ess
+             LEFT JOIN LATERAL (
+                 SELECT to_jsonb(b) - 'company_id' - 'deleted_at' AS bank
+                 FROM employee_bank_accounts b
+                 WHERE b.id = ess.bank_account_id AND b.deleted_at IS NULL
+             ) bk ON TRUE
+             WHERE ess.employee_id = $1
+               AND ess.is_active = true
+               AND ess.effective_from <= CURRENT_DATE
+               AND (ess.effective_to IS NULL OR ess.effective_to >= CURRENT_DATE)
+             ORDER BY ess.effective_from DESC
              LIMIT 1`,
             [employee_id]
         );
@@ -86,9 +104,15 @@ const EmployeeSalaryStructure = {
      */
     async getAllByEmployee(employee_id) {
         const result = await db.query(
-            `SELECT * FROM employee_salary_structures
-             WHERE employee_id = $1
-             ORDER BY effective_from DESC`,
+            `SELECT ess.*, bk.bank AS bank_account
+             FROM employee_salary_structures ess
+             LEFT JOIN LATERAL (
+                 SELECT to_jsonb(b) - 'company_id' - 'deleted_at' AS bank
+                 FROM employee_bank_accounts b
+                 WHERE b.id = ess.bank_account_id AND b.deleted_at IS NULL
+             ) bk ON TRUE
+             WHERE ess.employee_id = $1
+             ORDER BY ess.effective_from DESC`,
             [employee_id]
         );
         return result.rows;
@@ -103,9 +127,15 @@ const EmployeeSalaryStructure = {
                 ess.*,
                 e.first_name    AS employee_first_name,
                 e.last_name     AS employee_last_name,
-                e.employee_code AS employee_code
+                e.employee_code AS employee_code,
+                bk.bank         AS bank_account
              FROM employee_salary_structures ess
              LEFT JOIN employees e ON ess.employee_id = e.id
+             LEFT JOIN LATERAL (
+                 SELECT to_jsonb(b) - 'company_id' - 'deleted_at' AS bank
+                 FROM employee_bank_accounts b
+                 WHERE b.id = ess.bank_account_id AND b.deleted_at IS NULL
+             ) bk ON TRUE
              WHERE ess.company_id = $1
              ORDER BY ess.effective_from DESC`,
             [company_id]
