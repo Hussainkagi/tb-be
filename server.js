@@ -110,6 +110,9 @@ app.use("/api/companies/:company_id/employees/:employee_id/salary-structures", E
 const EmployeeBankAccountRoutes = require("./routes/employeeBankAccountRoute");
 app.use("/api/companies/:company_id/bank-accounts", EmployeeBankAccountRoutes);
 
+const EmployeeGratuityRoutes = require("./routes/employeeGratuityRoute");
+app.use("/api/companies/:company_id/gratuity", EmployeeGratuityRoutes);
+
 const EmployeeSalaryStructureBulkRoutes = require("./routes/employeeSalaryStructureBulkRoute");
 app.use("/api/companies/:company_id/salary-structures/bulk-upload", EmployeeSalaryStructureBulkRoutes);
 

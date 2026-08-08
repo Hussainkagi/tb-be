@@ -1,0 +1,714 @@
+{
+  "info": {
+    "name": "HRMS — Employee Gratuity (End of Service)",
+    "_postman_id": "3f8a1d05-7c62-4e9b-a4d1-6b0e2f57c891",
+    "description": "End-of-service gratuity: per-employee configuration and accrued-amount calculation.\n\n## Setup\n\n1. Run **0. Auth → Login** — it saves `token` and `company_id` automatically.\n2. Set `employee_id` to any employee in that company.\n\n## The model\n\n- A config row is **optional**. Without one, an employee uses the statutory preset for their country (resolved from `work_country` on their salary structure, falling back to the company's country). UAE staff accrue correctly with zero setup.\n- The accrued amount is **derived on every read, never stored** — it changes daily and retroactively whenever the basis salary changes.\n- Built-in schemes: **AE** (21/30 days, 1-year minimum, 2-year wage cap), **IN** (15/26 days, 5-year minimum, ₹20 lakh cap), **SA** (15/30 days on gross). Any other country accrues nothing until configured explicitly.\n\n## Cross-border employees\n\nWhen an employee's `work_country` differs from the company's country — a Dubai company with someone working from India — entitlement is a contractual question the system cannot infer. Those employees come back with `requires_decision: true`, `is_enabled: false` and a `decision_options` array. **Nothing accrues until an admin picks one.** See the cross-border examples in folder 2.\n\n## Watch for\n\n- UAE gratuity is legally based on **basic** salary. Records with `basic_salary = 0` return explicit `warnings[]` — surface them rather than rendering a silent zero.\n- Money here is returned as JSON **numbers** rounded to 2dp (unlike the salary endpoints, where NUMERIC columns come back as strings).\n- Amount-bearing endpoints are **Admin only**; `/rules` is Manager-readable.\n\nStatutory presets encode the common interpretation of each law and are overridable per employee. Not legal advice — verify against your jurisdiction and contracts.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_ADMIN_JWT_HERE",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "22b016c2-f8bc-4cdf-a360-a47a57d735fc",
+      "type": "string"
+    },
+    {
+      "key": "employee_id",
+      "value": "b7e21c44-9a3f-4d18-8e52-6c0f1a92d773",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Auth (prerequisite)",
+      "description": "Gratuity endpoints that show an amount are **Admin only** (role `0`). The `/rules` endpoints are Manager-readable.\n\nRun this first — it saves `token` into the collection variables automatically.",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data.access_token) {",
+                  "    pm.collectionVariables.set('token', res.data.access_token);",
+                  "    pm.collectionVariables.set('company_id', res.data.user.company_id);",
+                  "    console.log('role:', res.data.user.role, '(0 = Admin)');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"AA0001\",\n  \"password\": \"yourpassword\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user-companies/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user-companies",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n      \"user_id\": \"uuid\",\n      \"username\": \"AA0001\",\n      \"role\": \"0\",\n      \"company_id\": \"{{company_id}}\",\n      \"is_super_admin\": false\n    },\n    \"company\": {\n      \"id\": \"{{company_id}}\",\n      \"company_name\": \"AFM Holdings\",\n      \"is_active\": true,\n      \"is_disabled\": false\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Statutory Rule Presets",
+      "description": "Read-only metadata that drives the configuration form. Add a country to `enums/gratuityRules.js` on the backend and it appears here with no frontend change.",
+      "item": [
+        {
+          "name": "List countries with a scheme",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/rules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "rules"
+              ]
+            },
+            "description": "Manager+ readable. Currently AE, IN, SA."
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"countries\": [\n      {\n        \"country_code\": \"AE\",\n        \"country_name\": \"United Arab Emirates\",\n        \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n        \"calculation_basis\": \"basic\",\n        \"min_service_years\": 1,\n        \"tiers\": [\n          {\n            \"up_to_years\": 5,\n            \"days_per_year\": 21\n          },\n          {\n            \"up_to_years\": null,\n            \"days_per_year\": 30\n          }\n        ],\n        \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter…\"\n      },\n      {\n        \"country_code\": \"IN\",\n        \"country_name\": \"India\",\n        \"scheme_name\": \"Payment of Gratuity Act, 1972\",\n        \"calculation_basis\": \"basic\",\n        \"min_service_years\": 5,\n        \"tiers\": [\n          {\n            \"up_to_years\": null,\n            \"days_per_year\": 15\n          }\n        ],\n        \"notes\": \"15 days' wages (basic + DA) for every completed year, using a 26-day month…\"\n      },\n      {\n        \"country_code\": \"SA\",\n        \"country_name\": \"Saudi Arabia\",\n        \"scheme_name\": \"End of Service Award (Saudi Labour Law)\",\n        \"calculation_basis\": \"gross\",\n        \"min_service_years\": 1,\n        \"tiers\": [\n          {\n            \"up_to_years\": 5,\n            \"days_per_year\": 15\n          },\n          {\n            \"up_to_years\": null,\n            \"days_per_year\": 30\n          }\n        ],\n        \"notes\": \"Half a month's wage per year for the first 5 years, one month's wage per year thereafter…\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get one country's preset",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/rules/AE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "rules",
+                "AE"
+              ]
+            },
+            "description": "Any ISO2 code works. A country with no statutory scheme comes back with `is_enabled: false` and `has_preset: false`, so nothing accrues by accident."
+          },
+          "response": [
+            {
+              "name": "200 — UAE",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"country_code\": \"AE\",\n    \"country_name\": \"United Arab Emirates\",\n    \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n    \"is_enabled\": true,\n    \"calculation_basis\": \"basic\",\n    \"min_service_years\": 1,\n    \"days_in_month\": 30,\n    \"tiers\": [\n      {\n        \"up_to_years\": 5,\n        \"days_per_year\": 21\n      },\n      {\n        \"up_to_years\": null,\n        \"days_per_year\": 30\n      }\n    ],\n    \"max_years_cap\": 2,\n    \"max_amount_cap\": null,\n    \"year_rounding\": \"none\",\n    \"prorate_partial_years\": true,\n    \"exclude_unpaid_leave\": true,\n    \"is_preset\": true,\n    \"has_preset\": true,\n    \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter…\"\n  }\n}"
+            },
+            {
+              "name": "200 — Country with no scheme (BR)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"country_code\": \"BR\",\n    \"country_name\": \"BR\",\n    \"scheme_name\": \"No statutory gratuity scheme configured\",\n    \"is_enabled\": false,\n    \"calculation_basis\": \"basic\",\n    \"min_service_years\": 1,\n    \"days_in_month\": 30,\n    \"tiers\": [\n      {\n        \"up_to_years\": null,\n        \"days_per_year\": 0\n      }\n    ],\n    \"max_years_cap\": null,\n    \"max_amount_cap\": null,\n    \"year_rounding\": \"none\",\n    \"prorate_partial_years\": true,\n    \"exclude_unpaid_leave\": false,\n    \"is_preset\": false,\n    \"has_preset\": false,\n    \"notes\": \"No end-of-service gratuity preset exists for this country. Enable it and enter the rules manually if the employee is entitled to one.\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Employee Gratuity",
+      "description": "A config row is OPTIONAL. With none, the employee uses the statutory preset for their country, so UAE staff accrue correctly out of the box.",
+      "item": [
+        {
+          "name": "Get config + accrued amount",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "employees",
+                "{{employee_id}}"
+              ],
+              "query": [
+                {
+                  "key": "as_of_date",
+                  "value": "",
+                  "description": "YYYY-MM-DD — project the accrual to a future date. Defaults to today.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "The main call for the employee gratuity card. Returns three blocks: `employee`, `config` and `calculation`.\n\nThe amount is DERIVED on every read, never stored — it changes daily and retroactively whenever the basis salary changes."
+          },
+          "response": [
+            {
+              "name": "200 — Eligible (UAE, using country default)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": false,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"country_preset\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 6,\n        \"months\": 4,\n        \"days\": 21,\n        \"total_days\": 2334\n      },\n      \"service_years_decimal\": 6.39,\n      \"countable_years\": 6.39,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"basis_type\": \"basic\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 333.33,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 35000\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 6.39,\n          \"years\": 1.39,\n          \"days_per_year\": 30,\n          \"days_accrued\": 41.7,\n          \"amount\": 13900\n        }\n      ],\n      \"gross_amount\": 48900,\n      \"cap_applied\": null,\n      \"amount\": 48900,\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "200 — Not yet eligible (under 1 year)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2026-03-01\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": false,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"country_preset\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2026-03-01\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": false,\n      \"reason\": \"Not yet eligible — 1 year(s) of continuous service required\",\n      \"eligible_from\": \"2027-03-01\",\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2026-03-01\",\n      \"service\": {\n        \"years\": 0,\n        \"months\": 5,\n        \"days\": 4,\n        \"total_days\": 157\n      },\n      \"service_years_decimal\": 0.43,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"daily_wage\": 0,\n      \"tier_breakdown\": [],\n      \"gross_amount\": 0,\n      \"cap_applied\": null,\n      \"amount\": 0,\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "200 — CROSS-BORDER, decision pending",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Ravi Menon\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Remote\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": false,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"pending_decision\",\n      \"is_enabled\": false,\n      \"is_cross_border\": true,\n      \"requires_decision\": true,\n      \"pending_reason\": \"This employee works from IN but is employed by a AE company. Gratuity entitlement depends on their contract, so nothing accrues until an admin decides.\",\n      \"company_country\": \"AE\",\n      \"work_country\": \"IN\",\n      \"decision_options\": [\n        {\n          \"action\": \"enable\",\n          \"rule_country\": \"AE\",\n          \"role\": \"employer_country\",\n          \"country_name\": \"United Arab Emirates\",\n          \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n          \"has_preset\": true,\n          \"min_service_years\": 1,\n          \"tiers\": [\n            {\n              \"up_to_years\": 5,\n              \"days_per_year\": 21\n            },\n            {\n              \"up_to_years\": null,\n              \"days_per_year\": 30\n            }\n          ]\n        },\n        {\n          \"action\": \"enable\",\n          \"rule_country\": \"IN\",\n          \"role\": \"work_country\",\n          \"country_name\": \"India\",\n          \"scheme_name\": \"Payment of Gratuity Act, 1972\",\n          \"has_preset\": true,\n          \"min_service_years\": 5,\n          \"tiers\": [\n            {\n              \"up_to_years\": null,\n              \"days_per_year\": 15\n            }\n          ]\n        },\n        {\n          \"action\": \"disable\",\n          \"rule_country\": null,\n          \"role\": \"none\",\n          \"country_name\": null,\n          \"scheme_name\": \"Not entitled to end-of-service gratuity\",\n          \"has_preset\": false\n        }\n      ],\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": false,\n      \"reason\": \"This employee works from IN but is employed by a AE company. Gratuity entitlement depends on their contract, so nothing accrues until an admin decides.\",\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 0,\n        \"months\": 0,\n        \"days\": 0,\n        \"total_days\": 0\n      },\n      \"service_years_decimal\": 0,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"daily_wage\": 0,\n      \"tier_breakdown\": [],\n      \"gross_amount\": 0,\n      \"cap_applied\": null,\n      \"amount\": 0,\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "200 — Capped at 2 years' wages",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"1986-08-05\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": false,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"country_preset\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 40,\n        \"months\": 0,\n        \"days\": 0,\n        \"total_days\": 14610\n      },\n      \"service_years_decimal\": 40.03,\n      \"countable_years\": 40.03,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"basis_type\": \"basic\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 333.33,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 35000\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 40.03,\n          \"years\": 35.03,\n          \"days_per_year\": 30,\n          \"days_accrued\": 1050.9,\n          \"amount\": 350300\n        }\n      ],\n      \"gross_amount\": 385300,\n      \"cap_applied\": {\n        \"type\": \"years_of_salary\",\n        \"cap_years\": 2,\n        \"cap_amount\": 240000\n      },\n      \"amount\": 240000,\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "200 — Data problem: basic_salary is zero",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": false,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"country_preset\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 6,\n        \"months\": 4,\n        \"days\": 21,\n        \"total_days\": 2334\n      },\n      \"service_years_decimal\": 6.39,\n      \"countable_years\": 6.39,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 0,\n      \"basis_type\": \"basic\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 0,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 0\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 6.39,\n          \"years\": 1.39,\n          \"days_per_year\": 30,\n          \"days_accrued\": 41.7,\n          \"amount\": 0\n        }\n      ],\n      \"gross_amount\": 0,\n      \"cap_applied\": null,\n      \"amount\": 0,\n      \"warnings\": [\n        \"Basis salary is 0 — gratuity computes to zero. Check the 'basic' amount on the employee's salary structure.\",\n        \"basic_salary is 0 on the active salary structure. UAE law bases gratuity on basic pay — either set a basic amount or switch the basis to 'gross'.\"\n      ]\n    }\n  }\n}"
+            },
+            {
+              "name": "200 — Custom rules that DEPART from statute",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Kagi Wala\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2026-05-14\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": true,\n      \"has_high_severity_deviations\": true,\n      \"deviations\": [\n        {\n          \"field\": \"min_service_years\",\n          \"label\": \"Qualifying period\",\n          \"configured\": 0,\n          \"statutory\": 1,\n          \"severity\": \"high\",\n          \"impact\": \"Entitlement starts 1 year(s) earlier than United Arab Emirates law requires, so employees accrue before they legally qualify.\"\n        },\n        {\n          \"field\": \"days_in_month\",\n          \"label\": \"Days-in-month divisor\",\n          \"configured\": 20,\n          \"statutory\": 30,\n          \"severity\": \"high\",\n          \"impact\": \"The daily wage is scaled by 1.50x versus the statutory 30-day month, changing every amount proportionally.\"\n        }\n      ],\n      \"source\": \"employee_config\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 0,\n      \"days_in_month\": 20,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-08\",\n      \"service_start_date\": \"2026-05-14\",\n      \"service\": {\n        \"years\": 0,\n        \"months\": 2,\n        \"days\": 25,\n        \"total_days\": 86\n      },\n      \"service_years_decimal\": 0.24,\n      \"countable_years\": 0.24,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 4500,\n      \"basis_type\": \"basic\",\n      \"days_in_month\": 20,\n      \"daily_wage\": 225,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 0.24,\n          \"years\": 0.24,\n          \"days_per_year\": 21,\n          \"days_accrued\": 5.04,\n          \"amount\": 1134\n        }\n      ],\n      \"gross_amount\": 1134,\n      \"cap_applied\": null,\n      \"amount\": 1134,\n      \"warnings\": [\n        \"This employee uses custom rules that differ from United Arab Emirates statutory defaults (qualifying period, days-in-month divisor). Amounts will not match the statutory calculation.\"\n      ]\n    }\n  }\n}"
+            },
+            {
+              "name": "404 — Employee not found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Employee not found\"\n}"
+            },
+            {
+              "name": "403 — Not an Admin",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access forbidden. Required role(s): Admin. Your role: Manager.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Configure — minimal (just change the basis)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"calculation_basis\": \"gross\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "employees",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "Every field is optional. Anything omitted inherits the country preset, so this one-field call is the common case when basic_salary is not split out.\n\nThe response is the FULL recomputed GET payload — update the UI from it directly."
+          },
+          "response": [
+            {
+              "name": "200 — Saved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Gratuity configuration saved\",\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": true,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"employee_config\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"gross\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 6,\n        \"months\": 4,\n        \"days\": 21,\n        \"total_days\": 2334\n      },\n      \"service_years_decimal\": 6.39,\n      \"countable_years\": 6.39,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"basis_type\": \"gross\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 333.33,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 35000\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 6.39,\n          \"years\": 1.39,\n          \"days_per_year\": 30,\n          \"days_accrued\": 41.7,\n          \"amount\": 13900\n        }\n      ],\n      \"gross_amount\": 48900,\n      \"cap_applied\": null,\n      \"amount\": 48900,\n      \"warnings\": []\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Configure — cross-border: ENABLE with employer's scheme",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rule_country\": \"AE\",\n  \"is_enabled\": true,\n  \"calculation_basis\": \"gross\",\n  \"notes\": \"On a UAE contract, working remotely from India — UAE EOSB applies\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "employees",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "Resolves a pending cross-border decision by applying the EMPLOYER country's scheme. Once saved, `requires_decision` becomes false and accrual starts."
+          },
+          "response": [
+            {
+              "name": "200 — Saved, now accruing under UAE rules",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Gratuity configuration saved\",\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Ravi Menon\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": true,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"employee_config\",\n      \"is_enabled\": true,\n      \"is_cross_border\": true,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"IN\",\n      \"decision_options\": [\n        {\n          \"action\": \"enable\",\n          \"rule_country\": \"AE\",\n          \"role\": \"employer_country\",\n          \"country_name\": \"United Arab Emirates\",\n          \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n          \"has_preset\": true,\n          \"min_service_years\": 1,\n          \"tiers\": [\n            {\n              \"up_to_years\": 5,\n              \"days_per_year\": 21\n            },\n            {\n              \"up_to_years\": null,\n              \"days_per_year\": 30\n            }\n          ]\n        },\n        {\n          \"action\": \"enable\",\n          \"rule_country\": \"IN\",\n          \"role\": \"work_country\",\n          \"country_name\": \"India\",\n          \"scheme_name\": \"Payment of Gratuity Act, 1972\",\n          \"has_preset\": true,\n          \"min_service_years\": 5,\n          \"tiers\": [\n            {\n              \"up_to_years\": null,\n              \"days_per_year\": 15\n            }\n          ]\n        },\n        {\n          \"action\": \"disable\",\n          \"rule_country\": null,\n          \"role\": \"none\",\n          \"country_name\": null,\n          \"scheme_name\": \"Not entitled to end-of-service gratuity\",\n          \"has_preset\": false\n        }\n      ],\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"gross\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"On a UAE contract, working remotely from India — UAE EOSB applies\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 6,\n        \"months\": 4,\n        \"days\": 21,\n        \"total_days\": 2334\n      },\n      \"service_years_decimal\": 6.39,\n      \"countable_years\": 6.39,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"basis_type\": \"gross\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 333.33,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 35000\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 6.39,\n          \"years\": 1.39,\n          \"days_per_year\": 30,\n          \"days_accrued\": 41.7,\n          \"amount\": 13900\n        }\n      ],\n      \"gross_amount\": 48900,\n      \"cap_applied\": null,\n      \"amount\": 48900,\n      \"warnings\": []\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Configure — cross-border: NOT entitled",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rule_country\": \"AE\",\n  \"is_enabled\": false,\n  \"notes\": \"Local Indian contract via partner entity — no UAE end-of-service\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "employees",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "The other side of the decision: this employee accrues nothing, on the record, with a reason."
+          },
+          "response": [
+            {
+              "name": "200 — Saved, accrual disabled",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Gratuity configuration saved\",\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Ravi Menon\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": true,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"employee_config\",\n      \"is_enabled\": false,\n      \"is_cross_border\": true,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"IN\",\n      \"decision_options\": [\n        {\n          \"action\": \"enable\",\n          \"rule_country\": \"AE\",\n          \"role\": \"employer_country\",\n          \"country_name\": \"United Arab Emirates\",\n          \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n          \"has_preset\": true,\n          \"min_service_years\": 1,\n          \"tiers\": [\n            {\n              \"up_to_years\": 5,\n              \"days_per_year\": 21\n            },\n            {\n              \"up_to_years\": null,\n              \"days_per_year\": 30\n            }\n          ]\n        },\n        {\n          \"action\": \"enable\",\n          \"rule_country\": \"IN\",\n          \"role\": \"work_country\",\n          \"country_name\": \"India\",\n          \"scheme_name\": \"Payment of Gratuity Act, 1972\",\n          \"has_preset\": true,\n          \"min_service_years\": 5,\n          \"tiers\": [\n            {\n              \"up_to_years\": null,\n              \"days_per_year\": 15\n            }\n          ]\n        },\n        {\n          \"action\": \"disable\",\n          \"rule_country\": null,\n          \"role\": \"none\",\n          \"country_name\": null,\n          \"scheme_name\": \"Not entitled to end-of-service gratuity\",\n          \"has_preset\": false\n        }\n      ],\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"Local Indian contract via partner entity — no UAE end-of-service\"\n    },\n    \"calculation\": {\n      \"eligible\": false,\n      \"reason\": \"Gratuity accrual is not enabled for this employee\",\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 0,\n        \"months\": 0,\n        \"days\": 0,\n        \"total_days\": 0\n      },\n      \"service_years_decimal\": 0,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"daily_wage\": 0,\n      \"tier_breakdown\": [],\n      \"gross_amount\": 0,\n      \"cap_applied\": null,\n      \"amount\": 0,\n      \"warnings\": []\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Configure — full custom rules",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_enabled\": true,\n  \"rule_country\": \"AE\",\n  \"calculation_basis\": \"custom\",\n  \"custom_basis_amount\": 8500,\n  \"service_start_date\": \"2019-01-01\",\n  \"min_service_years\": 1,\n  \"days_in_month\": 30,\n  \"tiers\": [\n    {\n      \"up_to_years\": 5,\n      \"days_per_year\": 21\n    },\n    {\n      \"up_to_years\": null,\n      \"days_per_year\": 30\n    }\n  ],\n  \"max_years_cap\": 2,\n  \"max_amount_cap\": null,\n  \"year_rounding\": \"none\",\n  \"prorate_partial_years\": true,\n  \"exclude_unpaid_leave\": true,\n  \"notes\": \"Service carried over from the acquired entity\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "employees",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "`service_start_date` overrides the joining date — use it for transfers, acquisitions and re-hires with continuous service.\n\n`tiers`: `up_to_years: null` means 'and everything beyond'. The last tier must be open-ended."
+          },
+          "response": [
+            {
+              "name": "200 — Saved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Gratuity configuration saved\",\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": true,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"employee_config\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"custom\",\n      \"custom_basis_amount\": 8500,\n      \"service_start_date\": \"2019-01-01\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"Service carried over from the acquired entity\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 6,\n        \"months\": 4,\n        \"days\": 21,\n        \"total_days\": 2334\n      },\n      \"service_years_decimal\": 6.39,\n      \"countable_years\": 6.39,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 8500,\n      \"basis_type\": \"custom\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 283.33,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 35000\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 6.39,\n          \"years\": 1.39,\n          \"days_per_year\": 30,\n          \"days_accrued\": 41.7,\n          \"amount\": 13900\n        }\n      ],\n      \"gross_amount\": 48900,\n      \"cap_applied\": null,\n      \"amount\": 48900,\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "400 — Validation failed",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Gratuity configuration is invalid\",\n  \"errors\": [\n    {\n      \"field\": \"custom_basis_amount\",\n      \"message\": \"custom_basis_amount is required when calculation_basis is 'custom'\"\n    },\n    {\n      \"field\": \"tiers[0].days_per_year\",\n      \"message\": \"Must be a number >= 0\"\n    },\n    {\n      \"field\": \"tiers[0].up_to_years\",\n      \"message\": \"Must be a positive number, or null for the final open-ended tier\"\n    },\n    {\n      \"field\": \"days_in_month\",\n      \"message\": \"Must be between 1 and 31\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 — Country cannot be resolved",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"rule_country is required — set it explicitly, or set work_country on the employee's salary structure\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reset to country default",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "employees",
+                "{{employee_id}}"
+              ]
+            },
+            "description": "Removes the override. The employee falls back to the statutory preset — or back to `pending_decision` if they are cross-border."
+          },
+          "response": [
+            {
+              "name": "200 — Reverted",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Gratuity configuration removed — reverted to the country default\",\n  \"data\": {\n    \"employee\": {\n      \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"first_name\": \"Asha\",\n      \"last_name\": \"Rao\",\n      \"full_name\": \"Asha Rao\",\n      \"employee_code\": \"EMP1A2B3C\",\n      \"status\": \"active\",\n      \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n      \"branch_name\": \"Dubai Hills\",\n      \"joining_date\": \"2020-03-15\"\n    },\n    \"currency\": \"AED\",\n    \"config\": {\n      \"is_configured\": false,\n      \"has_high_severity_deviations\": false,\n      \"deviations\": [],\n      \"source\": \"country_preset\",\n      \"is_enabled\": true,\n      \"is_cross_border\": false,\n      \"requires_decision\": false,\n      \"pending_reason\": null,\n      \"company_country\": \"AE\",\n      \"work_country\": \"AE\",\n      \"decision_options\": null,\n      \"rule_country\": \"AE\",\n      \"country_name\": \"United Arab Emirates\",\n      \"scheme_name\": \"End of Service Benefits (Federal Decree-Law No. 33 of 2021)\",\n      \"is_preset\": true,\n      \"calculation_basis\": \"basic\",\n      \"custom_basis_amount\": null,\n      \"service_start_date\": \"2020-03-15\",\n      \"min_service_years\": 1,\n      \"days_in_month\": 30,\n      \"tiers\": [\n        {\n          \"up_to_years\": 5,\n          \"days_per_year\": 21\n        },\n        {\n          \"up_to_years\": null,\n          \"days_per_year\": 30\n        }\n      ],\n      \"max_years_cap\": 2,\n      \"max_amount_cap\": null,\n      \"year_rounding\": \"none\",\n      \"prorate_partial_years\": true,\n      \"exclude_unpaid_leave\": true,\n      \"notes\": \"21 days' basic pay per year for the first 5 years, 30 days per year thereafter. Minimum 1 year of continuous service. Pro-rated for part years. Total capped at 2 years' wages. Since the 2021 decree-law, resignation no longer reduces the entitlement.\"\n    },\n    \"calculation\": {\n      \"eligible\": true,\n      \"reason\": null,\n      \"as_of_date\": \"2026-08-05\",\n      \"service_start_date\": \"2020-03-15\",\n      \"service\": {\n        \"years\": 6,\n        \"months\": 4,\n        \"days\": 21,\n        \"total_days\": 2334\n      },\n      \"service_years_decimal\": 6.39,\n      \"countable_years\": 6.39,\n      \"unpaid_leave_days\": 0,\n      \"basis_amount\": 10000,\n      \"basis_type\": \"basic\",\n      \"days_in_month\": 30,\n      \"daily_wage\": 333.33,\n      \"tier_breakdown\": [\n        {\n          \"from_year\": 0,\n          \"to_year\": 5,\n          \"years\": 5,\n          \"days_per_year\": 21,\n          \"days_accrued\": 105,\n          \"amount\": 35000\n        },\n        {\n          \"from_year\": 5,\n          \"to_year\": 6.39,\n          \"years\": 1.39,\n          \"days_per_year\": 30,\n          \"days_accrued\": 41.7,\n          \"amount\": 13900\n        }\n      ],\n      \"gross_amount\": 48900,\n      \"cap_applied\": null,\n      \"amount\": 48900,\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "404 — Nothing to remove",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"No gratuity configuration to remove\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Company Liability Report",
+      "item": [
+        {
+          "name": "Total accrued liability",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/gratuity/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "gratuity",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "as_of_date",
+                  "value": "",
+                  "description": "YYYY-MM-DD — project the whole company forward",
+                  "disabled": true
+                },
+                {
+                  "key": "branch_id",
+                  "value": "",
+                  "description": "Scope to one branch",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "What the business owes if everyone left today.\n\n`total_accrued_by_currency` is an ARRAY — never sum across currencies, there is no FX in this system.\n\n`pending_decision_count` is the actionable number: cross-border staff nobody has decided on yet, accruing nothing in the meantime."
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"as_of_date\": \"2026-08-05\",\n    \"totals\": {\n      \"employee_count\": 9,\n      \"accrual_enabled_count\": 8,\n      \"eligible_count\": 6,\n      \"not_yet_eligible_count\": 2,\n      \"total_accrued_by_currency\": [\n        {\n          \"currency\": \"AED\",\n          \"amount\": 247200\n        }\n      ],\n      \"employees_with_warnings\": 3,\n      \"pending_decision_count\": 1,\n      \"cross_border_count\": 1,\n      \"deviating_config_count\": 2\n    },\n    \"by_branch\": [\n      {\n        \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n        \"branch_name\": \"Dubai Hills\",\n        \"employee_count\": 8,\n        \"eligible_count\": 6,\n        \"total_accrued\": 247200,\n        \"currency\": \"AED\"\n      },\n      {\n        \"branch_id\": null,\n        \"branch_name\": \"Unassigned\",\n        \"employee_count\": 1,\n        \"eligible_count\": 0,\n        \"total_accrued\": 0,\n        \"currency\": \"AED\"\n      }\n    ],\n    \"employees\": [\n      {\n        \"id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n        \"full_name\": \"Asha Rao\",\n        \"employee_code\": \"EMP1A2B3C\",\n        \"branch_id\": \"3a91c2f8-11d4-4e77-b6a3-9c8e0f2b1d55\",\n        \"branch_name\": \"Dubai Hills\",\n        \"joining_date\": \"2020-03-15\",\n        \"status\": \"active\",\n        \"currency\": \"AED\",\n        \"rule_country\": \"AE\",\n        \"is_enabled\": true,\n        \"is_configured\": false,\n        \"is_cross_border\": false,\n        \"requires_decision\": false,\n        \"has_high_severity_deviations\": false,\n        \"deviations\": [],\n        \"company_country\": \"AE\",\n        \"work_country\": \"AE\",\n        \"eligible\": true,\n        \"reason\": null,\n        \"service_years\": 6.39,\n        \"service_label\": \"6y 4m\",\n        \"basis_amount\": 10000,\n        \"accrued_amount\": 48900,\n        \"eligible_from\": null,\n        \"warnings\": []\n      },\n      {\n        \"id\": \"aa11bb22-cc33-4d44-8e55-6f7788990011\",\n        \"full_name\": \"Ravi Menon\",\n        \"employee_code\": \"EMP9Z8Y7X\",\n        \"branch_id\": null,\n        \"branch_name\": \"Unassigned\",\n        \"joining_date\": \"2022-06-01\",\n        \"status\": \"active\",\n        \"currency\": \"AED\",\n        \"rule_country\": \"AE\",\n        \"is_enabled\": false,\n        \"is_configured\": false,\n        \"is_cross_border\": true,\n        \"requires_decision\": true,\n        \"company_country\": \"AE\",\n        \"work_country\": \"IN\",\n        \"eligible\": false,\n        \"reason\": \"This employee works from IN but is employed by a AE company. Gratuity entitlement depends on their contract, so nothing accrues until an admin decides.\",\n        \"service_years\": 0,\n        \"service_label\": \"0y 0m\",\n        \"basis_amount\": 9000,\n        \"accrued_amount\": 0,\n        \"eligible_from\": null,\n        \"warnings\": []\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "403 — Not an Admin",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Access forbidden. Required role(s): Admin. Your role: Manager.\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
