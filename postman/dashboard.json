@@ -1,0 +1,299 @@
+{
+  "info": {
+    "name": "Company Admin Dashboard API",
+    "_postman_id": "7e1c9f52-3d84-4a16-9b77-2c5f0ad1e903",
+    "description": "Bird's-eye statistics for a company admin, scoped under /api/companies/:company_id/dashboard.\n\nAll endpoints are read-only. /overview answers the whole screen in one request; the rest are drill-downs.\n\nRoles: admin only, except /attendance/today and /upcoming which managers may also read.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_JWT_TOKEN_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Overview (whole dashboard in one call)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/dashboard/overview?sections=headline,today,branches,warnings,upcoming,trend&rangeDays=30&upcomingDays=30&sampleLimit=5",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "dashboard",
+            "overview"
+          ],
+          "query": [
+            {
+              "key": "branchId",
+              "value": "{{branch_id}}",
+              "description": "Scope the WHOLE dashboard to one branch (optional). Default is company-wide. The branch comparison table is the one section that never narrows.",
+              "disabled": true
+            },
+            {
+              "key": "sections",
+              "value": "headline,today,branches,warnings,upcoming,trend",
+              "description": "Comma-separated subset to compute. Dropping sections skips their queries entirely (optional, default all)"
+            },
+            {
+              "key": "rangeDays",
+              "value": "30",
+              "description": "Window for branch ratios and the trend line, 1-180 (optional, default 30)"
+            },
+            {
+              "key": "upcomingDays",
+              "value": "30",
+              "description": "How far ahead the calendar looks, 1-180 (optional, default 30)"
+            },
+            {
+              "key": "sampleLimit",
+              "value": "5",
+              "description": "Example rows per warning bucket and recent check-in list, 1-25 (optional, default 5)"
+            }
+          ]
+        },
+        "description": "Everything the dashboard renders on load:\n\n- headline  : headcount, branches, departments, new joiners, open leave requests\n- today     : present / absent / on-leave / late counts, attendance and punctuality rates, latest check-ins\n- branches  : per-branch headcount, today's presence and range ratios\n- warnings  : ranked list of things needing attention (see /warnings)\n- gratuity  : end-of-service coverage across the company\n- upcoming  : holidays, birthdays, work anniversaries, approved leaves\n- trend     : daily present / absent / leave / late series\n\n'Today' is resolved in the COMPANY's timezone, not UTC.\n\nBranch scoping: no branchId = company-wide. With branchId, headline / today / warnings / gratuity / upcoming / trend all narrow to that branch; `branches` stays company-wide with is_selected on the matching row, headline.branches stays company-wide, and headline.unassigned_employees comes back null."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Today's check-ins (with locations)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/dashboard/attendance/today?view=checked-in&page=1&limit=50",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "dashboard",
+            "attendance",
+            "today"
+          ],
+          "query": [
+            {
+              "key": "view",
+              "value": "checked-in",
+              "description": "'checked-in' (default) or 'missing' for who was expected and has not checked in"
+            },
+            {
+              "key": "branchId",
+              "value": "{{branch_id}}",
+              "description": "Filter by branch UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "departmentId",
+              "value": "",
+              "description": "Filter by department UUID (optional)",
+              "disabled": true
+            },
+            {
+              "key": "attendanceStatus",
+              "value": "late",
+              "description": "One of on-time | before-time | late (optional)",
+              "disabled": true
+            },
+            {
+              "key": "onlyOpen",
+              "value": "true",
+              "description": "Only people still checked in, no check-out yet (optional)",
+              "disabled": true
+            },
+            {
+              "key": "date",
+              "value": "",
+              "description": "Look at a specific day instead of today, YYYY-MM-DD (optional)",
+              "disabled": true
+            },
+            {
+              "key": "page",
+              "value": "1",
+              "description": "Page number (optional, default 1)"
+            },
+            {
+              "key": "limit",
+              "value": "50",
+              "description": "Rows per page, max 200 (optional, default 50)"
+            }
+          ]
+        },
+        "description": "Who checked in today, with check-in coordinates, address, selfie URL, branch, department and shift \u2014 the map / live feed widget.\n\nSet view=missing to flip it around and list who was expected today and has not checked in. That list already skips people on leave, on holiday, on a week-off, and anyone whose shift marks today as a non-working day."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Warnings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/dashboard/warnings?sampleLimit=10&expiryWindowDays=60",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "dashboard",
+            "warnings"
+          ],
+          "query": [
+            {
+              "key": "branchId",
+              "value": "{{branch_id}}",
+              "description": "Scope every bucket to one branch (optional). Pass the same branchId the overview is using so the drill-down matches the card.",
+              "disabled": true
+            },
+            {
+              "key": "severity",
+              "value": "critical",
+              "description": "Filter to one of critical | warning | info (optional)",
+              "disabled": true
+            },
+            {
+              "key": "sampleLimit",
+              "value": "10",
+              "description": "Example rows per bucket, 1-50 (optional, default 10)"
+            },
+            {
+              "key": "expiryWindowDays",
+              "value": "60",
+              "description": "How far ahead to look for expiring documents, 1-365 (optional, default 60)"
+            }
+          ]
+        },
+        "description": "Everything needing an admin's attention, ranked critical -> warning -> info, each with a count and a capped sample.\n\nBuckets:\n- missing_salary_structure   payroll cannot run\n- missing_bank_account       salary cannot be disbursed\n- gratuity_pending_decision  cross-border employee, entitlement undecided\n- gratuity_no_scheme         no statutory scheme and no rules entered\n- gratuity_disabled          accrual explicitly switched off\n- pending_leave_requests     awaiting approval, soonest start first\n- expiring_documents         visa / EID / passport expired or expiring\n- missing_checkouts          checked in on a past day, never checked out\n- missing_shift              no late marking or week-off pattern\n- missing_branch             absent from every branch-wise report\n- pending_invites            invited, never set a password\n- no_login_account           no user account linked\n- locked_accounts            locked after failed logins\n- branch_without_geofence    check-in location cannot be validated\n- branch_without_shift       no shift to assign employees to\n- no_leave_types_configured  nobody can apply for leave\n- no_holidays_this_year      holidays will be marked absent\n\nAlso returns a `gratuity` coverage block: how many employees are accruing, on a statutory default vs an explicit config, and which schemes are in use.\n\nBranch scoping: with branchId set, employee-level buckets and the two branch-level buckets narrow to that branch, and missing_branch disappears. no_leave_types_configured and no_holidays_this_year keep showing \u2014 company-level config breaks the selected branch too."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Branch-wise stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/dashboard/branches",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "dashboard",
+            "branches"
+          ],
+          "query": [
+            {
+              "key": "startDate",
+              "value": "",
+              "description": "Range start YYYY-MM-DD (optional, default 30 days back)",
+              "disabled": true
+            },
+            {
+              "key": "endDate",
+              "value": "",
+              "description": "Range end YYYY-MM-DD (optional, default today)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Branch league table plus company totals.\n\nPer branch: headcount, department count, today's checked-in / currently-in / on-leave / late / absent, and over the range \u2014 attendance, absence, leave and late ratios, total and average hours, pending leave requests, missing check-outs.\n\nRatios exclude week-offs and holidays from the denominator, so a branch with more off days is not penalised.\n\nAttendance is attributed to the employee's own branch, so headcount and attendance always add up even when someone checks in while visiting another site.\n\nThis endpoint has no branchId \u2014 it is the comparison. In /overview the selected branch is flagged with is_selected instead."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Upcoming calendar",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/dashboard/upcoming?days=30",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "dashboard",
+            "upcoming"
+          ],
+          "query": [
+            {
+              "key": "branchId",
+              "value": "{{branch_id}}",
+              "description": "Filter to one branch (optional)",
+              "disabled": true
+            },
+            {
+              "key": "days",
+              "value": "30",
+              "description": "Horizon in days, 1-180 (optional, default 30)"
+            }
+          ]
+        },
+        "description": "Holidays, birthdays, work anniversaries and approved leaves in the next N days, grouped by kind and sorted by date. Birthdays and anniversaries project the next occurrence, so 29 February resolves to 28 February in non-leap years."
+      },
+      "response": []
+    }
+  ]
+}

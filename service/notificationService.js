@@ -7,6 +7,7 @@ const {
     NotificationPreference,
 } = require("../models/notificationModel");
 const expoPushSender = require("../utils/expoPushSender");
+const { Role } = require("../enums/roles");
 const db = require("../config/database")
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +63,16 @@ const VALID_AUDIENCE_TYPES = [
 ];
 const MAX_SPECIFIC_EMPLOYEES = 500;
 
+// user_companies.role is a user_role ENUM ('0','1','2') — see 00_functions.sql.
+const VALID_TARGET_ROLES = Object.values(Role).map(String);
+
+// Admin-facing alerts (a leave request landing for approval, etc.) go out on
+// two channels. `in_app` is the durable one: it always writes a recipient row,
+// which is what the admin panel's inbox reads. `push` is best-effort on top and
+// silently writes nothing when the admin has no mobile device registered —
+// which is the normal case for someone who only ever uses the web panel.
+const ADMIN_ALERT_CHANNELS = ["in_app", "push"];
+
 const validateAudience = (audience) => {
     if (!audience || !audience.type) return "audience.type is required";
     if (!VALID_AUDIENCE_TYPES.includes(audience.type)) {
@@ -84,6 +95,13 @@ const validateAudience = (audience) => {
             break;
         case "role_based":
             if (!audience.role) return "audience.role is required when audience.type is 'role_based'";
+            // target_role is compared against user_companies.role, a user_role
+            // ENUM of '0' | '1' | '2'. A friendly string like "admin" parses
+            // fine, stores fine, and then matches nobody — the notification
+            // reports success and reaches zero people. Reject it here.
+            if (!VALID_TARGET_ROLES.includes(String(audience.role))) {
+                return `audience.role must be one of: ${VALID_TARGET_ROLES.join(", ")} ("0" admin | "1" manager | "2" employee)`;
+            }
             break;
         case "department":
             if (!audience.department_id) return "audience.department_id is required when audience.type is 'department'";
@@ -120,6 +138,42 @@ const buildAudienceRuleRows = (notification_id, audience) => {
         // Optional: drop one employee from an otherwise broad audience.
         exclude_employee_id: audience.exclude_employee_id || null,
     }];
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: dispatch the same event on several channels.
+//
+// Each channel is an independent notification row (they resolve different
+// templates and have separate delivery semantics). One channel failing must
+// not lose the others — a missing push template should never swallow the
+// in_app copy the admin panel depends on.
+// ─────────────────────────────────────────────────────────────────────────────
+const sendOnChannels = async (payload, channels) => {
+    const byChannel = {};
+
+    for (const channel of channels) {
+        try {
+            byChannel[channel] = await NotificationService.send({ ...payload, channel });
+        } catch (error) {
+            byChannel[channel] = { success: false, message: error.message };
+        }
+    }
+
+    const delivered = Object.entries(byChannel)
+        .filter(([, r]) => r.success && !r.skipped)
+        .map(([channel]) => channel);
+
+    return {
+        success: delivered.length > 0,
+        message: delivered.length
+            ? undefined
+            : `No channel accepted the notification: ${Object.entries(byChannel)
+                .map(([c, r]) => `${c}: ${r.message || "failed"}`)
+                .join("; ")}`,
+        delivered_channels: delivered,
+        channels: byChannel,
+    };
 };
 
 
@@ -724,17 +778,16 @@ const NotificationService = {
     // LEAVE: Notify admin/manager when employee submits a leave request
     // ─────────────────────────────────────────────────────────────────────────
     async notifyLeaveRequest({ company_id, branch_id, leave_id, employee_name, employee_code, leave_type, start_date, end_date }) {
-        return NotificationService.send({
+        return sendOnChannels({
             company_id,
             branch_id,
             notification_type: "leave_request",
-            channel: "push",
             template_code: "leave_request_submitted",
             template_variables: { employee_name, employee_code, leave_type, start_date, end_date, leave_id },
             entity_type: "leave_requests",
             entity_id: leave_id,
-            audience: { type: "role_based", role: "admin" },
-        });
+            audience: { type: "role_based", role: String(Role.ADMIN) },
+        }, ADMIN_ALERT_CHANNELS);
     },
 
 
@@ -792,17 +845,16 @@ const NotificationService = {
     // HOLIDAY REQUEST: Notify admin when employee requests a holiday
     // ─────────────────────────────────────────────────────────────────────────
     async notifyHolidayRequest({ company_id, branch_id, request_id, employee_name, holiday_date }) {
-        return NotificationService.send({
+        return sendOnChannels({
             company_id,
             branch_id,
             notification_type: "holiday_request",
-            channel: "push",
             template_code: "holiday_request_submitted",
             template_variables: { employee_name, holiday_date, request_id },
             entity_type: "holiday_requests",
             entity_id: request_id,
-            audience: { type: "role_based", role: "admin" },
-        });
+            audience: { type: "role_based", role: String(Role.ADMIN) },
+        }, ADMIN_ALERT_CHANNELS);
     },
 
 

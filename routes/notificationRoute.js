@@ -40,6 +40,22 @@ router.post("/holiday-request", verifyToken, validateTenant, isManager, Notifica
 
 
 // ─────────────────────────────────────────────
+// ADMIN INBOX (Admin — always the caller's own)
+//
+// Narrowed to the notification types an admin acts on, deduplicated across
+// devices, and joined to each entity's current state. The employee is taken
+// from the token, never the URL. Mounted BEFORE /inbox/:employee_id so
+// "admin" is not swallowed as an employee id.
+// ─────────────────────────────────────────────
+const AdminInboxController = require("../controller/adminInboxController");
+
+router.get("/admin/inbox", verifyToken, validateTenant, isAdmin, AdminInboxController.getInbox);
+router.get("/admin/inbox/unread-count", verifyToken, validateTenant, isAdmin, AdminInboxController.getUnreadCount);
+router.patch("/admin/inbox/read-all", verifyToken, validateTenant, isAdmin, AdminInboxController.markAllRead);
+router.patch("/admin/inbox/:notification_id/read", verifyToken, validateTenant, isAdmin, AdminInboxController.markRead);
+
+
+// ─────────────────────────────────────────────
 // INBOX (Employee — self-service)
 // ─────────────────────────────────────────────
 router.get("/inbox/:employee_id", verifyToken, validateTenant, isEmployee, NotificationController.getInbox);
