@@ -787,6 +787,215 @@ const NotificationPreference = {
 };
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminInbox
+// The company admin's own inbox, narrowed to the notification types an admin
+// is expected to act on.
+//
+// Two things it does that the raw employee inbox does not:
+//
+//   1. Deduplicates. notification_recipients holds one row per DEVICE per
+//      channel, so an admin with a phone and the web panel would otherwise see
+//      the same leave request three times. Everything is grouped by
+//      notification_id and read state is OR-ed across those rows.
+//
+//   2. Resolves the entity's CURRENT state. A notification is a snapshot of a
+//      moment; the leave request behind it may already be approved. Showing a
+//      stale "approve this" card is the main way an inbox loses trust, so the
+//      live status is joined in and `is_actionable` says whether anything is
+//      still open.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// One row per notification for this admin, with read state folded across
+// device/channel duplicates.
+const MINE_CTE = `
+    mine AS (
+        SELECT
+            nr.notification_id,
+            BOOL_OR(nr.read_at IS NOT NULL)  AS is_read,
+            MAX(nr.read_at)                  AS read_at,
+            MIN(nr.created_at)               AS received_at,
+            ARRAY_AGG(DISTINCT nr.channel)   AS channels
+        FROM notification_recipients nr
+        WHERE nr.employee_id = $1
+          AND nr.company_id  = $2
+          AND nr.status     <> 'cancelled'
+        GROUP BY nr.notification_id
+    )`;
+
+// Joins the notification to whatever entity triggered it. Only leave requests
+// carry an actionable state today; add further entity joins here as more admin
+// approval flows appear.
+const ENRICHED_CTE = `
+    enriched AS (
+        SELECT
+            n.id                    AS notification_id,
+            n.notification_type,
+            n.title,
+            n.body,
+            n.deep_link,
+            n.entity_type,
+            n.entity_id,
+            n.branch_id             AS notification_branch_id,
+            m.is_read,
+            m.read_at,
+            m.received_at,
+            m.channels,
+
+            lr.status               AS leave_status,
+            -- DATE columns must cross the wire as plain 'YYYY-MM-DD' strings.
+            -- Left raw, node-pg builds a JS Date at LOCAL midnight and
+            -- JSON.stringify then emits it as UTC — in Asia/Dubai an 18 Aug
+            -- leave serialises as "2026-08-17T20:00:00Z" and the UI shows the
+            -- wrong day.
+            TO_CHAR(lr.from_date, 'YYYY-MM-DD') AS leave_from_date,
+            TO_CHAR(lr.to_date,   'YYYY-MM-DD') AS leave_to_date,
+            lr.total_days           AS leave_total_days,
+            lr.is_half_day          AS leave_is_half_day,
+            lr.reason               AS leave_reason,
+            lt.leave_name,
+
+            req.id                  AS requester_id,
+            req.employee_code       AS requester_code,
+            req.first_name          AS requester_first_name,
+            req.last_name           AS requester_last_name,
+            b.id                    AS branch_id,
+            b.branch_name,
+
+            -- Still open, i.e. the admin can act on it right now
+            COALESCE(
+                n.entity_type = 'leave_requests' AND lr.status = 'pending',
+                FALSE
+            )                       AS is_actionable,
+
+            -- The entity vanished (deleted/cancelled) but the notification
+            -- remains — the card must not offer an action against nothing.
+            COALESCE(
+                n.entity_type = 'leave_requests' AND lr.id IS NULL,
+                FALSE
+            )                       AS is_orphaned
+        FROM mine m
+        JOIN notifications n
+          ON n.id = m.notification_id
+         AND n.deleted_at IS NULL
+        LEFT JOIN leave_requests lr
+          ON n.entity_type = 'leave_requests'
+         AND lr.id = n.entity_id
+         AND lr.deleted_at IS NULL
+        LEFT JOIN leave_types lt ON lt.id  = lr.leave_type_id
+        LEFT JOIN employees   req ON req.id = lr.employee_id
+        LEFT JOIN branches    b   ON b.id  = COALESCE(lr.branch_id, n.branch_id)
+        WHERE n.notification_type = ANY($3::text[])
+    )`;
+
+const AdminInbox = {
+
+    /**
+     * The admin's inbox page.
+     *
+     * Ordering is deliberate: anything still awaiting a decision floats to the
+     * top, then unread, then newest. An admin opening this should see what
+     * they must do before what they merely missed.
+     */
+    async list(employee_id, company_id, {
+        types,
+        unread_only = false,
+        actionable_only = false,
+        notification_type = null,
+        limit = 30,
+        offset = 0,
+    } = {}) {
+        const result = await db.query(
+            `WITH ${MINE_CTE},
+             ${ENRICHED_CTE}
+             SELECT e.*, (COUNT(*) OVER ())::int AS total_count
+             FROM enriched e
+             WHERE ($4::boolean IS NOT TRUE OR e.is_read       = FALSE)
+               AND ($5::boolean IS NOT TRUE OR e.is_actionable = TRUE)
+               AND ($6::text    IS NULL     OR e.notification_type = $6::text)
+             ORDER BY e.is_actionable DESC, e.is_read ASC, e.received_at DESC
+             LIMIT $7 OFFSET $8`,
+            [employee_id, company_id, types, unread_only, actionable_only, notification_type, limit, offset]
+        );
+        return result.rows;
+    },
+
+    /** Badge counts — total, unread, and how much is still awaiting a decision. */
+    async counts(employee_id, company_id, types) {
+        const result = await db.query(
+            `WITH ${MINE_CTE},
+             ${ENRICHED_CTE}
+             SELECT
+                (SELECT COUNT(*)::int FROM enriched)                                     AS total,
+                (SELECT (COUNT(*) FILTER (WHERE NOT is_read))::int FROM enriched)        AS unread,
+                (SELECT (COUNT(*) FILTER (WHERE is_actionable))::int FROM enriched)      AS actionable,
+                (SELECT (COUNT(*) FILTER (WHERE is_actionable AND NOT is_read))::int
+                   FROM enriched)                                                        AS unread_actionable,
+                (SELECT COALESCE(
+                            JSONB_AGG(t ORDER BY t->>'notification_type'),
+                            '[]'::jsonb)
+                   FROM (
+                        SELECT JSONB_BUILD_OBJECT(
+                                   'notification_type', notification_type,
+                                   'total',      COUNT(*)::int,
+                                   'unread',     (COUNT(*) FILTER (WHERE NOT is_read))::int,
+                                   'actionable', (COUNT(*) FILTER (WHERE is_actionable))::int
+                               ) AS t
+                        FROM enriched
+                        GROUP BY notification_type
+                   ) grouped)                                                            AS by_type`,
+            [employee_id, company_id, types]
+        );
+        return result.rows[0];
+    },
+
+    /**
+     * Mark one notification read for this admin.
+     *
+     * Updates every device/channel row behind it, so the item cannot come back
+     * unread on another device. Returns how many rows were touched — 0 means
+     * the notification was not theirs (or was already read).
+     */
+    async markRead(employee_id, company_id, notification_id) {
+        const result = await db.query(
+            `UPDATE notification_recipients
+                SET status  = 'read',
+                    read_at = COALESCE(read_at, NOW())
+              WHERE employee_id     = $1
+                AND company_id      = $2
+                AND notification_id = $3
+                AND status         <> 'cancelled'
+              RETURNING id`,
+            [employee_id, company_id, notification_id]
+        );
+        return result.rowCount;
+    },
+
+    /** Mark every admin-relevant notification read. Scoped to `types` so it
+     *  never silently clears the admin's own employee notifications. */
+    async markAllRead(employee_id, company_id, types) {
+        const result = await db.query(
+            `UPDATE notification_recipients nr
+                SET status  = 'read',
+                    read_at = COALESCE(nr.read_at, NOW())
+              WHERE nr.employee_id = $1
+                AND nr.company_id  = $2
+                AND nr.read_at    IS NULL
+                AND nr.status     <> 'cancelled'
+                AND EXISTS (
+                    SELECT 1 FROM notifications n
+                    WHERE n.id = nr.notification_id
+                      AND n.deleted_at IS NULL
+                      AND n.notification_type = ANY($3::text[])
+                )
+              RETURNING nr.notification_id`,
+            [employee_id, company_id, types]
+        );
+        return result.rowCount;
+    },
+};
+
+
 module.exports = {
     NotificationTemplate,
     Notification,
@@ -794,4 +1003,5 @@ module.exports = {
     NotificationRecipient,
     EmployeeDeviceToken,
     NotificationPreference,
+    AdminInbox,
 };

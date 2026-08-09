@@ -159,6 +159,9 @@ app.use("/api/companies/:company_id/payroll-breakdown", payrollBreakdownRouter);
 const activityLogRoutes = require("./routes/activityLogRoute");
 app.use("/api/companies/:company_id/activity-logs", activityLogRoutes);
 
+const dashboardRoutes = require("./routes/dashboardRoute");
+app.use("/api/companies/:company_id/dashboard", dashboardRoutes);
+
 
 
 // 404 handler
