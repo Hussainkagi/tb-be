@@ -68,6 +68,25 @@ const PayrollAdjustment = {
         return result.rows;
     },
 
+    /**
+     * Adjustments for many payrolls in one query, keyed by payroll_id.
+     * Payslip generation needs the line items for every employee in a run —
+     * fetching them one payroll at a time is a query per employee.
+     */
+    async getAllByPayrollIds(payroll_ids) {
+        if (!payroll_ids || payroll_ids.length === 0) return {};
+        const result = await db.query(
+            `SELECT * FROM payroll_adjustments
+             WHERE payroll_id = ANY($1::uuid[])
+             ORDER BY payroll_id, created_at ASC`,
+            [payroll_ids]
+        );
+        return result.rows.reduce((acc, row) => {
+            (acc[row.payroll_id] = acc[row.payroll_id] || []).push(row);
+            return acc;
+        }, {});
+    },
+
     async getAllByPayrollAndType(payroll_id, adjustment_type) {
         const result = await db.query(
             `SELECT * FROM payroll_adjustments

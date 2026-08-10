@@ -1,48 +1,69 @@
+const db = require("../config/database");
 const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
 const PayrollModel = require("../models/payrollModel");
+const { computeFinalFigures } = require("./payrollService");
+const { EDITABLE_STATUSES } = require("../enums/payrollFlow");
 
 // ============================================================
 // CONSTANTS
 // ============================================================
 const VALID_ADJUSTMENT_TYPES = ["bonus", "deduction", "commission", "penalty", "loan"];
 
-// After an adjustment is added/removed, recalculate the payroll
-// totals that depend on adjustments (bonus_amount, deduction_amount, net_salary)
-async function syncPayrollTotals(payroll_id) {
-    const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll_id);
+/**
+ * Adjustments may only be touched while the payroll is still the maker's to
+ * change. Without this, someone could quietly add a bonus to a run that had
+ * already been approved — the approver's sign-off would no longer describe
+ * what actually gets paid, which defeats maker-checker entirely.
+ */
+async function assertPayrollEditable(payroll_id) {
+    const payroll = await PayrollModel.findById(payroll_id);
+    if (!payroll) return { error: { success: false, message: "Payroll record not found" } };
 
-    let adjustmentBonusTotal = 0;
-    let adjustmentDeductionTotal = 0;
+    if (["paid", "cancelled"].includes(payroll.payroll_status)) {
+        return {
+            error: {
+                success: false,
+                message: `Cannot change adjustments on a '${payroll.payroll_status}' payroll`,
+            },
+        };
+    }
 
-    for (const adj of adjustments) {
-        const amount = parseFloat(adj.amount) || 0;
-        if (["bonus", "commission"].includes(adj.adjustment_type)) {
-            adjustmentBonusTotal += amount;
-        } else if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
-            adjustmentDeductionTotal += amount;
+    if (payroll.payroll_run_id) {
+        const run = await db.query(
+            `SELECT status FROM payroll_runs WHERE id = $1`,
+            [payroll.payroll_run_id]
+        ).then((r) => r.rows[0]);
+
+        if (run && !EDITABLE_STATUSES.includes(run.status)) {
+            return {
+                error: {
+                    success: false,
+                    message: `This payroll run is '${run.status}' and is locked for edits.`
+                        + (run.status === "pending_approval"
+                            ? " Ask the approver to reject it first."
+                            : ""),
+                },
+            };
         }
     }
 
+    return { payroll };
+}
+
+// After an adjustment is added/removed, recalculate the payroll totals that
+// depend on adjustments. The formula itself lives in payrollService so the
+// stored net salary always matches the previews shown elsewhere.
+async function syncPayrollTotals(payroll_id) {
     const payroll = await PayrollModel.findById(payroll_id);
-    const grossSalary = parseFloat(payroll.gross_salary) || 0;
-    const overtimeAmount = parseFloat(payroll.overtime_amount) || 0;
-    const taxAmount = parseFloat(payroll.tax_amount) || 0;
+    if (!payroll) return;
 
-    // ✅ Use base_deduction_amount (attendance-based), not the already-overwritten deduction_amount
-    const baseDeduction = parseFloat(payroll.base_deduction_amount) || 0;
-    const baseBonusAmount = parseFloat(payroll.base_bonus_amount) || 0;
-
-    const totalDeduction = parseFloat((baseDeduction + adjustmentDeductionTotal).toFixed(2));
-    const totalBonus = parseFloat((baseBonusAmount + adjustmentBonusTotal).toFixed(2));
-
-    const netSalary = parseFloat(
-        (grossSalary + overtimeAmount + totalBonus - totalDeduction - taxAmount).toFixed(2)
-    );
+    const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll_id);
+    const figures = computeFinalFigures(payroll, adjustments);
 
     await PayrollModel.update(payroll_id, {
-        bonus_amount: totalBonus,
-        deduction_amount: totalDeduction,
-        net_salary: netSalary,
+        bonus_amount: figures.bonus_amount,
+        deduction_amount: figures.deduction_amount,
+        net_salary: figures.net_salary,
     });
 }
 
@@ -71,17 +92,9 @@ const PayrollAdjustmentService = {
                 return { success: false, message: "Amount must be a positive number" };
             }
 
-            // Ensure payroll exists and is editable
-            const payroll = await PayrollModel.findById(payroll_id);
-            if (!payroll) {
-                return { success: false, message: "Payroll record not found" };
-            }
-            if (payroll.payroll_status === "paid") {
-                return { success: false, message: "Cannot add adjustments to a paid payroll" };
-            }
-            if (payroll.payroll_status === "cancelled") {
-                return { success: false, message: "Cannot add adjustments to a cancelled payroll" };
-            }
+            // Ensure the payroll — and the run it belongs to — still accept edits
+            const { error } = await assertPayrollEditable(payroll_id);
+            if (error) return error;
 
             const result = await PayrollAdjustmentModel.create({
                 payroll_id,
@@ -114,16 +127,8 @@ const PayrollAdjustmentService = {
                 return { success: false, message: "Adjustments array is required and cannot be empty" };
             }
 
-            const payroll = await PayrollModel.findById(payroll_id);
-            if (!payroll) {
-                return { success: false, message: "Payroll record not found" };
-            }
-            if (["paid", "cancelled"].includes(payroll.payroll_status)) {
-                return {
-                    success: false,
-                    message: `Cannot add adjustments to a ${payroll.payroll_status} payroll`,
-                };
-            }
+            const { error } = await assertPayrollEditable(payroll_id);
+            if (error) return error;
 
             // Validate each item
             for (let i = 0; i < adjustments.length; i++) {
@@ -218,14 +223,8 @@ const PayrollAdjustmentService = {
                 return { success: false, message: "Adjustment not found" };
             }
 
-            // Check payroll editability
-            const payroll = await PayrollModel.findById(adjustment.payroll_id);
-            if (["paid", "cancelled"].includes(payroll.payroll_status)) {
-                return {
-                    success: false,
-                    message: `Cannot update adjustments on a ${payroll.payroll_status} payroll`,
-                };
-            }
+            const { error } = await assertPayrollEditable(adjustment.payroll_id);
+            if (error) return error;
 
             // Validate type if being changed
             if (data.adjustment_type && !VALID_ADJUSTMENT_TYPES.includes(data.adjustment_type)) {
@@ -268,13 +267,8 @@ const PayrollAdjustmentService = {
                 return { success: false, message: "Adjustment not found" };
             }
 
-            const payroll = await PayrollModel.findById(adjustment.payroll_id);
-            if (["paid", "cancelled"].includes(payroll.payroll_status)) {
-                return {
-                    success: false,
-                    message: `Cannot delete adjustments from a ${payroll.payroll_status} payroll`,
-                };
-            }
+            const { error } = await assertPayrollEditable(adjustment.payroll_id);
+            if (error) return error;
 
             const result = await PayrollAdjustmentModel.delete(id);
 
@@ -296,16 +290,8 @@ const PayrollAdjustmentService = {
     // ----------------------------------------------------------
     async deleteAllAdjustments(payroll_id) {
         try {
-            const payroll = await PayrollModel.findById(payroll_id);
-            if (!payroll) {
-                return { success: false, message: "Payroll record not found" };
-            }
-            if (["paid", "cancelled"].includes(payroll.payroll_status)) {
-                return {
-                    success: false,
-                    message: `Cannot clear adjustments from a ${payroll.payroll_status} payroll`,
-                };
-            }
+            const { error } = await assertPayrollEditable(payroll_id);
+            if (error) return error;
 
             const result = await PayrollAdjustmentModel.deleteAllByPayroll(payroll_id);
 

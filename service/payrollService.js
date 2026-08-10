@@ -1,274 +1,10 @@
 const db = require("../config/database");
 const PayrollModel = require("../models/payrollModel");
 const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
-const PayslipModel = require("../models/payslipModel");
 const PayrollDailyLineModel = require("../models/payrollDailyLineModel");
-const { buildShift, buildDailyBreakdown } = require("./payrollEngineService");
-
-// ============================================================
-// UTILITY: Generate unique payslip number
-// Format: PSL-{YYYYMM}-{employee_code}-{random4}
-// ============================================================
-function generatePayslipNumber(employee_code, periodStart) {
-    const yyyymm = periodStart.toISOString().slice(0, 7).replace("-", "");
-    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `PSL-${yyyymm}-${employee_code}-${rand}`;
-}
-
-// ============================================================
-// UTILITY: Get all calendar dates between two dates (inclusive)
-// ============================================================
-function getDateRange(start, end) {
-    const dates = [];
-    const current = new Date(start);
-    const endDate = new Date(end);
-    while (current <= endDate) {
-        dates.push(current.toISOString().split("T")[0]);
-        current.setDate(current.getDate() + 1);
-    }
-    return dates;
-}
-
-// ============================================================
-// UTILITY: Sandwich Leave Calculator
-// Rule: if an absent/unpaid-leave day is both PRECEDED and FOLLOWED
-//       by another absent/unpaid-leave (with only holidays/week-offs/
-//       comp-offs in between), those middle non-working days are also
-//       counted as deductible days.
-//
-// @param {string[]} allDates        - all calendar dates in the period
-// @param {Set<string>} deductDates  - dates already marked for deduction
-// @param {Set<string>} middleDates  - holiday / week-off / comp-off dates
-// @returns {Set<string>}            - additional dates to deduct (sandwich days)
-// ============================================================
-function calculateSandwichLeaves(allDates, deductDates, middleDates) {
-    const sandwichDates = new Set();
-
-    // Walk through runs of consecutive "middle" dates
-    let i = 0;
-    while (i < allDates.length) {
-        const date = allDates[i];
-
-        if (!middleDates.has(date)) {
-            i++;
-            continue;
-        }
-
-        // Found start of a middle-day run — collect the entire run
-        const runStart = i;
-        while (i < allDates.length && middleDates.has(allDates[i])) {
-            i++;
-        }
-        const runEnd = i - 1; // inclusive
-
-        // Check the day BEFORE the run
-        const beforeDate = runStart > 0 ? allDates[runStart - 1] : null;
-        // Check the day AFTER the run
-        const afterDate = runEnd + 1 < allDates.length ? allDates[runEnd + 1] : null;
-
-        const beforeIsDeductible = beforeDate && deductDates.has(beforeDate);
-        const afterIsDeductible = afterDate && deductDates.has(afterDate);
-
-        if (beforeIsDeductible && afterIsDeductible) {
-            for (let j = runStart; j <= runEnd; j++) {
-                sandwichDates.add(allDates[j]);
-            }
-        }
-    }
-
-    return sandwichDates;
-}
-
-// ============================================================
-// CORE ENGINE: Calculate payroll for a single employee
-// ============================================================
-async function calculateEmployeePayroll(employee, period, shift, salaryStructure, attendanceMap, approvedLeaves, holidaySet) {
-    const allDates = getDateRange(period.start_date, period.end_date);
-    const totalWorkingDays = allDates.length;
-
-    // ----------------------------------------------------------
-    // STEP 1 — SALARY STRUCTURE
-    // ----------------------------------------------------------
-    const basicSalary = parseFloat(salaryStructure.actual_salary) || 0;
-    const housingAllowance = parseFloat(salaryStructure.housing_allowance) || 0;
-    const transportAllowance = parseFloat(salaryStructure.transport_allowance) || 0;
-    const otherAllowance = parseFloat(salaryStructure.other_allowance) || 0;
-    const grossSalary = basicSalary + housingAllowance + transportAllowance + otherAllowance;
-    const perDaySalary = totalWorkingDays > 0 ? grossSalary / totalWorkingDays : 0;
-
-    // ----------------------------------------------------------
-    // STEP 2 — BUILD SHIFT WEEK-OFF SET
-    //   shift stores monday…sunday booleans (true = working day)
-    //   week-off = day NOT in working days
-    // ----------------------------------------------------------
-    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    const weekOffDayNumbers = new Set(
-        [0, 1, 2, 3, 4, 5, 6].filter((d) => !shift[dayNames[d]])
-    );
-
-    // ----------------------------------------------------------
-    // STEP 3 — BUILD APPROVED LEAVE LOOKUP
-    //   leave maps: date → { is_paid, is_half_day }
-    // ----------------------------------------------------------
-    const leaveDateMap = {};
-    for (const leave of approvedLeaves) {
-        const leaveDates = getDateRange(leave.from_date, leave.to_date);
-        for (const d of leaveDates) {
-            leaveDateMap[d] = {
-                is_paid: leave.is_paid,
-                is_half_day: leave.is_half_day,
-            };
-        }
-    }
-
-    // ----------------------------------------------------------
-    // STEP 4 — CLASSIFY EACH DATE
-    // ----------------------------------------------------------
-    let totalPresentDays = 0;
-    let totalAbsentDays = 0;
-    let totalPaidLeaveDays = 0;
-    let totalUnpaidLeaveDays = 0;
-    let totalHolidays = 0;
-    let overtimeHours = 0;
-
-    const deductDates = new Set();  // dates that incur salary deduction
-    const middleDates = new Set();  // holiday / week-off / comp-off dates (potential sandwich)
-
-    for (const date of allDates) {
-        const jsDate = new Date(date);
-        const dayOfWeek = jsDate.getDay(); // 0=Sun…6=Sat
-        const isWeekOff = weekOffDayNumbers.has(dayOfWeek);
-        const isHoliday = holidaySet.has(date);
-        const attendance = attendanceMap[date];
-        const leaveInfo = leaveDateMap[date];
-
-        // ── Holiday ──────────────────────────────────────────
-        if (isHoliday) {
-            totalHolidays++;
-            middleDates.add(date);
-            continue;
-        }
-
-        // ── Week-off ─────────────────────────────────────────
-        if (isWeekOff) {
-            middleDates.add(date);
-            continue;
-        }
-
-        // ── Approved Leave ────────────────────────────────────
-        if (leaveInfo) {
-            if (leaveInfo.is_paid) {
-                totalPaidLeaveDays += leaveInfo.is_half_day ? 0.5 : 1;
-                // paid leave → no deduction, counts as present
-                totalPresentDays += leaveInfo.is_half_day ? 0.5 : 1;
-            } else {
-                const days = leaveInfo.is_half_day ? 0.5 : 1;
-                totalUnpaidLeaveDays += days;
-                deductDates.add(date);
-            }
-            continue;
-        }
-
-        // ── Attendance-based ──────────────────────────────────
-        if (!attendance) {
-            // No attendance record → absent
-            totalAbsentDays++;
-            deductDates.add(date);
-            continue;
-        }
-
-        const status = attendance.status;
-
-        if (status === "checked-in" || status === "checked-out") {
-            const totalHoursWorked = parseFloat(attendance.total_hours) || 0;
-            const halfDayThreshold = parseFloat(shift.half_day_hours) || 0;
-
-            if (halfDayThreshold > 0 && totalHoursWorked < halfDayThreshold) {
-                // Half day
-                totalPresentDays += 0.5;
-                deductDates.add(date); // deduct half day
-            } else {
-                totalPresentDays++;
-            }
-
-            // Overtime
-            if (salaryStructure.overtime_enabled) {
-                const fullDayHours = parseFloat(shift.working_hours) || 8;
-                const ot = Math.max(0, totalHoursWorked - fullDayHours);
-                overtimeHours += ot;
-            }
-        } else if (status === "absent") {
-            totalAbsentDays++;
-            deductDates.add(date);
-        } else if (status === "comp-off") {
-            middleDates.add(date);
-        } else if (status === "leave") {
-            // Leave status without a matching leave_request → treat as unpaid absent
-            totalAbsentDays++;
-            deductDates.add(date);
-        }
-        // holiday / week-off on attendance record — already handled above
-    }
-
-    // ----------------------------------------------------------
-    // STEP 5 — SANDWICH LEAVE
-    // ----------------------------------------------------------
-    const sandwichDates = calculateSandwichLeaves(allDates, deductDates, middleDates);
-    for (const d of sandwichDates) {
-        if (!deductDates.has(d)) {
-            deductDates.add(d);
-            totalUnpaidLeaveDays += 1; // sandwich days are effectively unpaid deductions
-        }
-    }
-
-    // ----------------------------------------------------------
-    // STEP 6 — DEDUCTION
-    // ----------------------------------------------------------
-    // Half-day deductions: a date in deductDates where totalPresentDays was +0.5
-    // We deduct exactly 0.5 per-day salary for half days captured above.
-    // For full deduct dates the full per_day_salary is deducted.
-    // We track precise deduction by summing per-type deductions.
-
-    let deductionDays = 0;
-    for (const date of deductDates) {
-        const leaveInfo = leaveDateMap[date];
-        if (leaveInfo && leaveInfo.is_half_day) {
-            deductionDays += 0.5;
-        } else {
-            deductionDays += 1;
-        }
-    }
-
-    const deductionAmount = parseFloat((perDaySalary * deductionDays).toFixed(2));
-
-    // ----------------------------------------------------------
-    // STEP 7 — OVERTIME AMOUNT
-    // ----------------------------------------------------------
-    const overtimeRatePerHour = parseFloat(salaryStructure.overtime_rate_per_hour) || 0;
-    const overtimeAmount = parseFloat((overtimeHours * overtimeRatePerHour).toFixed(2));
-
-    // ----------------------------------------------------------
-    // STEP 8 — NET SALARY
-    // ----------------------------------------------------------
-    const netSalary = parseFloat(
-        (grossSalary - deductionAmount + overtimeAmount).toFixed(2)
-    );
-
-    return {
-        actual_salary: basicSalary,
-        gross_salary: parseFloat(grossSalary.toFixed(2)),
-        total_working_days: totalWorkingDays,
-        total_present_days: parseFloat(totalPresentDays.toFixed(2)),
-        total_absent_days: totalAbsentDays,
-        total_paid_leave_days: parseFloat(totalPaidLeaveDays.toFixed(2)),
-        total_unpaid_leave_days: parseFloat(totalUnpaidLeaveDays.toFixed(2)),
-        total_holidays: totalHolidays,
-        overtime_hours: parseFloat(overtimeHours.toFixed(2)),
-        overtime_amount: overtimeAmount,
-        deduction_amount: deductionAmount,
-        net_salary: netSalary,
-    };
-}
+const PayrollSettingsModel = require("../models/payrollSettingsModel");
+const { buildShift, buildDailyBreakdown, getDateRange } = require("./payrollEngineService");
+const { PAYROLL_STATUS, PAYROLL_STATUS_TRANSITIONS } = require("../enums/payrollFlow");
 
 // ============================================================
 // DATA FETCHERS — isolated DB queries used by the engine
@@ -295,7 +31,10 @@ async function fetchActiveEmployees(company_id, branch_id = null) {
         branchClause = `AND e.branch_id = $2`;
     }
     const result = await db.query(
-        `SELECT e.*, s.shift_name, s.working_hours, s.half_day_hours,
+        `SELECT e.*,
+                e.joining_date::date::text AS joining_date,
+                e.exit_date::date::text    AS exit_date,
+                s.shift_name, s.working_hours, s.half_day_hours,
                 s.monday, s.tuesday, s.wednesday, s.thursday,
                 s.friday, s.saturday, s.sunday
          FROM employees e
@@ -356,8 +95,7 @@ async function fetchHolidaysForPeriod(company_id, branch_id, startDate, endDate)
     // Expand multi-day holidays into individual date strings
     const holidaySet = new Set();
     for (const row of result.rows) {
-        const dates = getDateRange(row.holiday_start_date, row.holiday_end_date);
-        dates.forEach((d) => holidaySet.add(d));
+        getDateRange(row.holiday_start_date, row.holiday_end_date).forEach((d) => holidaySet.add(d));
     }
     return holidaySet;
 }
@@ -365,7 +103,7 @@ async function fetchHolidaysForPeriod(company_id, branch_id, startDate, endDate)
 async function fetchApprovedLeaves(employee_id, startDate, endDate) {
     const result = await db.query(
         `SELECT lr.from_date, lr.to_date, lr.total_days, lr.is_half_day,
-                lt.is_paid
+                lt.is_paid, lt.leave_name
          FROM leave_requests lr
          JOIN leave_types lt ON lr.leave_type_id = lt.id
          WHERE lr.employee_id = $1
@@ -379,18 +117,96 @@ async function fetchApprovedLeaves(employee_id, startDate, endDate) {
 }
 
 // ============================================================
+// Adjustment totals — one definition, used everywhere.
+// Previously three call sites each rolled their own, and one of
+// them classified only 'bonus'/'deduction', silently dropping
+// commissions, penalties and loans from the paid amount.
+// ============================================================
+const DEDUCTION_TYPES = ["deduction", "penalty", "loan"];
+const BONUS_TYPES = ["bonus", "commission"];
+
+function totalsFromAdjustments(adjustments = []) {
+    let bonus = 0;
+    let deduction = 0;
+    for (const adj of adjustments) {
+        const amount = parseFloat(adj.amount) || 0;
+        if (DEDUCTION_TYPES.includes(adj.adjustment_type)) deduction += amount;
+        else if (BONUS_TYPES.includes(adj.adjustment_type)) bonus += amount;
+    }
+    return {
+        bonus: parseFloat(bonus.toFixed(2)),
+        deduction: parseFloat(deduction.toFixed(2)),
+    };
+}
+
+/**
+ * The single net-salary formula. base_* hold the attendance-derived figures
+ * frozen at generation time; adjustments layer on top. Recomputing from the
+ * base each time means editing an adjustment can never compound.
+ */
+function computeFinalFigures(payroll, adjustments) {
+    const { bonus, deduction } = totalsFromAdjustments(adjustments);
+
+    const totalDeduction = (parseFloat(payroll.base_deduction_amount) || 0) + deduction;
+    const totalBonus = (parseFloat(payroll.base_bonus_amount) || 0) + bonus;
+    const netSalary =
+        (parseFloat(payroll.gross_salary) || 0)
+        - totalDeduction
+        + (parseFloat(payroll.overtime_amount) || 0)
+        + totalBonus
+        - (parseFloat(payroll.tax_amount) || 0);
+
+    return {
+        adjustment_bonus: bonus,
+        adjustment_deduction: deduction,
+        bonus_amount: parseFloat(totalBonus.toFixed(2)),
+        deduction_amount: parseFloat(totalDeduction.toFixed(2)),
+        net_salary: parseFloat(netSalary.toFixed(2)),
+    };
+}
+
+async function withPreview(payroll) {
+    const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll.id);
+    const figures = computeFinalFigures(payroll, adjustments);
+    return {
+        ...payroll,
+        adjustments,
+        preview_bonus: figures.bonus_amount,
+        preview_deduction: figures.deduction_amount,
+        preview_net_salary: figures.net_salary,
+    };
+}
+
+// ============================================================
 // MAIN SERVICE
 // ============================================================
 const PayrollService = {
 
     // ----------------------------------------------------------
-    // Generate payroll for a single branch OR entire company
+    // Generate payroll for a single branch OR entire company.
+    //
+    // Runs inside one transaction: either every employee lands or
+    // none do, so a crash halfway can never leave a period with a
+    // partial, silently-wrong payroll.
+    //
+    // @param {boolean} data.force  regenerate employees that already
+    //                              have a payroll for this period
     // ----------------------------------------------------------
     async generatePayroll(data) {
-        const { company_id, payroll_period_id, branch_id = null, user_id } = data;
+        const {
+            company_id,
+            payroll_period_id,
+            branch_id = null,
+            user_id,
+            payroll_run_id = null,
+            force = false,
+        } = data;
+
         const generated = [];
         const skipped = [];
         const errors = [];
+
+        const client = await db.getClient();
 
         try {
             // ── STEP 1: Fetch payroll period ──────────────────
@@ -405,39 +221,43 @@ const PayrollService = {
                 return { success: false, message: "Payroll period is locked and cannot be processed" };
             }
 
-            // ── STEP 2: Fetch active employees ────────────────
-            const employees = await fetchActiveEmployees(company_id, branch_id);
+            // ── STEP 2: Fetch active employees + company rules ─
+            const [employees, settings] = await Promise.all([
+                fetchActiveEmployees(company_id, branch_id),
+                PayrollSettingsModel.getOrCreate(company_id),
+            ]);
             if (employees.length === 0) {
                 return { success: false, message: "No active employees found" };
             }
 
-            // ── Mark period as processing ─────────────────────
-            await db.query(
-                `UPDATE payroll_periods SET status = 'processing' WHERE id = $1`,
-                [payroll_period_id]
-            );
+            await client.query("BEGIN");
 
-            // ── STEP 3-8: Process each employee ───────────────
+            // ── STEP 3: Process each employee ─────────────────
             for (const employee of employees) {
                 try {
-                    // Skip if payroll already exists for this employee/period
                     const existing = await PayrollModel.findByEmployeeAndPeriod(
                         employee.id,
                         payroll_period_id
                     );
-                    if (existing) {
+
+                    if (existing && !force) {
                         skipped.push({
                             employee_id: employee.id,
+                            employee_code: employee.employee_code,
                             reason: "Payroll already exists",
                         });
                         continue;
                     }
+                    if (existing && ["paid", "cancelled"].includes(existing.payroll_status)) {
+                        skipped.push({
+                            employee_id: employee.id,
+                            employee_code: employee.employee_code,
+                            reason: `Cannot regenerate a '${existing.payroll_status}' payroll`,
+                        });
+                        continue;
+                    }
 
-                    // Fetch salary structure
-                    const salaryStructure = await fetchSalaryStructure(
-                        employee.id,
-                        period.start_date
-                    );
+                    const salaryStructure = await fetchSalaryStructure(employee.id, period.start_date);
                     if (!salaryStructure) {
                         skipped.push({
                             employee_id: employee.id,
@@ -447,44 +267,47 @@ const PayrollService = {
                         continue;
                     }
 
-                    // Shift — embedded in employee row from JOIN
                     const shift = buildShift(employee);
                     const empBranchId = employee.branch_id;
 
-                    // Fetch attendance, holidays, leaves in parallel
                     const [attendanceMap, holidaySet, approvedLeaves] = await Promise.all([
                         fetchAttendanceForPeriod(employee.id, period.start_date, period.end_date),
                         fetchHolidaysForPeriod(company_id, empBranchId, period.start_date, period.end_date),
                         fetchApprovedLeaves(employee.id, period.start_date, period.end_date),
                     ]);
 
-                    // Calculate payroll figures + day-by-day breakdown
-                    // using the SAME engine the breakdown service reads from —
-                    // this is what keeps the list view and breakdown view in sync.
-                    const breakdown = buildDailyBreakdown(
+                    // The same engine the breakdown page reads from — this is
+                    // what keeps the list view and the day-by-day view in sync.
+                    const breakdown = buildDailyBreakdown({
                         period,
                         shift,
                         salaryStructure,
                         attendanceMap,
                         approvedLeaves,
-                        holidaySet
-                    );
+                        holidaySet,
+                        employee,
+                        settings,
+                    });
                     const calc = breakdown.summary;
 
-                    // Create payroll record
-                    const payroll = await PayrollModel.create({
+                    const payload = {
                         company_id,
                         payroll_period_id,
+                        payroll_run_id,
                         employee_id: employee.id,
                         branch_id: empBranchId,
                         actual_salary: calc.actual_salary,
                         gross_salary: calc.gross_salary,
+                        per_day_salary: calc.per_day_salary,
                         total_working_days: calc.total_working_days,
                         total_present_days: calc.total_present_days,
                         total_absent_days: calc.total_absent_days,
                         total_paid_leave_days: calc.total_paid_leave_days,
                         total_unpaid_leave_days: calc.total_unpaid_leave_days,
                         total_holidays: calc.total_holidays,
+                        sandwich_days: calc.sandwich_days,
+                        payable_days: calc.payable_days,
+                        not_employed_days: calc.not_employed_days,
                         overtime_hours: calc.overtime_hours,
                         overtime_amount: calc.overtime_amount,
                         deduction_amount: calc.deduction_amount,
@@ -493,13 +316,34 @@ const PayrollService = {
                         base_bonus_amount: 0,
                         bonus_amount: 0,
                         tax_amount: 0,
-                        payroll_status: "processed",
-                    });
+                        payroll_status: PAYROLL_STATUS.PROCESSED,
+                    };
 
-                    // Freeze the day-by-day snapshot so the breakdown page
-                    // always matches what was generated here, regardless of
-                    // later attendance/leave/holiday edits.
-                    await PayrollDailyLineModel.bulkInsert(payroll.id, breakdown.daily);
+                    let payroll;
+                    if (existing) {
+                        // Regenerate in place so adjustments keyed to this
+                        // payroll_id survive; only the computed figures change.
+                        payroll = await PayrollModel.update(existing.id, payload, client);
+                        await PayrollDailyLineModel.deleteByPayrollId(existing.id, client);
+                    } else {
+                        payroll = await PayrollModel.create(payload, client);
+                    }
+
+                    // Freeze the day-by-day snapshot so the breakdown always
+                    // matches what was generated here, regardless of later
+                    // attendance / leave / holiday edits.
+                    await PayrollDailyLineModel.bulkInsert(payroll.id, breakdown.daily, client);
+
+                    // Re-apply any existing adjustments to the fresh base.
+                    const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll.id);
+                    if (adjustments.length > 0) {
+                        const figures = computeFinalFigures(payroll, adjustments);
+                        payroll = await PayrollModel.update(payroll.id, {
+                            bonus_amount: figures.bonus_amount,
+                            deduction_amount: figures.deduction_amount,
+                            net_salary: figures.net_salary,
+                        }, client);
+                    }
 
                     generated.push(payroll);
                 } catch (empError) {
@@ -511,13 +355,23 @@ const PayrollService = {
                 }
             }
 
-            // ── Mark period as completed ──────────────────────
-            await db.query(
-                `UPDATE payroll_periods 
-     SET status = 'processing', processed_at = NOW(), processed_by = $2 
-     WHERE id = $1`,
+            if (generated.length === 0 && errors.length > 0) {
+                await client.query("ROLLBACK");
+                return {
+                    success: false,
+                    message: "Payroll generation failed for every employee",
+                    data: { skipped, errors },
+                };
+            }
+
+            await client.query(
+                `UPDATE payroll_periods
+                 SET status = 'processing', processed_at = NOW(), processed_by = $2
+                 WHERE id = $1`,
                 [payroll_period_id, user_id]
             );
+
+            await client.query("COMMIT");
 
             return {
                 success: true,
@@ -532,59 +386,28 @@ const PayrollService = {
                 },
             };
         } catch (error) {
+            await client.query("ROLLBACK").catch(() => { });
             return { success: false, message: error.message, error };
+        } finally {
+            client.release();
         }
     },
 
     // ----------------------------------------------------------
-    // Get payroll by ID (with full details)
+    // Get payroll by ID (with adjustments + live preview figures)
     // ----------------------------------------------------------
-    // getPayrollById — add the same preview fields
     async getPayrollById(id) {
         try {
             const result = await PayrollModel.findById(id);
             if (!result) {
                 return { success: false, message: "Payroll record not found" };
             }
-            const adjustments = await PayrollAdjustmentModel.getAllByPayroll(id);
-
-            let bonusTotal = 0;
-            let deductionTotal = 0;
-            for (const adj of adjustments) {
-                if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
-                    deductionTotal += parseFloat(adj.amount);
-                } else if (["bonus", "commission"].includes(adj.adjustment_type)) {
-                    bonusTotal += parseFloat(adj.amount);
-                }
-            }
-
-            const preview_deduction = (parseFloat(result.base_deduction_amount) || 0) + deductionTotal;
-            const preview_bonus = (parseFloat(result.base_bonus_amount) || 0) + bonusTotal;
-            const preview_net_salary = parseFloat((
-                (parseFloat(result.gross_salary) || 0)
-                - preview_deduction
-                + (parseFloat(result.overtime_amount) || 0)
-                + preview_bonus
-            ).toFixed(2));
-
-            return {
-                success: true,
-                data: {
-                    ...result,
-                    adjustments,
-                    preview_bonus,
-                    preview_deduction,
-                    preview_net_salary,
-                }
-            };
+            return { success: true, data: await withPreview(result) };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
     },
 
-    // ----------------------------------------------------------
-    // Get all payrolls for a company
-    // ----------------------------------------------------------
     async getPayrollsByCompany(company_id) {
         try {
             const result = await PayrollModel.getAllByCompany(company_id);
@@ -594,47 +417,16 @@ const PayrollService = {
         }
     },
 
-    // ----------------------------------------------------------
-    // Get all payrolls for a specific period
-    // ----------------------------------------------------------
     async getPayrollsByPeriod(company_id, payroll_period_id) {
         try {
             const result = await PayrollModel.getAllByPeriod(company_id, payroll_period_id);
-            // For each payroll, fetch adjustments and recalculate deduction/bonus/net_salary for preview
-            const payrolls = await Promise.all(result.map(async (payroll) => {
-                const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll.id);
-                let bonusTotal = 0;
-                let deductionTotal = 0;
-                for (const adj of adjustments) {
-                    if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
-                        deductionTotal += parseFloat(adj.amount);
-                    } else if (["bonus", "commission"].includes(adj.adjustment_type)) {
-                        bonusTotal += parseFloat(adj.amount);
-                    }
-                }
-                const preview_deduction = (parseFloat(payroll.base_deduction_amount) || 0) + deductionTotal;
-                const preview_bonus = (parseFloat(payroll.base_bonus_amount) || 0) + bonusTotal;
-                const preview_net_salary = (parseFloat(payroll.gross_salary) || 0)
-                    - preview_deduction
-                    + (parseFloat(payroll.overtime_amount) || 0)
-                    + preview_bonus;
-                return {
-                    ...payroll,
-                    adjustments,
-                    preview_bonus,
-                    preview_deduction,
-                    preview_net_salary,
-                };
-            }));
+            const payrolls = await Promise.all(result.map(withPreview));
             return { success: true, data: payrolls };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
     },
 
-    // ----------------------------------------------------------
-    // Get all payrolls for a specific employee
-    // ----------------------------------------------------------
     async getPayrollsByEmployee(employee_id) {
         try {
             const result = await PayrollModel.getAllByEmployee(employee_id);
@@ -645,11 +437,41 @@ const PayrollService = {
     },
 
     // ----------------------------------------------------------
-    // Update payroll status  (draft → processed → paid → cancelled)
+    // Recalculate stored figures for one payroll from its frozen
+    // base + current adjustments. Called whenever an adjustment
+    // is added, changed or removed, so the stored net_salary is
+    // always the number that will actually be paid.
+    // ----------------------------------------------------------
+    async recalculatePayroll(id) {
+        try {
+            const payroll = await PayrollModel.findById(id);
+            if (!payroll) return { success: false, message: "Payroll record not found" };
+            if (["paid", "cancelled"].includes(payroll.payroll_status)) {
+                return { success: false, message: `Cannot recalculate a '${payroll.payroll_status}' payroll` };
+            }
+
+            const adjustments = await PayrollAdjustmentModel.getAllByPayroll(id);
+            const figures = computeFinalFigures(payroll, adjustments);
+
+            const updated = await PayrollModel.update(id, {
+                bonus_amount: figures.bonus_amount,
+                deduction_amount: figures.deduction_amount,
+                net_salary: figures.net_salary,
+            });
+
+            return { success: true, message: "Payroll recalculated", data: updated };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    // ----------------------------------------------------------
+    // Update payroll status
+    // draft → processed → approved → paid   (or cancelled/rejected)
     // ----------------------------------------------------------
     async updatePayrollStatus(id, payroll_status) {
         try {
-            const VALID_STATUSES = ["draft", "processed", "paid", "cancelled"];
+            const VALID_STATUSES = Object.values(PAYROLL_STATUS);
             if (!VALID_STATUSES.includes(payroll_status)) {
                 return {
                     success: false,
@@ -662,44 +484,30 @@ const PayrollService = {
                 return { success: false, message: "Payroll record not found" };
             }
 
-            // Enforce status transition rules
-            const transitions = {
-                draft: ["processed", "cancelled"],
-                processed: ["paid", "cancelled"],
-                paid: [],         // terminal state
-                cancelled: [],    // terminal state
-            };
-            if (!transitions[payroll.payroll_status].includes(payroll_status)) {
+            // An unknown current status used to crash here with
+            // "Cannot read properties of undefined (reading 'includes')".
+            const allowed = PAYROLL_STATUS_TRANSITIONS[payroll.payroll_status] || [];
+            if (!allowed.includes(payroll_status)) {
                 return {
                     success: false,
-                    message: `Cannot transition from '${payroll.payroll_status}' to '${payroll_status}'`,
+                    message: `Cannot transition from '${payroll.payroll_status}' to '${payroll_status}'`
+                        + `. Allowed: ${allowed.length ? allowed.join(", ") : "none"}`,
                 };
             }
 
             let result;
-            if (payroll_status === "paid") {
-                // Fetch all adjustments for this payroll
+            if (payroll_status === PAYROLL_STATUS.PAID) {
+                // Freeze the final figures at the moment of payment.
                 const adjustments = await PayrollAdjustmentModel.getAllByPayroll(id);
-                let bonusTotal = 0;
-                let deductionTotal = 0;
-                for (const adj of adjustments) {
-                    if (adj.adjustment_type === 'bonus') {
-                        bonusTotal += parseFloat(adj.amount);
-                    } else if (adj.adjustment_type === 'deduction') {
-                        deductionTotal += parseFloat(adj.amount);
-                    }
-                }
+                const figures = computeFinalFigures(payroll, adjustments);
 
-                // Update payroll record with adjustments
-                const updatedPayroll = await PayrollModel.update(id, {
-                    bonus_amount: bonusTotal,
-                    deduction_amount: (parseFloat(payroll.deduction_amount) || 0) + deductionTotal,
-                    net_salary: (parseFloat(payroll.net_salary) || 0) + bonusTotal - deductionTotal
+                result = await PayrollModel.update(id, {
+                    bonus_amount: figures.bonus_amount,
+                    deduction_amount: figures.deduction_amount,
+                    net_salary: figures.net_salary,
+                    payroll_status: PAYROLL_STATUS.PAID,
+                    paid_at: new Date(),
                 });
-
-                // Mark as paid
-                result = await PayrollModel.markAsPaid(id);
-                result = { ...updatedPayroll, ...result };
             } else {
                 result = await PayrollModel.updateStatus(id, payroll_status);
             }
@@ -737,11 +545,18 @@ const PayrollService = {
     },
 
     // ----------------------------------------------------------
-    // Bulk update payroll status for an entire period
+    // Bulk status change across a whole period.
+    //
+    // Kept for direct/API use. The run orchestrator
+    // (payrollRunService) is the path the UI should take, because
+    // it also records who approved what.
     // ----------------------------------------------------------
-    async bulkUpdatePayrollStatus(company_id, payroll_period_id, payroll_status) {
+    async bulkUpdatePayrollStatus(company_id, payroll_period_id, payroll_status, options = {}) {
+        const client = options.client || null;
+        const runner = client || db;
+
         try {
-            const VALID_STATUSES = ["approved", "paid", "cancelled"];
+            const VALID_STATUSES = ["approved", "rejected", "paid", "cancelled"];
             if (!VALID_STATUSES.includes(payroll_status)) {
                 return {
                     success: false,
@@ -749,7 +564,6 @@ const PayrollService = {
                 };
             }
 
-            // Validate period belongs to company
             const period = await fetchPayrollPeriod(payroll_period_id);
             if (!period) {
                 return { success: false, message: "Payroll period not found" };
@@ -758,90 +572,56 @@ const PayrollService = {
                 return { success: false, message: "Payroll period does not belong to this company" };
             }
 
-            // Define valid transitions for bulk update
             const validFromStatuses = {
-                approved: ["processed"],        // can only approve processed payrolls
-                paid: ["processed", "approved"], // can pay processed or approved
-                cancelled: ["processed", "approved"], // can cancel processed or approved
+                approved: ["processed", "rejected"],
+                rejected: ["processed", "approved"],
+                paid: ["approved"],                 // payment now requires approval first
+                cancelled: ["draft", "processed", "approved", "rejected"],
             };
 
-            // Fetch all payrolls for this period
             const payrolls = await PayrollModel.getAllByPeriod(company_id, payroll_period_id);
             if (payrolls.length === 0) {
                 return { success: false, message: "No payrolls found for this period" };
             }
 
-            // Split into eligible and skipped
-            const eligible = payrolls.filter(p =>
+            const eligible = payrolls.filter((p) =>
                 validFromStatuses[payroll_status].includes(p.payroll_status)
             );
-            const skipped = payrolls.filter(p =>
+            const skipped = payrolls.filter((p) =>
                 !validFromStatuses[payroll_status].includes(p.payroll_status)
             );
 
             if (eligible.length === 0) {
                 return {
                     success: false,
-                    message: `No payrolls eligible for '${payroll_status}'. All are either already ${payroll_status} or in a terminal state.`,
+                    message: `No payrolls eligible for '${payroll_status}'.`
+                        + ` Allowed source statuses: ${validFromStatuses[payroll_status].join(", ")}.`,
                 };
             }
-
-            const eligibleIds = eligible.map(p => p.id);
 
             let updatedRows;
 
             if (payroll_status === "paid") {
-                // For paid: apply adjustments to each payroll and mark paid_at
-                const results = await Promise.all(eligible.map(async (payroll) => {
+                updatedRows = await Promise.all(eligible.map(async (payroll) => {
                     const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payroll.id);
-                    let bonusTotal = 0;
-                    let deductionTotal = 0;
-                    for (const adj of adjustments) {
-                        if (["bonus", "commission"].includes(adj.adjustment_type)) {
-                            bonusTotal += parseFloat(adj.amount);
-                        } else if (["deduction", "penalty", "loan"].includes(adj.adjustment_type)) {
-                            deductionTotal += parseFloat(adj.amount);
-                        }
-                    }
-                    const baseDeduction = parseFloat(payroll.base_deduction_amount) || 0;
-                    const baseBonus = parseFloat(payroll.base_bonus_amount) || 0;
-                    const totalDeduction = baseDeduction + deductionTotal;
-                    const totalBonus = baseBonus + bonusTotal;
-                    const netSalary = parseFloat((
-                        (parseFloat(payroll.gross_salary) || 0)
-                        + (parseFloat(payroll.overtime_amount) || 0)
-                        + totalBonus
-                        - totalDeduction
-                        - (parseFloat(payroll.tax_amount) || 0)
-                    ).toFixed(2));
-
+                    const figures = computeFinalFigures(payroll, adjustments);
                     return PayrollModel.update(payroll.id, {
-                        bonus_amount: parseFloat(totalBonus.toFixed(2)),
-                        deduction_amount: parseFloat(totalDeduction.toFixed(2)),
-                        net_salary: netSalary,
+                        bonus_amount: figures.bonus_amount,
+                        deduction_amount: figures.deduction_amount,
+                        net_salary: figures.net_salary,
                         payroll_status: "paid",
                         paid_at: new Date(),
-                    });
+                    }, runner);
                 }));
-                updatedRows = results;
             } else {
-                // For approved/cancelled: simple bulk status update
-                const result = await db.query(
+                const result = await runner.query(
                     `UPDATE payrolls
-                 SET payroll_status = $1, updated_at = NOW()
-                 WHERE id = ANY($2::uuid[])
-                 RETURNING *`,
-                    [payroll_status, eligibleIds]
+                        SET payroll_status = $1, updated_at = NOW()
+                      WHERE id = ANY($2::uuid[])
+                      RETURNING *`,
+                    [payroll_status, eligible.map((p) => p.id)]
                 );
                 updatedRows = result.rows;
-            }
-
-            // Update payroll period status to match if all paid
-            if (payroll_status === "paid") {
-                await db.query(
-                    `UPDATE payroll_periods SET status = 'locked' WHERE id = $1`,
-                    [payroll_period_id]
-                );
             }
 
             return {
@@ -850,7 +630,8 @@ const PayrollService = {
                 data: {
                     updated_count: updatedRows.length,
                     skipped_count: skipped.length,
-                    skipped: skipped.map(p => ({
+                    skipped: skipped.map((p) => ({
+                        payroll_id: p.id,
                         employee_id: p.employee_id,
                         employee_code: p.employee_code,
                         current_status: p.payroll_status,
@@ -866,3 +647,6 @@ const PayrollService = {
 };
 
 module.exports = PayrollService;
+module.exports.computeFinalFigures = computeFinalFigures;
+module.exports.totalsFromAdjustments = totalsFromAdjustments;
+module.exports.fetchPayrollPeriod = fetchPayrollPeriod;
