@@ -168,9 +168,133 @@ const welcomeTemplate = ({ first_name, company_name, username, login_url }) => `
 </div>
 `;
 
+// ── 5. PAYSLIP ────────────────────────────────────────────────────────────────
+// Adjustments are itemised rather than folded into a single "deductions"
+// figure. A lump sum with no explanation is the number employees query.
+const ADJUSTMENT_LABELS = {
+  bonus: "Bonus",
+  commission: "Commission",
+  deduction: "Deduction",
+  penalty: "Penalty",
+  loan: "Loan repayment",
+};
+
+const EARNING_TYPES = ["bonus", "commission"];
+
+const payslipTemplate = ({
+  first_name,
+  company_name,
+  period_name,
+  period_start,
+  period_end,
+  payslip_number,
+  currency = "",
+  gross_salary,
+  overtime_amount = 0,
+  overtime_hours = 0,
+  base_deduction_amount = 0,
+  tax_amount = 0,
+  net_salary,
+  adjustments = [],
+  pdf_url,
+}) => {
+  const money = (v) =>
+    `${currency ? currency + " " : ""}${Number(v || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+  const cell = (align = "left", extra = "") =>
+    `padding:9px 0; font-size:14px; text-align:${align}; border-bottom:1px solid #ececec; ${extra}`;
+
+  const sectionHead = (label) => `
+    <tr>
+      <td colspan="2" style="padding:18px 0 6px; font-size:12px; font-weight:bold;
+                             letter-spacing:0.6px; text-transform:uppercase; color:#8a8a9a;">
+        ${label}
+      </td>
+    </tr>`;
+
+  const line = (label, value, note = "") => `
+    <tr>
+      <td style="${cell("left", "color:#555;")}">
+        ${label}${note ? `<div style="color:#999; font-size:12px; margin-top:2px;">${note}</div>` : ""}
+      </td>
+      <td style="${cell("right", "color:#1a1a2e; white-space:nowrap;")}">${value}</td>
+    </tr>`;
+
+  const earnings = adjustments.filter((a) => EARNING_TYPES.includes(a.adjustment_type));
+  const deductions = adjustments.filter((a) => !EARNING_TYPES.includes(a.adjustment_type));
+
+  const adjustmentRows = (items) =>
+    items
+      .map((a) =>
+        line(
+          a.title || ADJUSTMENT_LABELS[a.adjustment_type] || a.adjustment_type,
+          money(a.amount),
+          [ADJUSTMENT_LABELS[a.adjustment_type], a.remarks].filter(Boolean).join(" · ")
+        )
+      )
+      .join("");
+
+  return `
+<div style="${baseStyle}">
+  ${header(company_name)}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">Your payslip for ${period_name}</h2>
+    <p style="color:#444; font-size:15px; line-height:1.6;">
+      Hi ${first_name || "there"}, your salary for
+      <strong>${period_start} to ${period_end}</strong> has been processed and paid.
+    </p>
+
+    <p style="color:#888; font-size:13px; margin:0 0 8px;">
+      Payslip <strong style="color:#555;">${payslip_number}</strong>
+    </p>
+
+    <table style="width:100%; border-collapse:collapse; margin:8px 0 24px;">
+      ${sectionHead("Earnings")}
+      ${line("Gross salary", money(gross_salary))}
+      ${Number(overtime_amount) > 0
+      ? line("Overtime", money(overtime_amount), `${Number(overtime_hours).toFixed(2)} hours`)
+      : ""}
+      ${adjustmentRows(earnings)}
+
+      ${sectionHead("Deductions")}
+      ${Number(base_deduction_amount) > 0
+      ? line("Attendance & leave", money(base_deduction_amount), "Absences, unpaid leave and half days")
+      : ""}
+      ${Number(tax_amount) > 0 ? line("Tax", money(tax_amount)) : ""}
+      ${adjustmentRows(deductions)}
+      ${deductions.length === 0 && Number(base_deduction_amount) === 0 && Number(tax_amount) === 0
+      ? line("No deductions", money(0))
+      : ""}
+
+      <tr>
+        <td style="padding:16px 0 0; font-size:16px; font-weight:bold; color:#1a1a2e;">Net pay</td>
+        <td style="padding:16px 0 0; font-size:20px; font-weight:bold; text-align:right;
+                   color:#1a1a2e; white-space:nowrap;">${money(net_salary)}</td>
+      </tr>
+    </table>
+
+    ${pdf_url
+      ? button("Download payslip", pdf_url)
+      : `<p style="color:#666; font-size:14px;">
+           A day-by-day breakdown is available on your employee portal.
+         </p>`}
+
+    <p style="color:#888; font-size:13px; margin-top:24px;">
+      If anything looks wrong, contact your HR team before the next pay cycle.
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+};
+
 module.exports = {
   registrationOtpTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
-  welcomeTemplate
+  welcomeTemplate,
+  payslipTemplate
 };

@@ -6,13 +6,23 @@ const PayrollController = {
         try {
             const result = await PayrollService.generatePayroll({
                 ...req.body,
-                user_id: req.user.id,
+                user_id: req.user.user_id,
             });
             if (result.success) {
                 return res.status(200).json(result);
             } else {
                 return res.status(400).json(result);
             }
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    /** Re-derive stored figures from the frozen base + current adjustments. */
+    async recalculate(req, res) {
+        try {
+            const result = await PayrollService.recalculatePayroll(req.params.id);
+            return res.status(result.success ? 200 : 400).json(result);
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }

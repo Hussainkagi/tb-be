@@ -1,12 +1,16 @@
 const PayrollPeriodModel = require("../models/payrollPeriodModel");
 const PayrollModel = require("../models/payrollModel");
 
-const VALID_STATUSES = ["open", "processing", "completed", "locked"];
+// Period status mirrors the payroll run that drives it. The run is the
+// authority — payrollRunService moves the period along as each step lands.
+const VALID_STATUSES = ["open", "processing", "pending_approval", "approved", "completed", "locked"];
 
 // Allowed transitions: what status can move to what
 const STATUS_TRANSITIONS = {
     open: ["processing"],
-    processing: ["completed", "open"],
+    processing: ["pending_approval", "approved", "completed", "open"],
+    pending_approval: ["approved", "processing"],   // rejection drops back to processing
+    approved: ["completed", "processing"],
     completed: ["locked"],
     locked: [],
 };

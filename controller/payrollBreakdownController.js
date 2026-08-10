@@ -28,6 +28,15 @@ const PayrollBreakdownController = {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }
     },
+    /** Repair the frozen daily-line snapshot for one payroll. */
+    async rebuild(req, res) {
+        try {
+            const result = await PayrollBreakdownService.rebuildBreakdown(req.params.id);
+            return res.status(result.success ? 200 : 400).json(result);
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
 };
 
 module.exports = PayrollBreakdownController;

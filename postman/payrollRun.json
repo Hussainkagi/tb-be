@@ -1,0 +1,1413 @@
+{
+  "info": {
+    "name": "Payroll Run — Continuous Flow & Maker-Checker",
+    "_postman_id": "payroll-run-collection-v1",
+    "description": "The payroll module as **one resumable flow** with maker-checker approval.\n\n**Base URL:** `{{base_url}}/api/companies/{{company_id}}/payroll-runs`\n\n---\n\n### The flow\n\n```\nsetup → generate → adjust → review → approval → payment → payslips → done\n        └────────── MAKER ──────────┘ └──── CHECKER ────┘ └─ MAKER ─┘\n```\n\nA **payroll run** owns the whole journey. It carries `current_step` and `status`, and every transition is validated and written to an audit trail (`payroll_run_events`).\n\n### Resuming\n\n`GET /resume` is the entry point. A user who walks away mid-flow is dropped back exactly where they left off — never track the step client-side.\n\n### Maker-checker\n\nWhoever prepared a run **cannot approve it** (`403`). Submitting locks the run for edits so an approval always describes what actually gets paid. Rejection needs a reason and re-opens the run at `adjust`.\n\nWaivable per company via `allow_self_approval` / `require_approval` in payroll settings.\n\n### Run statuses\n\n| Status | Editable by maker | Checker action |\n|---|---|---|\n| `draft` / `in_progress` | ✅ | — |\n| `pending_approval` | ❌ locked | Approve / Reject |\n| `rejected` | ✅ re-opened | — |\n| `approved` | ❌ | Pay |\n| `paid` | payslips only | Complete |\n| `completed` / `cancelled` | ❌ terminal | — |\n\n### Roles\n- `isManager` (Admin **or** Manager) — maker actions\n- `isAdmin` — checker actions, and settings\n\nEvery response is `{ success, message, data }`. On failure, `message` is written to be shown to an end user verbatim.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "uuid-company-001",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "your-jwt-token-here",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "uuid-run-001",
+      "type": "string"
+    },
+    {
+      "key": "payroll_period_id",
+      "value": "uuid-period-001",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "uuid-branch-001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Resume — start here",
+      "item": [
+        {
+          "name": "Resume — unfinished runs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/resume?branch_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "resume"
+              ],
+              "query": [
+                {
+                  "key": "branch_id",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "**Role:** `isManager` (Admin or Manager)\n\n**Call this first, on every payroll page load.**\n\nReturns every run that is neither `completed` nor `cancelled`, plus `active_run` — the one the UI should open by default (most recent period first).\n\nThis is what makes the flow resumable: a user who closed the tab halfway through Adjustments comes back to exactly that step. Never store the current step client-side; `progress.current_step` here is the truth.\n\nOptional `?branch_id=` narrows to one branch."
+          },
+          "response": [
+            {
+              "name": "200 OK — an unfinished run exists",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": {\n    \"active_run\": {\n      \"id\": \"uuid-run-001\",\n      \"company_id\": \"uuid-company-001\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"branch_id\": null,\n      \"run_number\": \"PR-202608-A4K2\",\n      \"current_step\": \"adjust\",\n      \"status\": \"in_progress\",\n      \"employee_count\": 42,\n      \"total_gross\": \"134000.00\",\n      \"total_deductions\": \"6200.00\",\n      \"total_overtime\": \"2100.00\",\n      \"total_bonus\": \"1500.00\",\n      \"total_net\": \"129400.00\",\n      \"created_by\": \"uuid-user-maker\",\n      \"generated_by\": \"uuid-user-maker\",\n      \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null,\n      \"payslips_generated_at\": null,\n      \"payslips_sent_at\": null,\n      \"completed_at\": null,\n      \"period_name\": \"August 2026\",\n      \"start_date\": \"2026-08-01\",\n      \"end_date\": \"2026-08-31\",\n      \"period_status\": \"processing\",\n      \"branch_name\": null,\n      \"created_by_name\": \"Sara Khan\",\n      \"progress\": {\n        \"current_step\": \"adjust\",\n        \"current_step_label\": \"Adjustments\",\n        \"current_step_index\": 2,\n        \"steps\": [\n          {\n            \"key\": \"setup\",\n            \"label\": \"Period Setup\",\n            \"index\": 0,\n            \"is_complete\": true,\n            \"is_current\": false,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"generate\",\n            \"label\": \"Generate Payroll\",\n            \"index\": 1,\n            \"is_complete\": true,\n            \"is_current\": false,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"adjust\",\n            \"label\": \"Adjustments\",\n            \"index\": 2,\n            \"is_complete\": false,\n            \"is_current\": true,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"review\",\n            \"label\": \"Review\",\n            \"index\": 3,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"approval\",\n            \"label\": \"Approval\",\n            \"index\": 4,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"payment\",\n            \"label\": \"Payment\",\n            \"index\": 5,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"payslips\",\n            \"label\": \"Payslips\",\n            \"index\": 6,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"done\",\n            \"label\": \"Completed\",\n            \"index\": 7,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          }\n        ],\n        \"counts\": {\n          \"payrolls\": 42,\n          \"by_status\": {\n            \"processed\": 42\n          },\n          \"adjustments\": 7,\n          \"payslips\": 0,\n          \"payslips_emailed\": 0,\n          \"payslips_email_failed\": 0\n        }\n      },\n      \"maker_checker\": {\n        \"prepared_by\": \"Sara Khan\",\n        \"submitted_by\": null,\n        \"submitted_at\": null,\n        \"approved_by\": null,\n        \"approved_at\": null,\n        \"rejected_by\": null,\n        \"rejected_at\": null,\n        \"rejection_reason\": null,\n        \"paid_by\": null,\n        \"paid_at\": null\n      }\n    },\n    \"runs\": [\n      {\n        \"id\": \"uuid-run-001\",\n        \"company_id\": \"uuid-company-001\",\n        \"payroll_period_id\": \"uuid-period-001\",\n        \"branch_id\": null,\n        \"run_number\": \"PR-202608-A4K2\",\n        \"current_step\": \"adjust\",\n        \"status\": \"in_progress\",\n        \"employee_count\": 42,\n        \"total_gross\": \"134000.00\",\n        \"total_deductions\": \"6200.00\",\n        \"total_overtime\": \"2100.00\",\n        \"total_bonus\": \"1500.00\",\n        \"total_net\": \"129400.00\",\n        \"created_by\": \"uuid-user-maker\",\n        \"generated_by\": \"uuid-user-maker\",\n        \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n        \"submitted_by\": null,\n        \"submitted_at\": null,\n        \"approved_by\": null,\n        \"approved_at\": null,\n        \"rejected_by\": null,\n        \"rejected_at\": null,\n        \"rejection_reason\": null,\n        \"paid_by\": null,\n        \"paid_at\": null,\n        \"payslips_generated_at\": null,\n        \"payslips_sent_at\": null,\n        \"completed_at\": null,\n        \"period_name\": \"August 2026\",\n        \"start_date\": \"2026-08-01\",\n        \"end_date\": \"2026-08-31\",\n        \"period_status\": \"processing\",\n        \"branch_name\": null,\n        \"created_by_name\": \"Sara Khan\",\n        \"progress\": {\n          \"current_step\": \"adjust\",\n          \"current_step_label\": \"Adjustments\",\n          \"current_step_index\": 2,\n          \"steps\": [\n            {\n              \"key\": \"setup\",\n              \"label\": \"Period Setup\",\n              \"index\": 0,\n              \"is_complete\": true,\n              \"is_current\": false,\n              \"is_reachable\": true\n            },\n            {\n              \"key\": \"generate\",\n              \"label\": \"Generate Payroll\",\n              \"index\": 1,\n              \"is_complete\": true,\n              \"is_current\": false,\n              \"is_reachable\": true\n            },\n            {\n              \"key\": \"adjust\",\n              \"label\": \"Adjustments\",\n              \"index\": 2,\n              \"is_complete\": false,\n              \"is_current\": true,\n              \"is_reachable\": true\n            },\n            {\n              \"key\": \"review\",\n              \"label\": \"Review\",\n              \"index\": 3,\n              \"is_complete\": false,\n              \"is_current\": false,\n              \"is_reachable\": false\n            },\n            {\n              \"key\": \"approval\",\n              \"label\": \"Approval\",\n              \"index\": 4,\n              \"is_complete\": false,\n              \"is_current\": false,\n              \"is_reachable\": false\n            },\n            {\n              \"key\": \"payment\",\n              \"label\": \"Payment\",\n              \"index\": 5,\n              \"is_complete\": false,\n              \"is_current\": false,\n              \"is_reachable\": false\n            },\n            {\n              \"key\": \"payslips\",\n              \"label\": \"Payslips\",\n              \"index\": 6,\n              \"is_complete\": false,\n              \"is_current\": false,\n              \"is_reachable\": false\n            },\n            {\n              \"key\": \"done\",\n              \"label\": \"Completed\",\n              \"index\": 7,\n              \"is_complete\": false,\n              \"is_current\": false,\n              \"is_reachable\": false\n            }\n          ],\n          \"counts\": {\n            \"payrolls\": 42,\n            \"by_status\": {\n              \"processed\": 42\n            },\n            \"adjustments\": 7,\n            \"payslips\": 0,\n            \"payslips_emailed\": 0,\n            \"payslips_email_failed\": 0\n          }\n        },\n        \"maker_checker\": {\n          \"prepared_by\": \"Sara Khan\",\n          \"submitted_by\": null,\n          \"submitted_at\": null,\n          \"approved_by\": null,\n          \"approved_at\": null,\n          \"rejected_by\": null,\n          \"rejected_at\": null,\n          \"rejection_reason\": null,\n          \"paid_by\": null,\n          \"paid_at\": null\n        }\n      }\n    ],\n    \"has_unfinished_run\": true\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "200 OK — nothing in progress",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": {\n    \"active_run\": null,\n    \"runs\": [],\n    \"has_unfinished_run\": false\n  }\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ],
+      "description": "Call on every page load. Returns unfinished runs and which to open."
+    },
+    {
+      "name": "1. The flow (in order)",
+      "item": [
+        {
+          "name": "Step 1 — Start run (create period inline)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nOpens a payroll run. Pass **either** `payroll_period_id` (use an existing period) **or** `period_name` + `start_date` + `end_date` (create one inline) — so 'new payroll' is a single call rather than create-period-then-go-find-it.\n\n`branch_id: null` runs the whole company.\n\n**If a live run already exists for that period + branch, this returns `200` with `resumed: true` and hands back the existing run.** That is a success, not a conflict — open it.\n\nThe run starts at `status: in_progress`, `current_step: generate`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period_name\": \"August 2026\",\n  \"start_date\": \"2026-08-01\",\n  \"end_date\": \"2026-08-31\",\n  \"branch_id\": null,\n  \"notes\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created — new run",
+              "code": 201,
+              "status": "Created",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll run started\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"generate\",\n    \"status\": \"in_progress\",\n    \"employee_count\": 0,\n    \"total_gross\": \"0.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"0.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": null,\n    \"generated_at\": null,\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  },\n  \"resumed\": false\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "200 OK — resumed an existing run",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"An existing payroll run for this period was resumed\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"in_progress\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  },\n  \"resumed\": true\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — overlapping period",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Date range overlaps with existing period \\\"July 2026\\\" (2026-07-01 \\u2192 2026-07-31)\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 1b — Start run (existing period)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nSame endpoint, selecting a period that already exists.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payroll_period_id\": \"{{payroll_period_id}}\",\n  \"branch_id\": \"{{branch_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "code": 201,
+              "status": "Created",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll run started\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"in_progress\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  },\n  \"resumed\": false\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 2 — Generate payroll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "generate"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nComputes every active employee's salary for the period and freezes a day-by-day snapshot into `payroll_daily_lines`.\n\nRuns inside **one transaction** — either every employee lands or none do.\n\n`force: true` regenerates employees who already have a payroll for this period. Regeneration happens **in place**, so manual adjustments keyed to the payroll survive and are re-applied to the fresh base. Already-`paid` and `cancelled` payrolls are never touched.\n\nEmployees with no active salary structure are **skipped, not failed** — they come back in `skipped[]` so the UI can link straight to the fix.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"force\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — generated",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll generated for 42 employee(s)\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"in_progress\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"generation\": {\n      \"generated_count\": 42,\n      \"skipped_count\": 1,\n      \"error_count\": 0,\n      \"skipped\": [\n        {\n          \"employee_id\": \"uuid-employee-009\",\n          \"employee_code\": \"E1042\",\n          \"reason\": \"No active salary structure found\"\n        }\n      ],\n      \"errors\": []\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — run locked for edits",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"This payroll run is 'pending_approval' and can no longer be edited. Ask the approver to reject it first if changes are needed.\"\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — period locked",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payroll period is locked and cannot be processed\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 3 — Sync adjustments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/adjustments/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "adjustments",
+                "sync"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nCall after adding, editing or deleting adjustments via the `/payroll-adjustments/...` endpoints.\n\nRecalculates every payroll in the run from its **frozen attendance base** plus current adjustments, then refreshes the run header totals. Recomputing from the base each time is what stops repeated edits from compounding.\n\nAdvances the run to `review`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Applied Q3 bonuses\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Adjustments applied and totals recalculated\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"review\",\n    \"status\": \"in_progress\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 4 — Submit for approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "submit"
+              ]
+            },
+            "description": "**Role:** `isManager` — this is the **maker's** last action.\n\nMoves the run to `pending_approval` and **locks it for edits**: adjustments and regeneration are refused until a checker approves or rejects. Without that lock, someone could add a bonus after sign-off and the approval would no longer describe what actually gets paid.\n\nIf `payroll_settings.require_approval` is `false`, this auto-approves instead — still recording who did it.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"August payroll ready for review\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — awaiting approval",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll submitted for approval\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"approval\",\n    \"status\": \"pending_approval\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": \"uuid-user-maker\",\n    \"submitted_at\": \"2026-09-01T10:02:00.000Z\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — nothing generated yet",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Nothing to approve \\u2014 generate payroll for this period first\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 5 — Approve (checker)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "approve"
+              ]
+            },
+            "description": "**Role:** `isAdmin` — the **checker**.\n\n**Maker-checker rule:** whoever prepared the run (`created_by`, `generated_by` or `submitted_by`) **cannot approve it**. Attempting to returns `403`. Companies may waive this deliberately by setting `allow_self_approval: true` in payroll settings — never by accident.\n\nMarks every `processed` payroll as `approved` inside one transaction and moves the run to `payment`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Checked against the attendance report\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — approved",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll approved \\u2014 42 employee record(s)\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"payment\",\n    \"status\": \"approved\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": \"uuid-user-checker\",\n    \"approved_at\": \"2026-09-01T11:30:00.000Z\",\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "403 — self-approval blocked",
+              "code": 403,
+              "status": "Forbidden",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"You prepared this payroll, so you cannot approve it. A different admin must approve, or enable self-approval in payroll settings.\"\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — wrong state",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only a run awaiting approval can be approved. This one is 'in_progress'.\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 5b — Reject (checker)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "reject"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\n`reason` is **required** — the maker needs to know what to fix.\n\nSends the run back to `status: rejected`, `current_step: adjust`, which re-opens it for edits. The reason is stored on the run and in the timeline.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Overtime for the warehouse team looks wrong \\u2014 please re-check attendance\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — rejected",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll rejected and sent back for correction\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"rejected\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": \"uuid-user-checker\",\n    \"rejected_at\": \"2026-09-01T11:35:00.000Z\",\n    \"rejection_reason\": \"Overtime for the warehouse team looks wrong\",\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — no reason given",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A rejection reason is required so the preparer knows what to fix\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 6a — Payment summary (for the confirm dialog)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/payment-summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "payment-summary"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\n**Read this before showing the payment confirmation dialog.**\n\nGives the exact total about to leave the business, the headcount, and — importantly — how many employees have **no email address**, listed by name. Surfacing that up front means you warn before paying rather than after the sends have already failed.\n\n`defaults` reflects the company's payroll settings, so the dialog's checkboxes start in the right position."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": {\n    \"run_id\": \"uuid-run-001\",\n    \"period_name\": \"August 2026\",\n    \"employee_count\": 42,\n    \"total_net\": \"129400.00\",\n    \"total_gross\": \"134000.00\",\n    \"employees_without_email\": 2,\n    \"employees_without_email_list\": [\n      {\n        \"employee_id\": \"uuid-employee-077\",\n        \"employee_code\": \"E1077\",\n        \"name\": \"Omar Said\"\n      },\n      {\n        \"employee_id\": \"uuid-employee-081\",\n        \"employee_code\": \"E1081\",\n        \"name\": \"Lina Haddad\"\n      }\n    ],\n    \"not_payable_count\": 0,\n    \"defaults\": {\n      \"send_payslip_email\": true,\n      \"notify_employees\": true\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 6b — Pay (+ deliver payslips)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/pay",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "pay"
+              ]
+            },
+            "description": "**Role:** `isAdmin` — **irreversible.**\n\nCarries the confirmation dialog's answers. In one call it marks every approved payroll `paid`, **issues payslips, emails them, and sends a push + in-app notification** so the mobile app lights up.\n\n- `send_payslip_email` — omit or send `null` to fall back to the company's `auto_email_payslips` setting\n- `notify_employees` — defaults to `true`\n\n**Payment commits first; delivery runs afterwards and reports rather than throws.** A bounced email must never roll back money that has already been paid, so this returns `success: true` with a `delivery` block even when some sends fail. Show the failures and offer a retry — never imply the payment did not go through.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"send_payslip_email\": true,\n  \"notify_employees\": true,\n  \"notes\": \"Paid via bank transfer batch #4471\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — paid and delivered",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"42 payroll(s) marked as paid, 40 payslip(s) emailed, 42 employee(s) notified\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"payslips\",\n    \"status\": \"paid\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": \"uuid-user-checker\",\n    \"paid_at\": \"2026-09-01T12:00:00.000Z\",\n    \"payslips_generated_at\": \"2026-09-01T12:00:02.000Z\",\n    \"payslips_sent_at\": \"2026-09-01T12:00:09.000Z\",\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"delivery\": {\n      \"payslips\": {\n        \"generated_count\": 42,\n        \"skipped_count\": 0,\n        \"error_count\": 0\n      },\n      \"email\": {\n        \"sent_count\": 40,\n        \"failed_count\": 1,\n        \"skipped_count\": 1,\n        \"sent\": [\n          {\n            \"payslip_id\": \"uuid-payslip-001\",\n            \"employee_code\": \"E1001\",\n            \"employee_name\": \"Ann Lee\",\n            \"email\": \"ann@acme.com\"\n          }\n        ],\n        \"failed\": [\n          {\n            \"payslip_id\": \"uuid-payslip-042\",\n            \"employee_code\": \"E1042\",\n            \"email\": \"bad@@address\",\n            \"error\": \"Invalid recipient\"\n          }\n        ],\n        \"skipped\": [\n          {\n            \"payslip_id\": \"uuid-payslip-077\",\n            \"employee_code\": \"E1077\",\n            \"reason\": \"No email address on file\"\n          }\n        ]\n      },\n      \"notifications\": {\n        \"notified_count\": 42,\n        \"failed_count\": 0,\n        \"notified\": [],\n        \"failed\": []\n      }\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — not approved yet",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot move this run from 'in_progress' to 'paid'. Allowed: pending_approval, approved, cancelled\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 7a — Generate payslips",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/payslips/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "payslips",
+                "generate"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nUsually already done by `/pay`. Use this when the run was paid without delivery, or to pick up employees added afterwards. Existing payslips are skipped, never duplicated.\n\nOnly allowed once the run is `paid`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"42 payslip(s) generated\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"payslips\",\n    \"status\": \"paid\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"payslips\": {\n      \"generated_count\": 42,\n      \"skipped_count\": 0,\n      \"error_count\": 0,\n      \"generated\": [],\n      \"skipped\": [],\n      \"errors\": []\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — not paid yet",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payslips can only be issued once the payroll has been paid\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 7b — Email payslips",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/payslips/email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "payslips",
+                "email"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\n**Resumable and idempotent.** Only payslips whose `email_status` is `pending` or `failed` are attempted, so a half-finished batch can be re-run without spamming everyone who already received theirs.\n\n`only_failed: true` retries **just the failures** — wire this to the retry button, never to the primary send.\n\nThe emailed payslip itemises every adjustment (bonus, commission, deduction, penalty, loan) with its title and remark, alongside gross, overtime, attendance deductions and net pay.\n\nEmployees with no email address are marked `skipped` — they need an address added, not a retry.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"only_failed\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK — sent with one failure",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"40 payslip(s) emailed, 1 failed, 1 skipped\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"paid\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"email\": {\n      \"sent_count\": 40,\n      \"failed_count\": 1,\n      \"skipped_count\": 1,\n      \"sent\": [\n        {\n          \"payslip_id\": \"uuid-payslip-001\",\n          \"employee_code\": \"E1001\",\n          \"employee_name\": \"Ann Lee\",\n          \"email\": \"ann@acme.com\"\n        }\n      ],\n      \"failed\": [\n        {\n          \"payslip_id\": \"uuid-payslip-042\",\n          \"employee_code\": \"E1042\",\n          \"employee_name\": \"Yusuf Rahman\",\n          \"email\": \"bad@@address\",\n          \"error\": \"Invalid recipient\"\n        }\n      ],\n      \"skipped\": [\n        {\n          \"payslip_id\": \"uuid-payslip-077\",\n          \"employee_code\": \"E1077\",\n          \"reason\": \"No email address on file\"\n        }\n      ]\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "200 OK — nothing left to send",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"All payslips in this run have already been emailed\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"paid\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"email\": {\n      \"sent_count\": 0,\n      \"failed_count\": 0,\n      \"skipped_count\": 0,\n      \"sent\": [],\n      \"failed\": [],\n      \"skipped\": []\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — payslips not issued",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Generate the payslips before sending them\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 7c — Notify employees (push + in-app)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/payslips/notify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "payslips",
+                "notify"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nSends a `payslip_published` notification on **both** channels:\n- `push` — the phone alert\n- `in_app` — the persisted inbox row\n\nBoth deliberately: fan-out only writes a recipient row for `push` when the employee has an **active device token**, so a push-only notification vanishes for anyone without the app installed. The in-app copy guarantees everyone gets one.\n\nDeep link: `/payslips/{payslip_id}` — the mobile app must handle this route.\n\nTracked per payslip via `notification_status`, so it is retryable with `only_failed: true` and never double-notifies.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"only_failed\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"42 employee(s) notified\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"paid\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"notifications\": {\n      \"notified_count\": 42,\n      \"failed_count\": 0,\n      \"notified\": [\n        {\n          \"payslip_id\": \"uuid-payslip-001\",\n          \"employee_code\": \"E1001\",\n          \"employee_name\": \"Ann Lee\"\n        }\n      ],\n      \"failed\": []\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — payslips not issued",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Generate the payslips before notifying employees\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Step 8 — Complete run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "complete"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nCloses the run and **locks the payroll period**. Terminal state — nothing further can be changed."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll run completed and the period is now locked\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"done\",\n    \"status\": \"completed\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": \"2026-09-01T12:30:00.000Z\",\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Cancel run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "cancel"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nAbandons the run and cancels its payrolls. A cancelled run frees the period so a fresh run can be started for it.\n\nCannot cancel a run that has already been paid or completed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Wrong period dates \\u2014 restarting\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll run cancelled\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"cancelled\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    }\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "400 — already paid",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot move this run from 'paid' to 'cancelled'. Allowed: completed\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ],
+      "description": "Steps 1–8, in the order a user walks them."
+    },
+    {
+      "name": "2. Reads",
+      "item": [
+        {
+          "name": "Get run by ID (with employees)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nThe full run **including `employees[]`** — each with its adjustments and live preview figures (`preview_bonus`, `preview_deduction`, `preview_net_salary`) plus its payslip if one exists.\n\nThis is the payload the Adjustments, Review and Approval screens render."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": {\n    \"id\": \"uuid-run-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"payroll_period_id\": \"uuid-period-001\",\n    \"branch_id\": null,\n    \"run_number\": \"PR-202608-A4K2\",\n    \"current_step\": \"adjust\",\n    \"status\": \"in_progress\",\n    \"employee_count\": 42,\n    \"total_gross\": \"134000.00\",\n    \"total_deductions\": \"6200.00\",\n    \"total_overtime\": \"2100.00\",\n    \"total_bonus\": \"1500.00\",\n    \"total_net\": \"129400.00\",\n    \"created_by\": \"uuid-user-maker\",\n    \"generated_by\": \"uuid-user-maker\",\n    \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n    \"submitted_by\": null,\n    \"submitted_at\": null,\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejected_by\": null,\n    \"rejected_at\": null,\n    \"rejection_reason\": null,\n    \"paid_by\": null,\n    \"paid_at\": null,\n    \"payslips_generated_at\": null,\n    \"payslips_sent_at\": null,\n    \"completed_at\": null,\n    \"period_name\": \"August 2026\",\n    \"start_date\": \"2026-08-01\",\n    \"end_date\": \"2026-08-31\",\n    \"period_status\": \"processing\",\n    \"branch_name\": null,\n    \"created_by_name\": \"Sara Khan\",\n    \"progress\": {\n      \"current_step\": \"adjust\",\n      \"current_step_label\": \"Adjustments\",\n      \"current_step_index\": 2,\n      \"steps\": [\n        {\n          \"key\": \"setup\",\n          \"label\": \"Period Setup\",\n          \"index\": 0,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"generate\",\n          \"label\": \"Generate Payroll\",\n          \"index\": 1,\n          \"is_complete\": true,\n          \"is_current\": false,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"adjust\",\n          \"label\": \"Adjustments\",\n          \"index\": 2,\n          \"is_complete\": false,\n          \"is_current\": true,\n          \"is_reachable\": true\n        },\n        {\n          \"key\": \"review\",\n          \"label\": \"Review\",\n          \"index\": 3,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"approval\",\n          \"label\": \"Approval\",\n          \"index\": 4,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payment\",\n          \"label\": \"Payment\",\n          \"index\": 5,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"payslips\",\n          \"label\": \"Payslips\",\n          \"index\": 6,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        },\n        {\n          \"key\": \"done\",\n          \"label\": \"Completed\",\n          \"index\": 7,\n          \"is_complete\": false,\n          \"is_current\": false,\n          \"is_reachable\": false\n        }\n      ],\n      \"counts\": {\n        \"payrolls\": 42,\n        \"by_status\": {\n          \"processed\": 42\n        },\n        \"adjustments\": 7,\n        \"payslips\": 0,\n        \"payslips_emailed\": 0,\n        \"payslips_email_failed\": 0\n      }\n    },\n    \"maker_checker\": {\n      \"prepared_by\": \"Sara Khan\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null\n    },\n    \"employees\": [\n      {\n        \"id\": \"uuid-payroll-001\",\n        \"employee_id\": \"uuid-employee-001\",\n        \"employee_code\": \"E1001\",\n        \"employee_first_name\": \"Ann\",\n        \"employee_last_name\": \"Lee\",\n        \"employee_email\": \"ann@acme.com\",\n        \"gross_salary\": \"3100.00\",\n        \"per_day_salary\": \"100.0000\",\n        \"total_working_days\": \"31.00\",\n        \"total_present_days\": \"20.50\",\n        \"total_absent_days\": \"1.00\",\n        \"total_paid_leave_days\": \"2.00\",\n        \"total_unpaid_leave_days\": \"1.50\",\n        \"total_holidays\": \"1.00\",\n        \"sandwich_days\": \"0.00\",\n        \"payable_days\": \"29.50\",\n        \"not_employed_days\": \"0.00\",\n        \"overtime_hours\": \"10.00\",\n        \"overtime_amount\": \"250.50\",\n        \"base_deduction_amount\": \"150.00\",\n        \"base_bonus_amount\": \"0.00\",\n        \"deduction_amount\": \"250.00\",\n        \"bonus_amount\": \"500.00\",\n        \"tax_amount\": \"0.00\",\n        \"net_salary\": \"3600.50\",\n        \"payroll_status\": \"processed\",\n        \"adjustments\": [\n          {\n            \"id\": \"uuid-adj-001\",\n            \"adjustment_type\": \"bonus\",\n            \"title\": \"Q3 performance bonus\",\n            \"amount\": \"500.00\",\n            \"is_taxable\": false,\n            \"remarks\": \"Approved by CFO\"\n          }\n        ],\n        \"preview_bonus\": 500,\n        \"preview_deduction\": 250,\n        \"preview_net_salary\": 3600.5,\n        \"payslip\": null\n      }\n    ]\n  }\n}",
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "name": "404 — not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Payroll run not found\"\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "List runs (history)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs?status=&limit=50&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nRun history, newest first. Filter with `?status=completed` and page with `limit` / `offset`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": [\n    {\n      \"id\": \"uuid-run-001\",\n      \"company_id\": \"uuid-company-001\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"branch_id\": null,\n      \"run_number\": \"PR-202608-A4K2\",\n      \"current_step\": \"adjust\",\n      \"status\": \"completed\",\n      \"employee_count\": 42,\n      \"total_gross\": \"134000.00\",\n      \"total_deductions\": \"6200.00\",\n      \"total_overtime\": \"2100.00\",\n      \"total_bonus\": \"1500.00\",\n      \"total_net\": \"129400.00\",\n      \"created_by\": \"uuid-user-maker\",\n      \"generated_by\": \"uuid-user-maker\",\n      \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n      \"submitted_by\": null,\n      \"submitted_at\": null,\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null,\n      \"payslips_generated_at\": null,\n      \"payslips_sent_at\": null,\n      \"completed_at\": null,\n      \"period_name\": \"August 2026\",\n      \"start_date\": \"2026-08-01\",\n      \"end_date\": \"2026-08-31\",\n      \"period_status\": \"processing\",\n      \"branch_name\": null,\n      \"created_by_name\": \"Sara Khan\",\n      \"progress\": {\n        \"current_step\": \"adjust\",\n        \"current_step_label\": \"Adjustments\",\n        \"current_step_index\": 2,\n        \"steps\": [\n          {\n            \"key\": \"setup\",\n            \"label\": \"Period Setup\",\n            \"index\": 0,\n            \"is_complete\": true,\n            \"is_current\": false,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"generate\",\n            \"label\": \"Generate Payroll\",\n            \"index\": 1,\n            \"is_complete\": true,\n            \"is_current\": false,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"adjust\",\n            \"label\": \"Adjustments\",\n            \"index\": 2,\n            \"is_complete\": false,\n            \"is_current\": true,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"review\",\n            \"label\": \"Review\",\n            \"index\": 3,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"approval\",\n            \"label\": \"Approval\",\n            \"index\": 4,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"payment\",\n            \"label\": \"Payment\",\n            \"index\": 5,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"payslips\",\n            \"label\": \"Payslips\",\n            \"index\": 6,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"done\",\n            \"label\": \"Completed\",\n            \"index\": 7,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          }\n        ],\n        \"counts\": {\n          \"payrolls\": 42,\n          \"by_status\": {\n            \"processed\": 42\n          },\n          \"adjustments\": 7,\n          \"payslips\": 0,\n          \"payslips_emailed\": 0,\n          \"payslips_email_failed\": 0\n        }\n      },\n      \"maker_checker\": {\n        \"prepared_by\": \"Sara Khan\",\n        \"submitted_by\": null,\n        \"submitted_at\": null,\n        \"approved_by\": null,\n        \"approved_at\": null,\n        \"rejected_by\": null,\n        \"rejected_at\": null,\n        \"rejection_reason\": null,\n        \"paid_by\": null,\n        \"paid_at\": null\n      }\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Pending approvals (checker's queue)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/pending-approval",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "pending-approval"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\nEvery run waiting on a checker, oldest submission first. Back the **Approvals** entry in the admin nav with this and show the count as a badge."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": [\n    {\n      \"id\": \"uuid-run-001\",\n      \"company_id\": \"uuid-company-001\",\n      \"payroll_period_id\": \"uuid-period-001\",\n      \"branch_id\": null,\n      \"run_number\": \"PR-202608-A4K2\",\n      \"current_step\": \"approval\",\n      \"status\": \"pending_approval\",\n      \"employee_count\": 42,\n      \"total_gross\": \"134000.00\",\n      \"total_deductions\": \"6200.00\",\n      \"total_overtime\": \"2100.00\",\n      \"total_bonus\": \"1500.00\",\n      \"total_net\": \"129400.00\",\n      \"created_by\": \"uuid-user-maker\",\n      \"generated_by\": \"uuid-user-maker\",\n      \"generated_at\": \"2026-09-01T09:12:00.000Z\",\n      \"submitted_by\": \"uuid-user-maker\",\n      \"submitted_at\": \"2026-09-01T10:02:00.000Z\",\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejected_by\": null,\n      \"rejected_at\": null,\n      \"rejection_reason\": null,\n      \"paid_by\": null,\n      \"paid_at\": null,\n      \"payslips_generated_at\": null,\n      \"payslips_sent_at\": null,\n      \"completed_at\": null,\n      \"period_name\": \"August 2026\",\n      \"start_date\": \"2026-08-01\",\n      \"end_date\": \"2026-08-31\",\n      \"period_status\": \"processing\",\n      \"branch_name\": null,\n      \"created_by_name\": \"Sara Khan\",\n      \"progress\": {\n        \"current_step\": \"adjust\",\n        \"current_step_label\": \"Adjustments\",\n        \"current_step_index\": 2,\n        \"steps\": [\n          {\n            \"key\": \"setup\",\n            \"label\": \"Period Setup\",\n            \"index\": 0,\n            \"is_complete\": true,\n            \"is_current\": false,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"generate\",\n            \"label\": \"Generate Payroll\",\n            \"index\": 1,\n            \"is_complete\": true,\n            \"is_current\": false,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"adjust\",\n            \"label\": \"Adjustments\",\n            \"index\": 2,\n            \"is_complete\": false,\n            \"is_current\": true,\n            \"is_reachable\": true\n          },\n          {\n            \"key\": \"review\",\n            \"label\": \"Review\",\n            \"index\": 3,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"approval\",\n            \"label\": \"Approval\",\n            \"index\": 4,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"payment\",\n            \"label\": \"Payment\",\n            \"index\": 5,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"payslips\",\n            \"label\": \"Payslips\",\n            \"index\": 6,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          },\n          {\n            \"key\": \"done\",\n            \"label\": \"Completed\",\n            \"index\": 7,\n            \"is_complete\": false,\n            \"is_current\": false,\n            \"is_reachable\": false\n          }\n        ],\n        \"counts\": {\n          \"payrolls\": 42,\n          \"by_status\": {\n            \"processed\": 42\n          },\n          \"adjustments\": 7,\n          \"payslips\": 0,\n          \"payslips_emailed\": 0,\n          \"payslips_email_failed\": 0\n        }\n      },\n      \"maker_checker\": {\n        \"prepared_by\": \"Sara Khan\",\n        \"submitted_by\": null,\n        \"submitted_at\": null,\n        \"approved_by\": null,\n        \"approved_at\": null,\n        \"rejected_by\": null,\n        \"rejected_at\": null,\n        \"rejection_reason\": null,\n        \"paid_by\": null,\n        \"paid_at\": null\n      }\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Run timeline (audit trail)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/{{run_id}}/timeline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "{{run_id}}",
+                "timeline"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nAppend-only record of every step transition — who did what, when, and why. Render it as an activity feed on the Review and Approval screens. This is what makes maker-checker defensible when an auditor asks."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": [\n    {\n      \"id\": \"uuid-event-1\",\n      \"step\": \"setup\",\n      \"action\": \"created\",\n      \"from_status\": null,\n      \"to_status\": \"in_progress\",\n      \"actor_name\": \"Sara Khan\",\n      \"actor_email\": \"sara@acme.com\",\n      \"actor_role\": \"maker\",\n      \"notes\": \"Run PR-202608-A4K2 opened for August 2026\",\n      \"metadata\": null,\n      \"created_at\": \"2026-09-01T09:10:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-event-2\",\n      \"step\": \"generate\",\n      \"action\": \"generated\",\n      \"from_status\": \"in_progress\",\n      \"to_status\": \"in_progress\",\n      \"actor_name\": \"Sara Khan\",\n      \"actor_role\": \"maker\",\n      \"notes\": \"Payroll generated for 42 employee(s)\",\n      \"metadata\": {\n        \"generated\": 42,\n        \"skipped\": 1,\n        \"errors\": 0\n      },\n      \"created_at\": \"2026-09-01T09:12:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-event-3\",\n      \"step\": \"approval\",\n      \"action\": \"submitted_for_approval\",\n      \"from_status\": \"in_progress\",\n      \"to_status\": \"pending_approval\",\n      \"actor_name\": \"Sara Khan\",\n      \"actor_role\": \"maker\",\n      \"notes\": \"August payroll ready for review\",\n      \"created_at\": \"2026-09-01T10:02:00.000Z\"\n    },\n    {\n      \"id\": \"uuid-event-4\",\n      \"step\": \"approval\",\n      \"action\": \"approved\",\n      \"from_status\": \"pending_approval\",\n      \"to_status\": \"approved\",\n      \"actor_name\": \"Imran Qureshi\",\n      \"actor_role\": \"checker\",\n      \"notes\": \"Checked against the attendance report\",\n      \"metadata\": {\n        \"approved_count\": 42\n      },\n      \"created_at\": \"2026-09-01T11:30:00.000Z\"\n    }\n  ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ],
+      "description": "Run detail, history, the approval queue and the audit trail."
+    },
+    {
+      "name": "3. Payroll settings",
+      "item": [
+        {
+          "name": "Get payroll settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "settings"
+              ]
+            },
+            "description": "**Role:** `isManager`\n\nThe rules that decide what people actually get paid. Previously hard-coded in the engine.\n\nA company with no settings row gets defaults created on first read, so this never returns null."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": {\n    \"id\": \"uuid-settings-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"per_day_basis\": \"calendar_days\",\n    \"sandwich_enabled\": true,\n    \"sandwich_applies_to\": \"week_off\",\n    \"sandwich_requires_full_day\": true,\n    \"sandwich_max_bridge_days\": 2,\n    \"half_day_leave_is_payable\": true,\n    \"prorate_joiners_leavers\": true,\n    \"overtime_on_off_days\": true,\n    \"require_approval\": true,\n    \"allow_self_approval\": false,\n    \"auto_email_payslips\": true\n  }\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        },
+        {
+          "name": "Update payroll settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/payroll-runs/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "payroll-runs",
+                "settings"
+              ]
+            },
+            "description": "**Role:** `isAdmin`\n\n**Salary calculation**\n- `per_day_basis` — `calendar_days` (gross ÷ days in period; week-offs are paid) · `fixed_30` (gross ÷ 30; Gulf/KSA convention) · `working_days` (gross ÷ non-week-off, non-holiday days)\n- `half_day_leave_is_payable` — a paid half-day leave is half leave + half worked, so the day is fully payable\n- `prorate_joiners_leavers` — days before `joining_date` / after `exit_date` become `not_employed` rather than absence\n- `overtime_on_off_days` — pay overtime for hours worked on a week-off or holiday\n\n**Sandwich leave** — the group people get wrong\n- `sandwich_enabled` — turn the rule off entirely\n- `sandwich_applies_to` — which off-days may be bridged. Most policies are `week_off` only\n- `sandwich_requires_full_day` — **keep this `true`**. Only a full day of lost pay on *both* sides triggers a sandwich. With it `false`, a half day either side of a weekend makes that weekend unpaid\n- `sandwich_max_bridge_days` — longest stretch that can be swallowed, so one absence either side of a long shutdown cannot zero out the whole thing\n\n**Approvals**\n- `require_approval` — `false` makes submitting auto-approve\n- `allow_self_approval` — `true` waives the maker-checker rule\n- `auto_email_payslips` — default for the payment dialog's email checkbox\n\nChanges apply to the **next** payroll generation. Existing runs keep their frozen figures.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"per_day_basis\": \"calendar_days\",\n  \"sandwich_enabled\": true,\n  \"sandwich_applies_to\": \"week_off\",\n  \"sandwich_requires_full_day\": true,\n  \"sandwich_max_bridge_days\": 2,\n  \"half_day_leave_is_payable\": true,\n  \"prorate_joiners_leavers\": true,\n  \"overtime_on_off_days\": true,\n  \"require_approval\": true,\n  \"allow_self_approval\": false,\n  \"auto_email_payslips\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payroll settings updated. Changes apply the next time payroll is generated \\u2014 existing runs keep their frozen figures.\",\n  \"data\": {\n    \"id\": \"uuid-settings-001\",\n    \"company_id\": \"uuid-company-001\",\n    \"per_day_basis\": \"calendar_days\",\n    \"sandwich_enabled\": true,\n    \"sandwich_applies_to\": \"week_off\",\n    \"sandwich_requires_full_day\": true,\n    \"sandwich_max_bridge_days\": 2,\n    \"half_day_leave_is_payable\": true,\n    \"prorate_joiners_leavers\": true,\n    \"overtime_on_off_days\": true,\n    \"require_approval\": true,\n    \"allow_self_approval\": false,\n    \"auto_email_payslips\": true\n  }\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
+        }
+      ],
+      "description": "The company rules that drive every calculation."
+    }
+  ]
+}

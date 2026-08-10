@@ -1,0 +1,296 @@
+{
+  "info": {
+    "name": "Test Data — Payroll Seeder",
+    "_postman_id": "test-data-seed-collection-v1",
+    "description": "Fabricates a month of attendance, holidays and leave so the payroll flow can be exercised without hand-building test data.\n\n**Base URL:** `{{base_url}}/api/companies/{{company_id}}/test-data`\n\n---\n\n### ⚠️ Test utility\n\nThese endpoints **delete and rewrite attendance** for the target month. The router blocks itself when `NODE_ENV=production` unless `ALLOW_TEST_DATA_SEED=true` is set. Only set that on a throwaway environment.\n\n### Typical loop\n\n```\n1. POST /test-data/attendance          seed August 2026\n2. POST /payroll-runs                  open a run for 2026-08-01 → 2026-08-31\n3. POST /payroll-runs/:id/generate     compute salaries\n4. GET  /payroll-breakdown/:pid/breakdown\n                                       check the day-by-day output\n5. DELETE /test-data/attendance        tear down and repeat\n```\n\n### What to check in step 4\n\n- The week-off between the two **half days** is `week_off`, paid, `is_sandwich: false` — this is the bug the seeder exists to catch\n- The week-off between the two **absences** is `sandwich`, unpaid\n- `comp_off` is paid and never sandwiched\n- Days before a mid-month `joining_date` are `not_employed`, **not** `absent`\n- `pay_fraction + deduct_fraction === 1` on every row\n- `Σ payable_amount + Σ deduction_amount === gross_salary`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "uuid-company-001",
+      "type": "string"
+    },
+    {
+      "key": "employee_id",
+      "value": "uuid-employee-001",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "your-jwt-token-here",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Seed a month of attendance",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/test-data/attendance",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "test-data",
+            "attendance"
+          ]
+        },
+        "description": "**Role:** `isAdmin` · **blocked in production**\n\nFabricates a full month of attendance for the given employees so payroll can be tested end to end.\n\n### What it creates\n\n- **Attendance** for every day in the month — respecting each employee's shift week-offs and any company holiday\n- **1–2 company holidays** mid-month (`create_holidays`)\n- **Approved leave requests** — paid/unpaid × full/half day (`create_leaves`)\n\n### Why it is not just random\n\nRandom attendance almost never produces the cases that actually break payroll. With `guarantee_scenarios: true` (the default) every employee's month is planted with:\n\n| Scenario | What it tests |\n|---|---|\n| `half_day_around_week_off` | Half day either side of a weekend — must **NOT** sandwich |\n| `absent_around_week_off` | Full absence either side — **IS** a sandwich, weekend unpaid |\n| `mixed_sandwich_absent_side` / `_half_day_side` | Absent one side, half day the other — must **NOT** sandwich |\n| `late_arrival` | 45 minutes late, still a full day |\n| `overtime` | 3 hours over the shift |\n| `comp_off` | Earned — stays paid, never sandwiched |\n| `paid_full_day_leave` / `paid_half_day_leave` | Paid leave handling |\n| `unpaid_full_day_leave` / `unpaid_half_day_leave` | Unpaid leave deduction |\n| `plain_absence` | Ordinary absence |\n\nRemaining days are filled randomly (~70% present, 12% overtime, 8% half day, 6% absent, 4% comp-off).\n\nAn employee whose `joining_date` falls mid-month gets no attendance before it — so `not_employed` proration can be tested too.\n\n### Reproducibility\n\n`seed` makes the month **deterministic** — the same seed always produces the same attendance. Omit it and a random one is generated **and returned**, so a payroll bug found once can be replayed exactly.\n\n### Fields\n\n| Field | Default | Meaning |\n|---|---|---|\n| `employee_ids` | all active | Array of employee UUIDs |\n| `month` / `year` | — | **required** |\n| `seed` | random | Integer; returned in the response |\n| `clear_existing` | `true` | Wipe the month first, so re-running is idempotent |\n| `create_holidays` | `true` | Add 1–2 mid-month holidays |\n| `create_leaves` | `true` | Add approved leave requests |\n| `guarantee_scenarios` | `true` | Plant the cases above |\n\n> ⚠️ **`clear_existing` deletes attendance for the target month** before writing. The router refuses to run when `NODE_ENV=production` unless `ALLOW_TEST_DATA_SEED=true` is set — only do that on a throwaway environment.\n\nSeeded holidays and leaves are prefixed `[SEED]` so the teardown endpoint can find them without touching real records.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"employee_ids\": [\n    \"{{employee_id}}\"\n  ],\n  \"month\": 8,\n  \"year\": 2026,\n  \"seed\": 42,\n  \"clear_existing\": true,\n  \"create_holidays\": true,\n  \"create_leaves\": true,\n  \"guarantee_scenarios\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [
+        {
+          "name": "201 Created — seeded",
+          "code": 201,
+          "status": "Created",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Seeded 46 attendance row(s) for 2 employee(s) across 2026-08-01 \\u2192 2026-08-31\",\n  \"data\": {\n    \"seed\": 42,\n    \"replay_hint\": \"Pass \\\"seed\\\": 42 to regenerate this exact month\",\n    \"period\": {\n      \"month\": 8,\n      \"year\": 2026,\n      \"start_date\": \"2026-08-01\",\n      \"end_date\": \"2026-08-31\",\n      \"total_days\": 31\n    },\n    \"employee_count\": 2,\n    \"attendance_rows\": 46,\n    \"holidays_created\": [\n      {\n        \"id\": \"uuid-holiday-1\",\n        \"holiday_name\": \"[SEED] Test Holiday 1\",\n        \"date\": \"2026-08-08\"\n      },\n      {\n        \"id\": \"uuid-holiday-2\",\n        \"holiday_name\": \"[SEED] Test Holiday 2\",\n        \"date\": \"2026-08-14\"\n      }\n    ],\n    \"leaves_created\": [\n      {\n        \"id\": \"uuid-leave-1\",\n        \"date\": \"2026-08-04\",\n        \"is_half_day\": false,\n        \"employee_code\": \"E1001\",\n        \"leave_type\": \"Annual Leave\",\n        \"is_paid\": true,\n        \"scenario\": \"paid_full_day_leave\"\n      },\n      {\n        \"id\": \"uuid-leave-2\",\n        \"date\": \"2026-08-11\",\n        \"is_half_day\": true,\n        \"employee_code\": \"E1001\",\n        \"leave_type\": \"Annual Leave\",\n        \"is_paid\": true,\n        \"scenario\": \"paid_half_day_leave\"\n      },\n      {\n        \"id\": \"uuid-leave-3\",\n        \"date\": \"2026-08-17\",\n        \"is_half_day\": false,\n        \"employee_code\": \"E1001\",\n        \"leave_type\": \"Leave Without Pay\",\n        \"is_paid\": false,\n        \"scenario\": \"unpaid_full_day_leave\"\n      }\n    ],\n    \"warnings\": [],\n    \"employees\": [\n      {\n        \"employee_id\": \"uuid-employee-001\",\n        \"employee_code\": \"E1001\",\n        \"name\": \"Ann Lee\",\n        \"shift\": \"assigned\",\n        \"week_off_days\": [\n          \"sunday\",\n          \"saturday\"\n        ],\n        \"attendance_rows\": 31,\n        \"scenarios_planted\": [\n          \"half_day_around_week_off\",\n          \"absent_around_week_off\",\n          \"mixed_sandwich_absent_side\",\n          \"mixed_sandwich_half_day_side\",\n          \"late_arrival\",\n          \"overtime\",\n          \"comp_off\",\n          \"paid_full_day_leave\",\n          \"paid_half_day_leave\",\n          \"unpaid_full_day_leave\",\n          \"unpaid_half_day_leave\",\n          \"plain_absence\"\n        ]\n      },\n      {\n        \"employee_id\": \"uuid-employee-002\",\n        \"employee_code\": \"E1002\",\n        \"name\": \"Bilal Khan\",\n        \"shift\": \"assigned\",\n        \"week_off_days\": [\n          \"sunday\",\n          \"saturday\"\n        ],\n        \"attendance_rows\": 15,\n        \"scenarios_planted\": [\n          \"half_day_around_week_off\",\n          \"absent_around_week_off\"\n        ]\n      }\n    ],\n    \"next_step\": {\n      \"message\": \"Now run payroll for this period\",\n      \"create_run\": \"POST /api/companies/{{company_id}}/payroll-runs\",\n      \"body\": {\n        \"period_name\": \"2026-08 (seeded)\",\n        \"start_date\": \"2026-08-01\",\n        \"end_date\": \"2026-08-31\"\n      }\n    }\n  }\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "400 — bad month",
+          "code": 400,
+          "status": "Bad Request",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": false,\n  \"message\": \"month must be between 1 and 12\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "400 — no such employees",
+          "code": 400,
+          "status": "Bad Request",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": false,\n  \"message\": \"No active employees found for the given ids\"\n}",
+          "_postman_previewlanguage": "json"
+        },
+        {
+          "name": "403 — production",
+          "code": 403,
+          "status": "Forbidden",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": false,\n  \"message\": \"Test-data seeding is disabled in production. It overwrites real attendance. Set ALLOW_TEST_DATA_SEED=true only on a throwaway environment.\"\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "Seed every active employee",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/test-data/attendance",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "test-data",
+            "attendance"
+          ]
+        },
+        "description": "**Role:** `isAdmin`\n\nOmit `employee_ids` to seed every active employee in the company.\n\nOmit `seed` for a random month — the seed used is returned so you can reproduce it.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"month\": 8,\n  \"year\": 2026\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [
+        {
+          "name": "201 Created",
+          "code": 201,
+          "status": "Created",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Seeded 46 attendance row(s) for 2 employee(s) across 2026-08-01 \\u2192 2026-08-31\",\n  \"data\": {\n    \"seed\": 42,\n    \"replay_hint\": \"Pass \\\"seed\\\": 42 to regenerate this exact month\",\n    \"period\": {\n      \"month\": 8,\n      \"year\": 2026,\n      \"start_date\": \"2026-08-01\",\n      \"end_date\": \"2026-08-31\",\n      \"total_days\": 31\n    },\n    \"employee_count\": 2,\n    \"attendance_rows\": 46,\n    \"holidays_created\": [\n      {\n        \"id\": \"uuid-holiday-1\",\n        \"holiday_name\": \"[SEED] Test Holiday 1\",\n        \"date\": \"2026-08-08\"\n      },\n      {\n        \"id\": \"uuid-holiday-2\",\n        \"holiday_name\": \"[SEED] Test Holiday 2\",\n        \"date\": \"2026-08-14\"\n      }\n    ],\n    \"leaves_created\": [\n      {\n        \"id\": \"uuid-leave-1\",\n        \"date\": \"2026-08-04\",\n        \"is_half_day\": false,\n        \"employee_code\": \"E1001\",\n        \"leave_type\": \"Annual Leave\",\n        \"is_paid\": true,\n        \"scenario\": \"paid_full_day_leave\"\n      },\n      {\n        \"id\": \"uuid-leave-2\",\n        \"date\": \"2026-08-11\",\n        \"is_half_day\": true,\n        \"employee_code\": \"E1001\",\n        \"leave_type\": \"Annual Leave\",\n        \"is_paid\": true,\n        \"scenario\": \"paid_half_day_leave\"\n      },\n      {\n        \"id\": \"uuid-leave-3\",\n        \"date\": \"2026-08-17\",\n        \"is_half_day\": false,\n        \"employee_code\": \"E1001\",\n        \"leave_type\": \"Leave Without Pay\",\n        \"is_paid\": false,\n        \"scenario\": \"unpaid_full_day_leave\"\n      }\n    ],\n    \"warnings\": [],\n    \"employees\": [\n      {\n        \"employee_id\": \"uuid-employee-001\",\n        \"employee_code\": \"E1001\",\n        \"name\": \"Ann Lee\",\n        \"shift\": \"assigned\",\n        \"week_off_days\": [\n          \"sunday\",\n          \"saturday\"\n        ],\n        \"attendance_rows\": 31,\n        \"scenarios_planted\": [\n          \"half_day_around_week_off\",\n          \"absent_around_week_off\",\n          \"mixed_sandwich_absent_side\",\n          \"mixed_sandwich_half_day_side\",\n          \"late_arrival\",\n          \"overtime\",\n          \"comp_off\",\n          \"paid_full_day_leave\",\n          \"paid_half_day_leave\",\n          \"unpaid_full_day_leave\",\n          \"unpaid_half_day_leave\",\n          \"plain_absence\"\n        ]\n      },\n      {\n        \"employee_id\": \"uuid-employee-002\",\n        \"employee_code\": \"E1002\",\n        \"name\": \"Bilal Khan\",\n        \"shift\": \"assigned\",\n        \"week_off_days\": [\n          \"sunday\",\n          \"saturday\"\n        ],\n        \"attendance_rows\": 15,\n        \"scenarios_planted\": [\n          \"half_day_around_week_off\",\n          \"absent_around_week_off\"\n        ]\n      }\n    ],\n    \"next_step\": {\n      \"message\": \"Now run payroll for this period\",\n      \"create_run\": \"POST /api/companies/{{company_id}}/payroll-runs\",\n      \"body\": {\n        \"period_name\": \"2026-08 (seeded)\",\n        \"start_date\": \"2026-08-01\",\n        \"end_date\": \"2026-08-31\"\n      }\n    }\n  }\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "Clear seeded data",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/test-data/attendance",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "test-data",
+            "attendance"
+          ]
+        },
+        "description": "**Role:** `isAdmin`\n\nTears down a seeded month:\n\n- **all** attendance in the date range for the given employees\n- leave requests whose reason starts with `[SEED]`\n- holidays whose name starts with `[SEED]`\n\nThe `[SEED]` prefix is what keeps this from deleting real leave requests and holidays. Attendance has no such marker, so the whole month goes — which is why this endpoint is blocked in production.\n\nOmit `employee_ids` to clear every active employee.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"employee_ids\": [\n    \"{{employee_id}}\"\n  ],\n  \"month\": 8,\n  \"year\": 2026\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "code": 200,
+          "status": "OK",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": true,\n  \"message\": \"Cleared 46 attendance row(s), 6 seeded leave(s) and 2 seeded holiday(s)\",\n  \"data\": {\n    \"period\": {\n      \"start_date\": \"2026-08-01\",\n      \"end_date\": \"2026-08-31\"\n    },\n    \"attendance_deleted\": 46,\n    \"leaves_deleted\": 6,\n    \"holidays_deleted\": 2\n  }\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "Scenario catalogue",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/companies/{{company_id}}/test-data/scenarios",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "companies",
+            "{{company_id}}",
+            "test-data",
+            "scenarios"
+          ]
+        },
+        "description": "**Role:** `isAdmin`\n\nThe scenarios a seeded month is guaranteed to contain, with a note on what each one is meant to prove. Useful as a checklist when reviewing the payroll breakdown."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "code": 200,
+          "status": "OK",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"scenarios\": {\n      \"HALF_DAY_SANDWICH\": \"half_day_around_week_off\",\n      \"REAL_SANDWICH\": \"absent_around_week_off\",\n      \"MIXED_SANDWICH_ABSENT\": \"mixed_sandwich_absent_side\",\n      \"MIXED_SANDWICH_HALF\": \"mixed_sandwich_half_day_side\",\n      \"LATE_ARRIVAL\": \"late_arrival\",\n      \"OVERTIME\": \"overtime\",\n      \"COMP_OFF\": \"comp_off\",\n      \"PAID_LEAVE\": \"paid_full_day_leave\",\n      \"PAID_HALF_LEAVE\": \"paid_half_day_leave\",\n      \"UNPAID_LEAVE\": \"unpaid_full_day_leave\",\n      \"UNPAID_HALF_LEAVE\": \"unpaid_half_day_leave\",\n      \"ABSENT\": \"plain_absence\"\n    },\n    \"notes\": {\n      \"half_day_around_week_off\": \"Half day on the working day either side of a week-off. Payroll must NOT treat the week-off as a sandwich \\u2014 this is the case that was previously wrong.\",\n      \"absent_around_week_off\": \"Full-day absence either side of a week-off. This IS a sandwich; the week-off should come out unpaid.\",\n      \"mixed_sandwich_absent_side\": \"Absent one side, half day the other. Must NOT sandwich \\u2014 a sandwich needs a full day of lost pay on both sides.\",\n      \"comp_off\": \"Earned comp-off. Stays fully paid and is never swallowed by a sandwich.\"\n    }\n  }\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    }
+  ]
+}

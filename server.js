@@ -138,6 +138,17 @@ const leaveRequestAdminRoutes = require("./routes/leaveRequestAdminRoute");
 app.use("/api/companies/:company_id", leaveRequestAdminRoutes);
 
 
+// The single continuous payroll flow (period → generate → adjust → review →
+// approve → pay → payslips). The routers below it stay mounted for the
+// per-record operations the wizard calls into.
+const payrollRunRoutes = require("./routes/payrollRunRoute");
+app.use("/api/companies/:company_id/payroll-runs", payrollRunRoutes);
+
+// Fabricates a month of attendance so payroll can be tested end to end.
+// The router blocks itself in production — see routes/testDataSeedRoute.js
+const testDataSeedRoutes = require("./routes/testDataSeedRoute");
+app.use("/api/companies/:company_id/test-data", testDataSeedRoutes);
+
 const payrollPeriodRoutes = require("./routes/payrollPeriodRoute");
 app.use("/api/companies/:company_id/payroll-periods", payrollPeriodRoutes);
 
