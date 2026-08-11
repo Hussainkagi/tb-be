@@ -4,13 +4,34 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:3000/api" },
-    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
-    { "key": "employee_id", "value": "e1e2e3e4-0000-0000-0000-000000000001" },
-    { "key": "branch_id", "value": "b1b2b3b4-0000-0000-0000-000000000001" },
-    { "key": "department_id", "value": "d1d2d3d4-0000-0000-0000-000000000001" },
-    { "key": "document_id", "value": "dc000001-0000-0000-0000-000000000001" },
-    { "key": "access_token", "value": "your_jwt_access_token_here" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "company_id",
+      "value": "a1b2c3d4-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "employee_id",
+      "value": "e1e2e3e4-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "branch_id",
+      "value": "b1b2b3b4-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "department_id",
+      "value": "d1d2d3d4-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "document_id",
+      "value": "dc000001-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "access_token",
+      "value": "your_jwt_access_token_here"
+    }
   ],
   "item": [
     {
@@ -21,12 +42,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "employees"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "employees"
+              ]
             }
           },
           "response": [
@@ -38,17 +68,21 @@
             }
           ]
         },
-
         {
           "name": "Get Employee by ID",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -72,17 +106,21 @@
             }
           ]
         },
-
         {
           "name": "Get Employees by Branch",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/branch/{{branch_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -101,17 +139,21 @@
             }
           ]
         },
-
         {
           "name": "Get Employees by Department",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/department/{{department_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -119,7 +161,8 @@
                 "department",
                 "{{department_id}}"
               ]
-            }
+            },
+            "description": "Use this to populate the \"assign head of department\" dropdown — filter to `status === \"active\"`."
           },
           "response": [
             {
@@ -130,18 +173,25 @@
             }
           ]
         },
-
         {
           "name": "Update Employee",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -151,15 +201,28 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"+971509999999\",\n  \"address\": \"Villa 5, JVC, Dubai\",\n  \"actual_salary\": 9500,\n  \"bank_name\": \"ADCB\",\n  \"bank_account_number\": \"9876543210\",\n  \"iban\": \"AE250030009876543210123\"\n}"
-            }
+              "raw": "{\n  \"phone\": \"+971509999999\",\n  \"address\": \"Villa 5, JVC, Dubai\",\n  \"department_id\": \"{{department_id}}\",\n  \"is_department_head\": true\n}"
+            },
+            "description": "Update an employee. Salary/bank fields are ignored here — use the salary-structure and bank-account endpoints.\n\nHEAD OF DEPARTMENT:\n- `is_department_head: true` promotes this employee to head of their department; the outcome comes back in `department_head_result` (it fails there, without failing the update, if the department already has a head).\n- Moving the employee to a different `department_id` automatically clears the head of the department they were heading. When that department still has employees the response carries `vacated_department` — prompt the admin to assign a new head."
           },
           "response": [
             {
-              "name": "200 OK",
+              "name": "200 OK — promoted to head",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"phone\": \"+971509999999\",\n    \"address\": \"Villa 5, JVC, Dubai\",\n    \"actual_salary\": \"9500.00\",\n    \"bank_name\": \"ADCB\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"phone\": \"+971509999999\",\n    \"address\": \"Villa 5, JVC, Dubai\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  },\n  \"vacated_department\": null,\n  \"department_head_result\": {\n    \"success\": true,\n    \"message\": \"Head of department assigned successfully\",\n    \"data\": {\n      \"id\": \"33333333-3333-3333-3333-333333333333\",\n      \"department_name\": \"Engineering\",\n      \"head_employee_id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n      \"employee_count\": 7\n    }\n  }\n}"
+            },
+            {
+              "name": "200 OK — moved out of a department they headed",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333334\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  },\n  \"vacated_department\": {\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"department_name\": \"Sales\",\n    \"employee_count\": 6,\n    \"message\": \"\\\"Sales\\\" no longer has a head. Assign a new head of department.\"\n  },\n  \"department_head_result\": null\n}"
+            },
+            {
+              "name": "200 OK — promotion rejected (department already has a head)",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee updated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"updated_at\": \"2024-03-15T10:30:00.000Z\"\n  },\n  \"vacated_department\": null,\n  \"department_head_result\": {\n    \"success\": false,\n    \"message\": \"This department already has a head. Pass replace: true to change it.\",\n    \"data\": {\n      \"current_head_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n      \"current_head_name\": \"Ravi Kumar\"\n    }\n  }\n}"
             },
             {
               "name": "404 Not Found",
@@ -169,18 +232,25 @@
             }
           ]
         },
-
         {
           "name": "Update Employee Status",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/status",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -209,17 +279,21 @@
             }
           ]
         },
-
         {
           "name": "Deactivate Employee",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/deactivate",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -227,42 +301,54 @@
                 "{{employee_id}}",
                 "deactivate"
               ]
-            }
+            },
+            "description": "Deactivate an employee. If they were head of a department, that department loses its head automatically; when it still has employees the response carries `vacated_department` so the UI can prompt for a replacement."
           },
           "response": [
             {
-              "name": "200 OK",
+              "name": "200 OK — was head of a department",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deactivated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"is_active\": false,\n    \"updated_at\": \"2024-03-15T11:00:00.000Z\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deactivated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"is_active\": false,\n    \"updated_at\": \"2024-03-15T11:00:00.000Z\"\n  },\n  \"vacated_department\": {\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"department_name\": \"Sales\",\n    \"employee_count\": 6,\n    \"message\": \"\\\"Sales\\\" no longer has a head. Assign a new head of department.\"\n  }\n}"
+            },
+            {
+              "name": "200 OK — not a head",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deactivated successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"is_active\": false,\n    \"updated_at\": \"2024-03-15T11:00:00.000Z\"\n  },\n  \"vacated_department\": null\n}"
             }
           ]
         },
-
         {
           "name": "Delete Employee (Soft)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
                 "employees",
                 "{{employee_id}}"
               ]
-            }
+            },
+            "description": "Soft-delete an employee. If they were head of a department, that department loses its head automatically; `vacated_department` is returned when the department still has employees."
           },
           "response": [
             {
               "name": "200 OK",
               "status": "OK",
               "code": 200,
-              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deleted successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"deleted_at\": \"2024-03-15T11:00:00.000Z\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee deleted successfully\",\n  \"data\": {\n    \"id\": \"e1e2e3e4-0000-0000-0000-000000000001\",\n    \"deleted_at\": \"2024-03-15T11:00:00.000Z\"\n  },\n  \"vacated_department\": {\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"department_name\": \"Sales\",\n    \"employee_count\": 6,\n    \"message\": \"\\\"Sales\\\" no longer has a head. Assign a new head of department.\"\n  }\n}"
             },
             {
               "name": "404 Not Found",
@@ -274,7 +360,6 @@
         }
       ]
     },
-
     {
       "name": "Employee Documents",
       "item": [
@@ -283,12 +368,20 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -323,17 +416,21 @@
             }
           ]
         },
-
         {
           "name": "Get Document by ID",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -359,17 +456,21 @@
             }
           ]
         },
-
         {
           "name": "Get All Documents (by Employee)",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -388,18 +489,26 @@
             }
           ]
         },
-
         {
           "name": "Get All Documents (by Company)",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/documents",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "documents"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "documents"
+              ]
             }
           },
           "response": [
@@ -411,18 +520,27 @@
             }
           ]
         },
-
         {
           "name": "Get Expiring Documents",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/documents/expiring?days=30",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "documents", "expiring"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "documents",
+                "expiring"
+              ],
               "query": [
                 {
                   "key": "days",
@@ -447,18 +565,25 @@
             }
           ]
         },
-
         {
           "name": "Update Document",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -488,17 +613,21 @@
             }
           ]
         },
-
         {
           "name": "Deactivate Document",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}/deactivate",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -519,17 +648,21 @@
             }
           ]
         },
-
         {
           "name": "Delete Document (Soft)",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/employees/{{employee_id}}/documents/{{document_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",

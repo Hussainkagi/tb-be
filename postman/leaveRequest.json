@@ -2,16 +2,39 @@
   "info": {
     "name": "Leave Request Module",
     "_postman_id": "leave-request-collection-v1",
-    "description": "All endpoints for the Leave Request module — employee self-service and admin management.",
+    "description": "Leave requests with TWO-STAGE APPROVAL.\n\nA regular employee's request goes to the HEAD OF DEPARTMENT first, then to the ADMIN.\nThe head of department's own request — and any request from an employee with no department, or whose department has no head — goes straight to the ADMIN.\n\n`status` keeps its old meaning: it stays `pending` for the whole journey and only becomes `approved` when the admin signs off (payroll reads `status`, so nothing there changes).\n`approval_stage` says who must act next:\n  - `hod`       → waiting for the head of department\n  - `admin`     → waiting for the admin (HOD leg done or not needed)\n  - `completed` → approved / rejected / cancelled\n\n`hod_status`: `not_required` | `pending` | `approved` | `rejected`.\nA HOD rejection ends the request immediately — status becomes `rejected` and the admin never sees it.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:4000/api" },
-    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
-    { "key": "branch_id", "value": "b1b2c3d4-0000-0000-0000-000000000002" },
-    { "key": "employee_id", "value": "e1b2c3d4-0000-0000-0000-000000000003" },
-    { "key": "request_id", "value": "r1b2c3d4-0000-0000-0000-000000000004" },
-    { "key": "token", "value": "your_jwt_token_here" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000/api"
+    },
+    {
+      "key": "company_id",
+      "value": "a1b2c3d4-0000-0000-0000-000000000001"
+    },
+    {
+      "key": "branch_id",
+      "value": "b1b2c3d4-0000-0000-0000-000000000002"
+    },
+    {
+      "key": "department_id",
+      "value": "33333333-3333-3333-3333-333333333333",
+      "type": "string"
+    },
+    {
+      "key": "employee_id",
+      "value": "e1b2c3d4-0000-0000-0000-000000000003"
+    },
+    {
+      "key": "request_id",
+      "value": "r1b2c3d4-0000-0000-0000-000000000004"
+    },
+    {
+      "key": "token",
+      "value": "your_jwt_token_here"
+    }
   ],
   "item": [
     {
@@ -22,12 +45,20 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -41,24 +72,55 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n  \"from_date\": \"2025-08-01\",\n  \"to_date\": \"2025-08-03\",\n  \"total_days\": 3,\n  \"is_half_day\": false,\n  \"reason\": \"Family vacation\",\n  \"document_url\": null\n}"
-            }
+            },
+            "description": "Submit a leave request. The backend decides the approval route automatically from the employee's department and its head — the client sends nothing extra.\n\nThe response carries `approval_route` so the UI can say who is reviewing it: `approval_stage` (`hod` or `admin`), the HOD's employee id, and `skip_reason` when the HOD leg was skipped (`employee_is_head_of_department`, `department_has_no_head`, `employee_has_no_department`)."
           },
           "response": [
             {
-              "name": "201 Created",
+              "name": "201 — Routed to head of department",
               "status": "Created",
               "code": 201,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request created successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request submitted. Awaiting head of department approval.\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"approval_stage\": \"hod\",\n    \"hod_status\": \"pending\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"hod_approved_by\": null,\n    \"hod_approved_at\": null,\n    \"hod_rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  },\n  \"approval_route\": {\n    \"approval_stage\": \"hod\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"department_name\": \"Engineering\",\n    \"skip_reason\": null\n  }\n}"
+            },
+            {
+              "name": "201 — Requester is the HOD, goes straight to admin",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request submitted. Awaiting admin approval.\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"approval_stage\": \"admin\",\n    \"hod_status\": \"not_required\",\n    \"hod_employee_id\": null,\n    \"hod_approved_by\": null,\n    \"hod_approved_at\": null,\n    \"hod_rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  },\n  \"approval_route\": {\n    \"approval_stage\": \"admin\",\n    \"hod_employee_id\": null,\n    \"department_name\": \"Engineering\",\n    \"skip_reason\": \"employee_is_head_of_department\"\n  }\n}"
+            },
+            {
+              "name": "201 — Department has no head, goes straight to admin",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request submitted. Awaiting admin approval.\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"approval_stage\": \"admin\",\n    \"hod_status\": \"not_required\",\n    \"hod_employee_id\": null,\n    \"hod_approved_by\": null,\n    \"hod_approved_at\": null,\n    \"hod_rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  },\n  \"approval_route\": {\n    \"approval_stage\": \"admin\",\n    \"hod_employee_id\": null,\n    \"department_name\": \"Sales\",\n    \"skip_reason\": \"department_has_no_head\"\n  }\n}"
             },
             {
               "name": "400 Overlapping Leave",
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Employee already has a pending or approved leave request overlapping these dates\"\n}"
             },
@@ -67,7 +129,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"A supporting document is required for this leave type\"\n}"
             },
@@ -76,9 +141,67 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Half-day leave is not allowed for this leave type\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Approval Route (before submitting)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/approval-route",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "branches",
+                "{{branch_id}}",
+                "employees",
+                "{{employee_id}}",
+                "leave-requests",
+                "approval-route"
+              ]
+            },
+            "description": "Who will approve this employee's next leave request. Call it when the leave form opens so the UI can render the approval chain and tell the employee whether their HOD reviews it first. `is_head_of_department` also tells the app whether to show the HOD inbox to the signed-in user."
+          },
+          "response": [
+            {
+              "name": "200 — HOD then admin",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"department_name\": \"Engineering\",\n    \"requires_hod_approval\": true,\n    \"approval_stage\": \"hod\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"hod_name\": \"Ravi Kumar\",\n    \"skip_reason\": null,\n    \"is_head_of_department\": false,\n    \"approval_chain\": [\n      \"head_of_department\",\n      \"admin\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 — Admin only (requester is the HOD)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"department_name\": \"Engineering\",\n    \"requires_hod_approval\": false,\n    \"approval_stage\": \"admin\",\n    \"hod_employee_id\": null,\n    \"hod_name\": \"Ravi Kumar\",\n    \"skip_reason\": \"employee_is_head_of_department\",\n    \"is_head_of_department\": true,\n    \"approval_chain\": [\n      \"admin\"\n    ]\n  }\n}"
             }
           ]
         },
@@ -86,10 +209,17 @@
           "name": "Get All Leave Requests (Employee)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -107,7 +237,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"is_half_day\": false,\n      \"reason\": \"Family vacation\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"r2b2c3d4-0000-0000-0000-000000000005\",\n      \"leave_type_id\": \"lt000002-0000-0000-0000-000000000011\",\n      \"leave_name\": \"Sick Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-06-10\",\n      \"to_date\": \"2025-06-10\",\n      \"total_days\": \"0.50\",\n      \"is_half_day\": true,\n      \"reason\": \"Doctor appointment\",\n      \"status\": \"approved\",\n      \"created_at\": \"2025-06-09T10:00:00.000Z\"\n    }\n  ]\n}"
             }
@@ -117,10 +250,17 @@
           "name": "Get Leave Requests by Status (Employee)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/status/pending",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -140,7 +280,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    }\n  ]\n}"
             },
@@ -149,7 +292,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Invalid status. Must be one of: pending, approved, rejected, cancelled\"\n}"
             }
@@ -159,10 +305,17 @@
           "name": "Get Leave Request by ID",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -181,7 +334,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"leave_name\": \"Annual Leave\",\n    \"is_paid\": true,\n    \"requires_document\": false,\n    \"is_half_day_allowed\": true,\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\"\n  }\n}"
             },
@@ -190,7 +346,10 @@
               "status": "Not Found",
               "code": 404,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
             }
@@ -201,12 +360,20 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -229,7 +396,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"message\": \"Leave request updated successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-05\",\n    \"total_days\": \"5.00\",\n    \"reason\": \"Updated reason — extended family trip\",\n    \"status\": \"pending\",\n    \"updated_at\": \"2025-07-21T09:30:00.000Z\"\n  }\n}"
             },
@@ -238,7 +408,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Only pending leave requests can be edited. Current status: approved\"\n}"
             },
@@ -247,7 +420,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"You are not authorized to update this leave request\"\n}"
             }
@@ -258,12 +434,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}/cancel",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -287,7 +471,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"message\": \"Leave request cancelled successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"status\": \"cancelled\",\n    \"updated_at\": \"2025-07-21T10:00:00.000Z\"\n  }\n}"
             },
@@ -296,7 +483,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Leave request cannot be cancelled. Current status: rejected\"\n}"
             },
@@ -305,7 +495,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"You are not authorized to cancel this leave request\"\n}"
             }
@@ -315,10 +508,17 @@
           "name": "Delete Leave Request",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/employees/{{employee_id}}/leave-requests/{{request_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -337,7 +537,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"message\": \"Leave request deleted successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"deleted_at\": \"2025-07-21T10:30:00.000Z\"\n  }\n}"
             },
@@ -346,7 +549,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Approved leave requests cannot be deleted. Cancel it first.\"\n}"
             },
@@ -355,9 +561,209 @@
               "status": "Not Found",
               "code": 404,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Head of Department — Stage 1 Approval",
+      "description": "Authorised by identity, not role: the caller's employee record must be the `head_employee_id` of a department. A HOD normally holds the Employee role, so a plain employee token is expected here. Non-HOD callers get 403.",
+      "item": [
+        {
+          "name": "HOD Inbox (awaiting my approval)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/hod/leave-requests?stage=hod",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "hod",
+                "leave-requests"
+              ],
+              "query": [
+                {
+                  "key": "stage",
+                  "value": "hod"
+                }
+              ]
+            },
+            "description": "Requests from the caller's department waiting on them. `stage` accepts `hod` (default — my action queue), `admin` (already forwarded, waiting on the admin), or `all`. Optional `status` filter. `pending_count` drives the inbox badge."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"department\": {\n      \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n      \"department_name\": \"Engineering\"\n    },\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"pending_count\": 2,\n    \"requests\": [\n      {\n        \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n        \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n        \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n        \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n        \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n        \"from_date\": \"2025-08-01\",\n        \"to_date\": \"2025-08-03\",\n        \"total_days\": \"3.00\",\n        \"is_half_day\": false,\n        \"reason\": \"Family vacation\",\n        \"document_url\": null,\n        \"status\": \"pending\",\n        \"approved_by\": null,\n        \"approved_at\": null,\n        \"rejection_reason\": null,\n        \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n        \"approval_stage\": \"hod\",\n        \"hod_status\": \"pending\",\n        \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n        \"hod_approved_by\": null,\n        \"hod_approved_at\": null,\n        \"hod_rejection_reason\": null,\n        \"created_at\": \"2025-07-20T08:00:00.000Z\",\n        \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n        \"deleted_at\": null,\n        \"employee_code\": \"EMP0A1B2C\",\n        \"first_name\": \"Priya\",\n        \"last_name\": \"Nair\",\n        \"email\": \"priya@acme.com\",\n        \"leave_name\": \"Annual Leave\",\n        \"is_paid\": true,\n        \"department_name\": \"Engineering\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "403 — Not a head of department",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"You are not head of any department\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "HOD Approve (forward to admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/hod/leave-requests/{{request_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "hod",
+                "leave-requests",
+                "{{request_id}}",
+                "approve"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Stage-one approval. `status` stays `pending`; `approval_stage` moves to `admin`, `hod_status` becomes `approved`. The admin is notified that it needs final sign-off and the employee is told their HOD approved it."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request approved by head of department. Awaiting admin approval.\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"approval_stage\": \"admin\",\n    \"hod_status\": \"approved\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"hod_approved_by\": \"u1b2c3d4-0000-0000-0000-000000000055\",\n    \"hod_approved_at\": \"2025-07-21T09:00:00.000Z\",\n    \"hod_rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  }\n}"
+            },
+            {
+              "name": "400 — Not awaiting you",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"This request is not awaiting your approval. Status: pending, stage: admin\"\n}"
+            },
+            {
+              "name": "400 — Different department",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"You are not the head of department for this request\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "HOD Reject (ends the request)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/hod/leave-requests/{{request_id}}/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "hod",
+                "leave-requests",
+                "{{request_id}}",
+                "reject"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejection_reason\": \"Team is short-staffed that week\"\n}"
+            },
+            "description": "Stage-one rejection. The request is closed immediately: `status` = `rejected`, `approval_stage` = `completed`. It never reaches the admin. `rejection_reason` is required."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request rejected by head of department\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"rejected\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": \"Team is short-staffed that week\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"approval_stage\": \"completed\",\n    \"hod_status\": \"rejected\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"hod_approved_by\": \"u1b2c3d4-0000-0000-0000-000000000055\",\n    \"hod_approved_at\": \"2025-07-21T09:00:00.000Z\",\n    \"hod_rejection_reason\": \"Team is short-staffed that week\",\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  }\n}"
+            },
+            {
+              "name": "400 — Reason missing",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"rejection_reason is required when rejecting a leave request\"\n}"
             }
           ]
         }
@@ -371,12 +777,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/{{request_id}}/approve",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -387,8 +801,9 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\"\n}"
-            }
+              "raw": "{\n  \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n  \"override_hod\": false\n}"
+            },
+            "description": "Final approval by the admin. Blocked with 400 while `approval_stage` is `hod` — the head of department must sign off first. Pass `override_hod: true` to push it through anyway (use when the HOD is unavailable)."
           },
           "response": [
             {
@@ -396,16 +811,34 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request approved successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"status\": \"approved\",\n    \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n    \"approved_at\": \"2025-07-21T11:00:00.000Z\",\n    \"updated_at\": \"2025-07-21T11:00:00.000Z\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave request approved successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"approved\",\n    \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n    \"approved_at\": \"2025-07-21T11:00:00.000Z\",\n    \"rejection_reason\": null,\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"approval_stage\": \"completed\",\n    \"hod_status\": \"approved\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"hod_approved_by\": \"u1b2c3d4-0000-0000-0000-000000000055\",\n    \"hod_approved_at\": \"2025-07-21T09:00:00.000Z\",\n    \"hod_rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n    \"deleted_at\": null\n  }\n}"
+            },
+            {
+              "name": "400 — Awaiting head of department",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"This request is awaiting approval from Ravi Kumar (head of Engineering). Pass override_hod: true to approve it directly.\",\n  \"data\": {\n    \"approval_stage\": \"hod\",\n    \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n    \"hod_status\": \"pending\"\n  }\n}"
             },
             {
               "name": "400 Not Pending",
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Only pending leave requests can be approved. Current status: approved\"\n}"
             },
@@ -414,7 +847,10 @@
               "status": "Not Found",
               "code": 404,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
             }
@@ -425,12 +861,20 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/{{request_id}}/reject",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -442,7 +886,8 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n  \"rejection_reason\": \"Insufficient staffing during requested period\"\n}"
-            }
+            },
+            "description": "Admin rejection. Allowed at any stage — an admin can reject a request that is still sitting with the head of department."
           },
           "response": [
             {
@@ -450,7 +895,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"message\": \"Leave request rejected successfully\",\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"status\": \"rejected\",\n    \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n    \"approved_at\": \"2025-07-21T11:15:00.000Z\",\n    \"rejection_reason\": \"Insufficient staffing during requested period\",\n    \"updated_at\": \"2025-07-21T11:15:00.000Z\"\n  }\n}"
             },
@@ -459,7 +907,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"rejection_reason is required when rejecting a leave request\"\n}"
             },
@@ -468,7 +919,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Only pending leave requests can be rejected. Current status: cancelled\"\n}"
             }
@@ -483,11 +937,22 @@
           "name": "Get All Leave Requests (Company)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/leave-requests",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "leave-requests"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests"
+              ]
             }
           },
           "response": [
@@ -496,7 +961,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    },\n    {\n      \"id\": \"r3b2c3d4-0000-0000-0000-000000000006\",\n      \"employee_id\": \"e2b2c3d4-0000-0000-0000-000000000007\",\n      \"leave_name\": \"Sick Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-07-25\",\n      \"to_date\": \"2025-07-26\",\n      \"total_days\": \"2.00\",\n      \"status\": \"approved\",\n      \"created_at\": \"2025-07-19T07:00:00.000Z\"\n    }\n  ]\n}"
             }
@@ -506,10 +974,17 @@
           "name": "Get Leave Requests by Status (Company)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/status/approved",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -525,9 +1000,64 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r3b2c3d4-0000-0000-0000-000000000006\",\n      \"employee_id\": \"e2b2c3d4-0000-0000-0000-000000000007\",\n      \"leave_name\": \"Sick Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-07-25\",\n      \"to_date\": \"2025-07-26\",\n      \"total_days\": \"2.00\",\n      \"status\": \"approved\",\n      \"approved_by\": \"u1b2c3d4-0000-0000-0000-000000000099\",\n      \"approved_at\": \"2025-07-20T09:00:00.000Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Leave Requests by Approval Stage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/stage/admin",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "leave-requests",
+                "stage",
+                "admin"
+              ]
+            },
+            "description": "Pending requests at a given stage. `stage=admin` is the admin's real action queue — everything that cleared the HOD leg or never needed one. `stage=hod` shows what is still with the department heads (read-only oversight). Note that the plain `/leave-requests/status/pending` list mixes both stages."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n      \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_type_id\": \"lt000001-0000-0000-0000-000000000010\",\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"is_half_day\": false,\n      \"reason\": \"Family vacation\",\n      \"document_url\": null,\n      \"status\": \"pending\",\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"rejection_reason\": null,\n      \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n      \"approval_stage\": \"admin\",\n      \"hod_status\": \"approved\",\n      \"hod_employee_id\": \"55555555-5555-5555-5555-555555555555\",\n      \"hod_approved_by\": \"u1b2c3d4-0000-0000-0000-000000000055\",\n      \"hod_approved_at\": \"2025-07-21T09:00:00.000Z\",\n      \"hod_rejection_reason\": null,\n      \"created_at\": \"2025-07-20T08:00:00.000Z\",\n      \"updated_at\": \"2025-07-20T08:00:00.000Z\",\n      \"deleted_at\": null,\n      \"employee_code\": \"EMP0A1B2C\",\n      \"first_name\": \"Priya\",\n      \"last_name\": \"Nair\",\n      \"email\": \"priya@acme.com\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"department_name\": \"Engineering\",\n      \"hod_first_name\": \"Ravi\",\n      \"hod_last_name\": \"Kumar\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 — Bad stage",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid stage. Must be one of: hod, admin, completed\"\n}"
             }
           ]
         },
@@ -535,10 +1065,17 @@
           "name": "Get Leave Requests by Date Range",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/date-range?from_date=2025-08-01&to_date=2025-08-31&branch_id={{branch_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -546,8 +1083,14 @@
                 "date-range"
               ],
               "query": [
-                { "key": "from_date", "value": "2025-08-01" },
-                { "key": "to_date", "value": "2025-08-31" },
+                {
+                  "key": "from_date",
+                  "value": "2025-08-01"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2025-08-31"
+                },
                 {
                   "key": "branch_id",
                   "value": "{{branch_id}}",
@@ -562,7 +1105,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"approved\"\n    }\n  ]\n}"
             },
@@ -571,7 +1117,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"from_date and to_date are required query parameters\"\n}"
             },
@@ -580,7 +1129,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"to_date must be on or after from_date\"\n}"
             }
@@ -590,10 +1142,17 @@
           "name": "Get Leave Request by ID (Admin)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/leave-requests/{{request_id}}",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -608,7 +1167,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": {\n    \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"branch_id\": \"b1b2c3d4-0000-0000-0000-000000000002\",\n    \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n    \"leave_name\": \"Annual Leave\",\n    \"is_paid\": true,\n    \"requires_document\": false,\n    \"is_half_day_allowed\": true,\n    \"from_date\": \"2025-08-01\",\n    \"to_date\": \"2025-08-03\",\n    \"total_days\": \"3.00\",\n    \"is_half_day\": false,\n    \"reason\": \"Family vacation\",\n    \"document_url\": null,\n    \"status\": \"pending\",\n    \"approved_by\": null,\n    \"approved_at\": null,\n    \"rejection_reason\": null,\n    \"created_at\": \"2025-07-20T08:00:00.000Z\",\n    \"updated_at\": \"2025-07-20T08:00:00.000Z\"\n  }\n}"
             },
@@ -617,7 +1179,10 @@
               "status": "Not Found",
               "code": 404,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Leave request not found\"\n}"
             }
@@ -632,10 +1197,17 @@
           "name": "Get All Leave Requests (Branch)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/leave-requests",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -651,7 +1223,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    }\n  ]\n}"
             }
@@ -661,10 +1236,17 @@
           "name": "Get Leave Requests by Status (Branch)",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/branches/{{branch_id}}/leave-requests/status/pending",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "companies",
                 "{{company_id}}",
@@ -682,7 +1264,10 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"r1b2c3d4-0000-0000-0000-000000000004\",\n      \"employee_id\": \"e1b2c3d4-0000-0000-0000-000000000003\",\n      \"leave_name\": \"Annual Leave\",\n      \"is_paid\": true,\n      \"from_date\": \"2025-08-01\",\n      \"to_date\": \"2025-08-03\",\n      \"total_days\": \"3.00\",\n      \"status\": \"pending\",\n      \"created_at\": \"2025-07-20T08:00:00.000Z\"\n    }\n  ]\n}"
             }

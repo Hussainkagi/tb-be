@@ -76,6 +76,80 @@ const DepartmentController = {
         }
     },
 
+    // ── HEAD OF DEPARTMENT ────────────────────────────────────────────────
+    async setHead(req, res) {
+        try {
+            const { employee_id, replace = false } = req.body;
+            if (!employee_id) {
+                return res.status(400).json({ success: false, message: "employee_id is required" });
+            }
+
+            const result = await DepartmentService.setDepartmentHead(req.params.id, employee_id, { replace });
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    async removeHead(req, res) {
+        try {
+            const result = await DepartmentService.removeDepartmentHead(req.params.id);
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    async getHeadStatus(req, res) {
+        try {
+            const result = await DepartmentService.getDepartmentHeadStatus(req.params.id);
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(404).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    async getMissingHeads(req, res) {
+        try {
+            const result = await DepartmentService.getDepartmentsMissingHead(req.params.company_id);
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
     async update(req, res) {
         try {
             const result = await DepartmentService.updateDepartment(req.params.id, req.body);

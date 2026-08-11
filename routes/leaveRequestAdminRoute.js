@@ -3,7 +3,7 @@ const router = express.Router({ mergeParams: true });
 
 const LeaveRequestController = require("../controller/leaveRequestController");
 const verifyToken = require("../middleware/verifyToken");
-const { isAdmin } = require("../middleware/authorizeRoles");
+const { isAdmin, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +31,17 @@ router.get(
     validateTenant,
     isAdmin,
     LeaveRequestController.getByCompanyAndStatus
+);
+
+// GET /api/companies/:company_id/leave-requests/stage/:stage   (hod | admin | completed)
+// The admin's action queue is stage=admin — requests that cleared the HOD leg
+// (or never needed one). stage=hod shows what is still with the department heads.
+router.get(
+    "/leave-requests/stage/:stage",
+    verifyToken,
+    validateTenant,
+    isAdmin,
+    LeaveRequestController.getByCompanyAndStage
 );
 
 // GET /api/companies/:company_id/leave-requests/date-range?from_date=&to_date=&branch_id=
@@ -97,6 +108,41 @@ router.patch(
     validateTenant,
     isAdmin,
     LeaveRequestController.reject
+);
+
+// ─────────────────────────────────────────────
+// HEAD OF DEPARTMENT — stage one of the approval workflow
+//
+// A head of department normally holds the Employee role, so these routes are
+// authorised by identity (does this user head a department?) inside the
+// service, not by role. isEmployee only keeps anonymous callers out.
+// ─────────────────────────────────────────────
+
+// GET /api/companies/:company_id/hod/leave-requests?stage=hod|admin|all&status=
+router.get(
+    "/hod/leave-requests",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    LeaveRequestController.getForHod
+);
+
+// PATCH /api/companies/:company_id/hod/leave-requests/:id/approve
+router.patch(
+    "/hod/leave-requests/:id/approve",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    LeaveRequestController.hodApprove
+);
+
+// PATCH /api/companies/:company_id/hod/leave-requests/:id/reject
+router.patch(
+    "/hod/leave-requests/:id/reject",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    LeaveRequestController.hodReject
 );
 
 module.exports = router;

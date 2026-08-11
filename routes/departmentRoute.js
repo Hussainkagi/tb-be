@@ -13,7 +13,12 @@ const validateTenant = require("../middleware/validateTenant");
 // ─────────────────────────────────────────────
 router.get("/", verifyToken, validateTenant, isManager, DepartmentController.getByBranch);
 router.get("/company", verifyToken, validateTenant, isManager, DepartmentController.getByCompany);
+// Departments that have employees but no head — must come before "/:id"
+router.get("/missing-heads", verifyToken, validateTenant, isManager, DepartmentController.getMissingHeads);
 router.get("/:id", verifyToken, validateTenant, isManager, DepartmentController.getById);
+router.get("/:id/head-status", verifyToken, validateTenant, isManager, DepartmentController.getHeadStatus);
+router.put("/:id/head", verifyToken, validateTenant, isAdmin, DepartmentController.setHead);
+router.delete("/:id/head", verifyToken, validateTenant, isAdmin, DepartmentController.removeHead);
 router.post("/", verifyToken, validateTenant, isAdmin, DepartmentController.create);
 router.put("/:id", verifyToken, validateTenant, isManager, DepartmentController.update);
 router.patch("/:id/deactivate", verifyToken, validateTenant, isAdmin, DepartmentController.deactivate);
