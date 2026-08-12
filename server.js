@@ -73,6 +73,12 @@ app.use("/api", enforceCompanyActive);
 const { activityLogger } = require("./middleware/activityLogger");
 app.use("/api", activityLogger);
 
+// Plan gating. Mounted per module below rather than globally, because which
+// modules a plan includes is exactly what varies. See enums/features.js for
+// the key list and docs/PRICING_AND_PLANS.md for the model.
+const { requireFeature } = require("./middleware/enforceEntitlement");
+const { Feature } = require("./enums/features");
+
 //All Routes
 const SuperAdminRoutes = require("./routes/superAdminRoute");
 app.use("/api/super-admin", SuperAdminRoutes);
@@ -82,6 +88,12 @@ app.use("/api/users", UserRoutes);
 
 const CompanyRoutes = require("./routes/companyRoute");
 app.use("/api/companies", CompanyRoutes);
+
+// Plan entitlements, the pricing page and coupon redemption. Never gated by a
+// plan itself — a company whose plan has lapsed must still be able to reach the
+// upgrade path.
+const BillingRoutes = require("./routes/billingRoute");
+app.use("/api/companies/:company_id/billing", BillingRoutes);
 
 const UserCompanyRoutes = require("./routes/userCompanyRoute");
 app.use("/api/user-companies", UserCompanyRoutes);
@@ -113,8 +125,14 @@ app.use("/api/companies/:company_id/employees/:employee_id/salary-structures", E
 const EmployeeBankAccountRoutes = require("./routes/employeeBankAccountRoute");
 app.use("/api/companies/:company_id/bank-accounts", EmployeeBankAccountRoutes);
 
+// Gold only. Gated on every method including reads: a plan without gratuity
+// never produced a figure, so there is no history to strand.
 const EmployeeGratuityRoutes = require("./routes/employeeGratuityRoute");
-app.use("/api/companies/:company_id/gratuity", EmployeeGratuityRoutes);
+app.use(
+    "/api/companies/:company_id/gratuity",
+    requireFeature(Feature.GRATUITY_CALCULATE),
+    EmployeeGratuityRoutes
+);
 
 const EmployeeSalaryStructureBulkRoutes = require("./routes/employeeSalaryStructureBulkRoute");
 app.use("/api/companies/:company_id/salary-structures/bulk-upload", EmployeeSalaryStructureBulkRoutes);
@@ -141,11 +159,22 @@ const leaveRequestAdminRoutes = require("./routes/leaveRequestAdminRoute");
 app.use("/api/companies/:company_id", leaveRequestAdminRoutes);
 
 
+// ─────────────────────────────────────────────
+// PAYROLL — Pro and above
+// ─────────────────────────────────────────────
+//
+// Gated with allowReads: true. Writes (generate, adjust, approve, pay) require
+// the feature; GETs stay open so a company that lapses from Pro can still open
+// the payroll it already ran. Hiding historical payroll behind an expired plan
+// reads as data loss, and finance records are the worst possible thing to make
+// someone feel they have lost.
+const requirePayroll = requireFeature(Feature.PAYROLL_GENERATE, { allowReads: true });
+
 // The single continuous payroll flow (period → generate → adjust → review →
 // approve → pay → payslips). The routers below it stay mounted for the
 // per-record operations the wizard calls into.
 const payrollRunRoutes = require("./routes/payrollRunRoute");
-app.use("/api/companies/:company_id/payroll-runs", payrollRunRoutes);
+app.use("/api/companies/:company_id/payroll-runs", requirePayroll, payrollRunRoutes);
 
 // Fabricates a month of attendance so payroll can be tested end to end.
 // The router blocks itself in production — see routes/testDataSeedRoute.js
@@ -153,25 +182,37 @@ const testDataSeedRoutes = require("./routes/testDataSeedRoute");
 app.use("/api/companies/:company_id/test-data", testDataSeedRoutes);
 
 const payrollPeriodRoutes = require("./routes/payrollPeriodRoute");
-app.use("/api/companies/:company_id/payroll-periods", payrollPeriodRoutes);
+app.use("/api/companies/:company_id/payroll-periods", requirePayroll, payrollPeriodRoutes);
 
 const payrollRoutes = require("./routes/payrollRoute");
-app.use("/api/companies/:company_id/payrolls", payrollRoutes);
+app.use("/api/companies/:company_id/payrolls", requirePayroll, payrollRoutes);
 
 const payrollAdjustmentRoutes = require("./routes/payrollAdjustmentRoute");
-app.use("/api/companies/:company_id/payroll-adjustments", payrollAdjustmentRoutes);
+app.use("/api/companies/:company_id/payroll-adjustments", requirePayroll, payrollAdjustmentRoutes);
 
+// Payslips have their own key — a plan could sell payroll without PDF payslips.
 const payslipRoutes = require("./routes/payslipRoute");
-app.use("/api/companies/:company_id/payslips", payslipRoutes);
+app.use(
+    "/api/companies/:company_id/payslips",
+    requireFeature(Feature.PAYSLIP_PDF, { allowReads: true }),
+    payslipRoutes
+);
 
 const notificationRoutes = require("./routes/notificationRoute");
 app.use("/api/companies/:company_id/notifications", notificationRoutes);
 
 const payrollBreakdownRouter = require("./routes/payrollBreakdownRoute");
-app.use("/api/companies/:company_id/payroll-breakdown", payrollBreakdownRouter);
+app.use("/api/companies/:company_id/payroll-breakdown", requirePayroll, payrollBreakdownRouter);
 
+// Pro and above. Fully gated: logs keep accruing for everyone (the logger is
+// mounted globally), a lower plan just cannot read them — so an upgrade later
+// reveals the full history rather than starting from empty.
 const activityLogRoutes = require("./routes/activityLogRoute");
-app.use("/api/companies/:company_id/activity-logs", activityLogRoutes);
+app.use(
+    "/api/companies/:company_id/activity-logs",
+    requireFeature(Feature.ACTIVITY_LOG),
+    activityLogRoutes
+);
 
 const dashboardRoutes = require("./routes/dashboardRoute");
 app.use("/api/companies/:company_id/dashboard", dashboardRoutes);

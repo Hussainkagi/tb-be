@@ -15,6 +15,9 @@ const {
     welcomeTemplate
 } = require("../utils/emailTemplates");
 const { Role } = require("../enums/roles");
+const { Limit } = require("../enums/features");
+const EntitlementService = require("./entitlementService");
+const PlanModel = require("../models/planModel");
 const crypto = require("crypto");
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -81,12 +84,25 @@ const UserCompanyService = {
                 first_name, last_name, email, phone,
             });
 
-            // 4. Create company
+            // 4. Create company, on the fallback (Trial) plan.
+            //
+            // The plan row is resolved here rather than defaulted in SQL so the
+            // trial clock starts from the plan's own duration_days — change the
+            // trial from 14 to 30 days in the panel and new signups follow,
+            // with no migration.
+            const trialPlan = await PlanModel.findFallbackPlan();
+            const planExpiresAt = trialPlan?.duration_days
+                ? new Date(Date.now() + trialPlan.duration_days * 24 * 60 * 60 * 1000)
+                : null;
+
             const company = await CompanyModel.create({
                 company_name, company_code,
                 email: company_email || email,
                 phone: company_phone,
                 country, timezone, currency, logo_url,
+                plan: trialPlan?.code || "trial",
+                plan_id: trialPlan?.id || null,
+                plan_expires_at: planExpiresAt,
             });
 
             // 5. Check user isn't already in this company (edge case: race condition)
@@ -391,6 +407,34 @@ async bulkInviteEmployees(rows, company_id) {
         failed:    0,
         rows:      [],   // per-row outcome — always populated
     };
+
+    // ── Plan seat check, for the WHOLE batch ──────────────────────────────
+    //
+    // Checked once, up front, against rows.length. Letting the loop create
+    // employees one at a time would walk a company past its cap on a single
+    // upload — each individual insert looks fine until the exact row that
+    // crosses the line, leaving a half-imported file and a company over its
+    // limit. Rejecting the upload whole is the honest outcome.
+    const seatCheck = await EntitlementService.checkLimit(
+        company_id, Limit.EMPLOYEES, rows.length
+    );
+
+    if (!seatCheck.allowed) {
+        return {
+            success: false,
+            code: "LIMIT_REACHED",
+            message: `This file has ${rows.length} employee(s), but your plan allows ${seatCheck.limit} and you already have ${seatCheck.used}. You can add ${seatCheck.remaining} more.`,
+            data: {
+                feature: Limit.EMPLOYEES,
+                limit: seatCheck.limit,
+                used: seatCheck.used,
+                requested: rows.length,
+                remaining: seatCheck.remaining,
+                current_plan: seatCheck.plan_code,
+                upgrade_path: "/billing/pricing",
+            },
+        };
+    }
 
     for (let i = 0; i < rows.length; i++) {
         const raw       = rows[i];

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const SuperAdminController = require("../controller/superAdminController");
+const PlanController = require("../controller/planController");
 const verifyToken = require("../middleware/verifyToken");
 const { requireSuperAdmin } = require("../middleware/isSuperAdmin");
 
@@ -46,6 +47,57 @@ router.get("/companies/:company_id/leave-stats", SuperAdminController.companyLea
 router.patch("/companies/:company_id/disable", SuperAdminController.disableCompany);
 router.patch("/companies/:company_id/enable", SuperAdminController.enableCompany);
 router.patch("/companies/:company_id/plan", SuperAdminController.updateCompanyPlan);
+
+// ─────────────────────────────────────────────
+// PLANS & FEATURE GRID
+// ─────────────────────────────────────────────
+//
+// The feature CATALOG is read-only: rows are created by migrations, because a
+// key that no code enforces is dead config. What IS editable here is the grid —
+// which plans get which features — so adding a module to Gold next month is a
+// checkbox, not a deploy.
+
+// The catalog, grouped by category. Renders the rows of the grid screen.
+router.get("/plan-features", PlanController.listFeatures);
+
+// ?include_inactive=true
+router.get("/plans", PlanController.listPlans);
+router.post("/plans", PlanController.createPlan);
+router.get("/plans/:plan_id", PlanController.getPlan);
+router.put("/plans/:plan_id", PlanController.updatePlan);
+router.delete("/plans/:plan_id", PlanController.deletePlan);
+
+// The grid for one plan. PUT saves the whole screen in one transaction;
+// PATCH toggles a single cell.
+router.get("/plans/:plan_id/grid", PlanController.getPlanGrid);
+router.put("/plans/:plan_id/grid", PlanController.savePlanGrid);
+router.patch("/plans/:plan_id/features/:feature_key", PlanController.setPlanFeature);
+
+// ─────────────────────────────────────────────
+// PER-COMPANY ENTITLEMENTS & OVERRIDES
+// ─────────────────────────────────────────────
+//
+// Overrides answer "Pro, but 150 employees" without minting a private plan per
+// customer. The resolved view is what support reads when a tenant asks why
+// they cannot add an employee.
+router.get("/companies/:company_id/entitlements", PlanController.getCompanyEntitlements);
+router.get("/companies/:company_id/overrides", PlanController.listCompanyOverrides);
+router.put("/companies/:company_id/overrides", PlanController.upsertCompanyOverride);
+router.delete("/companies/:company_id/overrides/:feature_key", PlanController.removeCompanyOverride);
+
+// ─────────────────────────────────────────────
+// UPGRADE COUPONS
+// ─────────────────────────────────────────────
+//
+// Payment happens off-platform: the customer mails us, we invoice, they pay,
+// then we mint a code here and send it over. Each code is bound to one company
+// and is single-use.
+//
+// ?page&limit&company_id&status=active|redeemed|revoked&search
+router.get("/coupons", PlanController.listCoupons);
+router.post("/coupons", PlanController.createCoupon);
+router.get("/coupons/:coupon_id", PlanController.getCoupon);
+router.patch("/coupons/:coupon_id/revoke", PlanController.revokeCoupon);
 
 // ─────────────────────────────────────────────
 // SUPER ADMIN MANAGEMENT

@@ -144,6 +144,12 @@ const UserCompanyController = {
 
             const result = await UserCompanyService.bulkInviteEmployees(rows, req.user.company_id);
 
+            // The plan seat check rejects the whole batch before any row is
+            // processed, so there is no per-row tally to report on.
+            if (result.success === false) {
+                return res.status(result.code === "LIMIT_REACHED" ? 403 : 400).json(result);
+            }
+
             const status =
                 result.data.failed > 0 && result.data.succeeded > 0 ? 207
                     : result.data.failed === rows.length ? 422

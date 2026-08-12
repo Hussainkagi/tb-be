@@ -1,6 +1,8 @@
 const SuperAdminModel = require("../models/superAdminModel");
 const CompanyModel = require("../models/companyModel");
 const UserModel = require("../models/userModel");
+const PlanModel = require("../models/planModel");
+const EntitlementService = require("./entitlementService");
 const { invalidateCompanyCache } = require("../middleware/enforceCompanyActive");
 const { invalidateSuperAdminCache } = require("../middleware/isSuperAdmin");
 
@@ -605,24 +607,42 @@ const SuperAdminService = {
         }
     },
 
+    /**
+     * Moves a company onto a plan directly — the manual counterpart to coupon
+     * redemption, used for corrections, comped upgrades and reversals.
+     *
+     * Valid plans come from the plans table, not a hardcoded list: a plan added
+     * from the panel has to be assignable without a code change, or the whole
+     * point of making plans data is lost.
+     */
     async updateCompanyPlan(company_id, { plan, plan_expires_at }, actor, { ip_address }) {
         try {
-            const VALID_PLANS = ["trial", "basic", "pro", "enterprise"];
-            if (!plan || !VALID_PLANS.includes(plan)) {
+            if (!plan) return { success: false, message: "plan is required" };
+
+            const target = await PlanModel.findPlanByCode(plan);
+            if (!target) {
+                const available = await PlanModel.listPlans({ include_inactive: true });
                 return {
                     success: false,
-                    message: `Invalid plan. Must be one of: ${VALID_PLANS.join(", ")}`,
+                    message: `Unknown plan "${plan}". Available: ${available.map((p) => p.code).join(", ")}`,
                 };
+            }
+            if (!target.is_active) {
+                return { success: false, message: `Plan "${plan}" is inactive and cannot be assigned.` };
             }
 
             const company = await SuperAdminModel.getCompany(company_id);
             if (!company) return { success: false, message: "Company not found" };
 
-            const updated = await SuperAdminModel.updateCompanyPlan(
-                company_id,
-                plan,
-                plan_expires_at
-            );
+            // No expiry given: derive one from the plan, so a paid plan can
+            // never be assigned perpetually by accident.
+            const expiry =
+                plan_expires_at ||
+                (target.duration_days
+                    ? new Date(Date.now() + target.duration_days * 24 * 60 * 60 * 1000)
+                    : null);
+
+            const updated = await SuperAdminModel.updateCompanyPlan(company_id, plan, expiry);
 
             await SuperAdminModel.createAuditLog({
                 actor_user_id: actor.user_id,
@@ -631,10 +651,13 @@ const SuperAdminService = {
                 metadata: {
                     from_plan: company.plan,
                     to_plan: plan,
-                    plan_expires_at: plan_expires_at || null,
+                    plan_expires_at: expiry,
                 },
                 ip_address,
             });
+
+            // Take effect now rather than when the entitlement TTL lapses.
+            EntitlementService.invalidate(company_id);
 
             return { success: true, message: "Plan updated successfully", data: updated };
         } catch (error) {

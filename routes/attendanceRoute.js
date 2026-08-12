@@ -6,6 +6,8 @@ const AttendanceController = require("../controller/attendanceController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { requireFeature, stripUnentitledUpload } = require("../middleware/enforceEntitlement");
+const { Feature } = require("../enums/features");
 
 // ---------------------------------------------------------------------------
 // Multer — memory storage so req.file.buffer is available for Cloudinary
@@ -26,12 +28,17 @@ const upload = multer({
 // ─────────────────────────────────────────────
 // EMPLOYEE — self check-in / check-out
 // ─────────────────────────────────────────────
+// Photo verification is Pro+. It is stripped, not rejected: the selfie is an
+// optional part of the payload, and 403-ing the whole request would stop a
+// Trial employee from clocking in at all. The check-in is written without the
+// photo and the response carries X-Feature-Stripped.
 router.post(
     "/check-in",
     verifyToken,
     validateTenant,
     isEmployee,
     upload.single("selfie"),        // field name: "selfie"  → req.file
+    stripUnentitledUpload(Feature.ATTENDANCE_PHOTO),
     AttendanceController.checkIn,
 );
 
@@ -41,6 +48,7 @@ router.post(
     validateTenant,
     isEmployee,
     upload.single("selfie"),        // field name: "selfie"  → req.file
+    stripUnentitledUpload(Feature.ATTENDANCE_PHOTO),
     AttendanceController.checkOut,
 );
 
@@ -55,7 +63,8 @@ router.get("/", verifyToken, validateTenant, isManager, AttendanceController.get
 router.get("/summary", verifyToken, validateTenant, isManager, AttendanceController.getSummary);
 
 // GET /api/companies/:company_id/attendance/map?startDate=&endDate=
-router.get("/map", verifyToken, validateTenant, isManager, AttendanceController.getCheckInLocations);
+// Branch attendance map — Pro+.
+router.get("/map", verifyToken, validateTenant, isManager, requireFeature(Feature.ATTENDANCE_BRANCH_MAP), AttendanceController.getCheckInLocations);
 
 // ─────────────────────────────────────────────
 // ADMIN + MANAGER — nested filters

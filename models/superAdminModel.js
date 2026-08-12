@@ -783,11 +783,20 @@ const SuperAdmin = {
         return result.rows[0];
     },
 
+    // plan_id is the column entitlements actually resolve against; plan is the
+    // legacy label the console still filters on. Both move together, or an
+    // upgrade silently grants nothing.
     async updateCompanyPlan(company_id, plan, plan_expires_at) {
         const result = await db.query(
-            `UPDATE companies
-             SET plan = $2, plan_expires_at = $3
-             WHERE id = $1 AND deleted_at IS NULL
+            `UPDATE companies c
+             SET plan = $2::VARCHAR,
+                 plan_expires_at = $3,
+                 plan_id = COALESCE(
+                     (SELECT p.id FROM plans p
+                       WHERE p.code = $2::VARCHAR AND p.deleted_at IS NULL),
+                     c.plan_id
+                 )
+             WHERE c.id = $1 AND c.deleted_at IS NULL
              RETURNING *`,
             [company_id, plan, plan_expires_at || null]
         );
