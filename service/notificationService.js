@@ -792,6 +792,63 @@ const NotificationService = {
 
 
     // ─────────────────────────────────────────────────────────────────────────
+    // LEAVE: Notify the head of department that a request needs their approval
+    // Stage one of the two-stage flow — the admin is not told yet.
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyLeaveRequestToHod({ company_id, hod_employee_id, leave_id, employee_name, employee_code, leave_type, department_name, start_date, end_date }) {
+        return sendOnChannels({
+            company_id,
+            notification_type: "leave_request",
+            template_code: "leave_request_hod_pending",
+            template_variables: {
+                employee_name, employee_code, leave_type, department_name,
+                start_date, end_date, leave_id,
+            },
+            entity_type: "leave_requests",
+            entity_id: leave_id,
+            audience: { type: "specific_employee", employee_id: hod_employee_id },
+        }, ADMIN_ALERT_CHANNELS);
+    },
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LEAVE: HOD signed off — ask the admin for the final approval
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyLeaveRequestToAdminAfterHod({ company_id, branch_id, leave_id, employee_name, employee_code, leave_type, department_name, hod_name, start_date, end_date }) {
+        return sendOnChannels({
+            company_id,
+            branch_id,
+            notification_type: "leave_request",
+            template_code: "leave_request_admin_pending",
+            template_variables: {
+                employee_name, employee_code, leave_type, department_name,
+                hod_name, start_date, end_date, leave_id,
+            },
+            entity_type: "leave_requests",
+            entity_id: leave_id,
+            audience: { type: "role_based", role: String(Role.ADMIN) },
+        }, ADMIN_ALERT_CHANNELS);
+    },
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LEAVE: Tell the employee their request cleared the HOD stage
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyLeaveHodApproved({ company_id, employee_id, leave_id, leave_type, hod_name, start_date, end_date }) {
+        return NotificationService.send({
+            company_id,
+            notification_type: "leave_status_update",
+            channel: "push",
+            template_code: "leave_status_hod_approved",
+            template_variables: { leave_type, hod_name, start_date, end_date, leave_id },
+            entity_type: "leave_requests",
+            entity_id: leave_id,
+            audience: { type: "specific_employee", employee_id },
+        });
+    },
+
+
+    // ─────────────────────────────────────────────────────────────────────────
     // LEAVE: Notify employee when their leave is approved or rejected
     // ─────────────────────────────────────────────────────────────────────────
     async notifyLeaveStatusUpdate({ company_id, employee_id, leave_id, status, leave_type, start_date, end_date, actioned_by, rejection_reason = null }) {

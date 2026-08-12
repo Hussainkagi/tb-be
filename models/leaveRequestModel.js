@@ -17,19 +17,26 @@ const LeaveRequestModel = {
             is_half_day = false,
             reason,
             document_url = null,
+            // Two-stage approval routing — decided by the service
+            department_id = null,
+            approval_stage = "admin",
+            hod_status = "not_required",
+            hod_employee_id = null,
         } = data;
 
         const result = await db.query(
             `INSERT INTO leave_requests (
                 company_id, branch_id, employee_id, leave_type_id,
                 from_date, to_date, total_days, is_half_day,
-                reason, document_url
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                reason, document_url,
+                department_id, approval_stage, hod_status, hod_employee_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING *`,
             [
                 company_id, branch_id, employee_id, leave_type_id,
                 from_date, to_date, total_days, is_half_day,
                 reason, document_url,
+                department_id, approval_stage, hod_status, hod_employee_id,
             ]
         );
         return result.rows[0];
@@ -45,9 +52,18 @@ const LeaveRequestModel = {
                     lt.leave_name,
                     lt.is_paid,
                     lt.requires_document,
-                    lt.is_half_day_allowed
+                    lt.is_half_day_allowed,
+                    e.first_name      AS employee_first_name,
+                    e.last_name       AS employee_last_name,
+                    e.employee_code,
+                    d.department_name,
+                    hod.first_name    AS hod_first_name,
+                    hod.last_name     AS hod_last_name
              FROM leave_requests lr
              JOIN leave_types lt ON lt.id = lr.leave_type_id
+             JOIN employees   e  ON e.id  = lr.employee_id
+             LEFT JOIN departments d   ON d.id   = lr.department_id
+             LEFT JOIN employees   hod ON hod.id = lr.hod_employee_id
              WHERE lr.id = $1 AND lr.deleted_at IS NULL`,
             [id]
         );
@@ -139,6 +155,138 @@ const LeaveRequestModel = {
     },
 
     // --------------------------------------------------------
+    // READ — head of department scope
+    // --------------------------------------------------------
+
+    // Everything raised inside the departments this employee heads.
+    // `stage` narrows it to one leg of the workflow:
+    //   "hod"   → waiting for the HOD to act (their action queue)
+    //   "admin" → cleared by the HOD, waiting on the admin
+    async getAllForHod(hod_employee_id, { stage = null, status = null } = {}) {
+        const params = [hod_employee_id];
+        let clauses = "";
+
+        if (stage) {
+            params.push(stage);
+            clauses += ` AND lr.approval_stage = $${params.length}`;
+        }
+        if (status) {
+            params.push(status);
+            clauses += ` AND lr.status = $${params.length}`;
+        }
+
+        const result = await db.query(
+            `SELECT lr.*,
+                    lt.leave_name,
+                    lt.is_paid,
+                    e.employee_code,
+                    e.first_name,
+                    e.last_name,
+                    e.email,
+                    e.gender,
+                    d.department_name
+             FROM leave_requests lr
+             JOIN leave_types lt ON lt.id = lr.leave_type_id
+             JOIN employees   e  ON e.id  = lr.employee_id
+             LEFT JOIN departments d ON d.id = lr.department_id
+             WHERE lr.hod_employee_id = $1
+               AND lr.deleted_at IS NULL${clauses}
+             ORDER BY lr.created_at DESC`,
+            params
+        );
+        return result.rows;
+    },
+
+    async countPendingForHod(hod_employee_id) {
+        const result = await db.query(
+            `SELECT COUNT(*)::int AS count
+             FROM leave_requests
+             WHERE hod_employee_id = $1
+               AND approval_stage  = 'hod'
+               AND status          = 'pending'
+               AND deleted_at IS NULL`,
+            [hod_employee_id]
+        );
+        return result.rows[0].count;
+    },
+
+    // --------------------------------------------------------
+    // UPDATE — head of department leg
+    // --------------------------------------------------------
+
+    // HOD signs off — the request moves on to the admin, `status` stays pending
+    async hodApprove(id, hod_approved_by) {
+        const result = await db.query(
+            `UPDATE leave_requests
+             SET hod_status      = 'approved',
+                 hod_approved_by = $2,
+                 hod_approved_at = NOW(),
+                 approval_stage  = 'admin'
+             WHERE id             = $1
+               AND deleted_at     IS NULL
+               AND approval_stage = 'hod'
+             RETURNING *`,
+            [id, hod_approved_by]
+        );
+        return result.rows[0];
+    },
+
+    // HOD rejects — the request ends here, it never reaches the admin
+    async hodReject(id, hod_approved_by, rejection_reason) {
+        const result = await db.query(
+            `UPDATE leave_requests
+             SET hod_status           = 'rejected',
+                 hod_approved_by      = $2,
+                 hod_approved_at      = NOW(),
+                 hod_rejection_reason = $3,
+                 approval_stage       = 'completed',
+                 status               = 'rejected',
+                 rejection_reason     = $3
+             WHERE id             = $1
+               AND deleted_at     IS NULL
+               AND approval_stage = 'hod'
+             RETURNING *`,
+            [id, hod_approved_by, rejection_reason]
+        );
+        return result.rows[0];
+    },
+
+    // A department got a new head — hand the still-waiting requests over to
+    // them so nothing is stuck with the previous head.
+    async reassignHodForDepartment(department_id, new_hod_employee_id) {
+        const result = await db.query(
+            `UPDATE leave_requests
+             SET hod_employee_id = $2
+             WHERE department_id  = $1
+               AND approval_stage = 'hod'
+               AND status         = 'pending'
+               AND deleted_at IS NULL
+               AND employee_id != $2
+             RETURNING *`,
+            [department_id, new_hod_employee_id]
+        );
+        return result.rows;
+    },
+
+    // A department lost its head — the HOD stage can no longer be served, so
+    // the waiting requests fall through to the admin instead of stalling.
+    async releaseHodStageForDepartment(department_id) {
+        const result = await db.query(
+            `UPDATE leave_requests
+             SET approval_stage  = 'admin',
+                 hod_status      = 'not_required',
+                 hod_employee_id = NULL
+             WHERE department_id  = $1
+               AND approval_stage = 'hod'
+               AND status         = 'pending'
+               AND deleted_at IS NULL
+             RETURNING *`,
+            [department_id]
+        );
+        return result.rows;
+    },
+
+    // --------------------------------------------------------
     // READ — company scope
     // --------------------------------------------------------
 
@@ -169,6 +317,36 @@ const LeaveRequestModel = {
                AND lr.deleted_at IS NULL
              ORDER BY lr.from_date DESC`,
             [company_id, status]
+        );
+        return result.rows;
+    },
+
+    // The admin queue — pending requests that already cleared the HOD stage
+    // (plus the ones that never needed it). Pass stage 'hod' to see what is
+    // still sitting with the department heads.
+    async getByCompanyAndStage(company_id, stage) {
+        const result = await db.query(
+            `SELECT lr.*,
+                    lt.leave_name,
+                    lt.is_paid,
+                    e.employee_code,
+                    e.first_name,
+                    e.last_name,
+                    e.email,
+                    d.department_name,
+                    hod.first_name AS hod_first_name,
+                    hod.last_name  AS hod_last_name
+             FROM leave_requests lr
+             JOIN leave_types lt ON lt.id = lr.leave_type_id
+             JOIN employees   e  ON e.id  = lr.employee_id
+             LEFT JOIN departments d   ON d.id   = lr.department_id
+             LEFT JOIN employees   hod ON hod.id = lr.hod_employee_id
+             WHERE lr.company_id     = $1
+               AND lr.approval_stage = $2
+               AND lr.status         = 'pending'
+               AND lr.deleted_at IS NULL
+             ORDER BY lr.created_at DESC`,
+            [company_id, stage]
         );
         return result.rows;
     },
@@ -234,9 +412,10 @@ const LeaveRequestModel = {
     async approve(id, approved_by) {
         const result = await db.query(
             `UPDATE leave_requests
-             SET status      = 'approved',
-                 approved_by = $2,
-                 approved_at = NOW()
+             SET status         = 'approved',
+                 approved_by    = $2,
+                 approved_at    = NOW(),
+                 approval_stage = 'completed'
              WHERE id          = $1
                AND deleted_at  IS NULL
              RETURNING *`,
@@ -251,7 +430,8 @@ const LeaveRequestModel = {
              SET status           = 'rejected',
                  approved_by      = $2,
                  approved_at      = NOW(),
-                 rejection_reason = $3
+                 rejection_reason = $3,
+                 approval_stage   = 'completed'
              WHERE id         = $1
                AND deleted_at IS NULL
              RETURNING *`,
@@ -263,7 +443,8 @@ const LeaveRequestModel = {
     async cancel(id) {
         const result = await db.query(
             `UPDATE leave_requests
-             SET status = 'cancelled'
+             SET status         = 'cancelled',
+                 approval_stage = 'completed'
              WHERE id         = $1
                AND deleted_at IS NULL
              RETURNING *`,

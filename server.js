@@ -95,6 +95,9 @@ app.use("/api/companies/:company_id/branches", BranchRoutes);
 const DepartmentRoutes = require("./routes/departmentRoute");
 app.use("/api/companies/:company_id/branches/:branch_id/departments", DepartmentRoutes);
 
+const OrgChartRoutes = require("./routes/orgChartRoute");
+app.use("/api/companies/:company_id/org-chart", OrgChartRoutes);
+
 const ShiftRoutes = require("./routes/shiftRoute");
 app.use("/api/companies/:company_id/branches/:branch_id/shifts", ShiftRoutes);
 

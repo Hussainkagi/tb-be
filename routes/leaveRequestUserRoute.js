@@ -38,6 +38,17 @@ router.get(
     LeaveRequestController.getAllByEmployee
 );
 
+// GET .../leave-requests/approval-route
+// Who approves this employee's next request — HOD then admin, or admin only.
+// Call it before rendering the leave form so the UI can show the chain.
+router.get(
+    "/approval-route",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    LeaveRequestController.getApprovalRoute
+);
+
 // GET /api/companies/:company_id/branches/:branch_id/employees/:employee_id/leave-requests/status/:status
 router.get(
     "/status/:status",

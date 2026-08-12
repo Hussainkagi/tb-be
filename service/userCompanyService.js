@@ -5,6 +5,7 @@ const OtpModel = require("../models/otpTypeModel");
 const { hashPassword, comparePassword } = require("../utils/password");
 const { generateAccessToken, generateRefreshToken } = require("../utils/jwt");
 const EmployeeModel = require("../models/employeeModel");
+const DepartmentModel = require("../models/departmentModel");
 
 const { sendEmail } = require("../utils/mailer");
 const {
@@ -214,13 +215,33 @@ const UserCompanyService = {
             date_of_birth = null,
             joining_date = null,
             employment_type = null,
-             employee_person_code = null, 
+             employee_person_code = null,
             is_remote_job = false,
+            // Set from the "make this employee head of department?" prompt on
+            // the create-employee screen.
+            is_department_head = false,
         } = data;
 
         // 1. Validate role
         if (role === String(Role.ADMIN)) {
             return { success: false, message: "Cannot invite a user as Admin. Use company registration." };
+        }
+
+        // 1b. Head-of-department pre-checks — fail before creating anything
+        if (is_department_head) {
+            if (!department_id) {
+                return { success: false, message: "Cannot mark employee as head of department without a department" };
+            }
+            const targetDepartment = await DepartmentModel.findById(department_id);
+            if (!targetDepartment || targetDepartment.company_id !== company_id) {
+                return { success: false, message: "Department not found or does not belong to this company" };
+            }
+            if (targetDepartment.head_employee_id) {
+                return {
+                    success: false,
+                    message: `"${targetDepartment.department_name}" already has a head of department. Change it from the department settings.`,
+                };
+            }
         }
 
         // 2. Find or create user
@@ -279,6 +300,25 @@ const UserCompanyService = {
             is_remote_job
         });
 
+        // 8b. Make this employee head of their department if asked to, and warn
+        //     the caller when the department is left without a head.
+        let became_department_head = false;
+        let department_needs_head = false;
+
+        if (department_id) {
+            const department = await DepartmentModel.findById(department_id);
+
+            if (is_department_head && department && !department.head_employee_id) {
+                await DepartmentModel.setHead(department_id, employee.id);
+                became_department_head = true;
+            }
+
+            // Department now has at least this employee, so a head is required.
+            department_needs_head = Boolean(
+                department && !department.head_employee_id && !became_department_head
+            );
+        }
+
         // 9. Generate invite token + store
         const token = generateSecureToken();
         const expires_at = new Date(Date.now() + INVITE_EXPIRY_HOURS * 60 * 60 * 1000);
@@ -306,12 +346,18 @@ const UserCompanyService = {
 
         return {
             success: true,
-            message: "Employee invited. Password-set link sent to email.",
+            message: became_department_head
+                ? "Employee invited and set as head of department. Password-set link sent to email."
+                : "Employee invited. Password-set link sent to email.",
             data: {
                 user_id: user.id,
                 employee_id: employee.id,
                 username,
                 company_id,
+                department_id,
+                is_department_head: became_department_head,
+                // true → the UI should nudge the admin to pick a head for this department
+                department_needs_head,
             },
         };
     } catch (error) {
@@ -361,6 +407,7 @@ async bulkInviteEmployees(rows, company_id) {
             employment_type: String(raw.employment_type  ?? "").trim().toLowerCase(),
             employee_person_code: raw.employee_person_code ? String(raw.employee_person_code).trim() : null,
             is_remote_job:   String(raw.is_remote_job    ?? "false").trim().toLowerCase() === "true",
+            is_department_head: String(raw.is_department_head ?? "false").trim().toLowerCase() === "true",
             branch_id:       raw.branch_id     ? String(raw.branch_id).trim()     : null,
             department_id:   raw.department_id ? String(raw.department_id).trim() : null,
             shift_id:        raw.shift_id      ? String(raw.shift_id).trim()      : null,

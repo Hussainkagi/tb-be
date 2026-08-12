@@ -188,6 +188,122 @@ const LeaveRequestController = {
         }
     },
 
+    // GET /api/companies/:company_id/leave-requests/stage/:stage
+    // stage = hod | admin | completed — the admin's "awaiting me" queue is 'admin'
+    async getByCompanyAndStage(req, res) {
+        try {
+            const result = await LeaveRequestService.getByCompanyAndStage(
+                req.params.company_id,
+                req.params.stage
+            );
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    // --------------------------------------------------------
+    // HEAD OF DEPARTMENT — stage one of the approval workflow
+    // --------------------------------------------------------
+
+    // GET /api/companies/:company_id/hod/leave-requests?stage=hod|admin|all&status=
+    async getForHod(req, res) {
+        try {
+            const result = await LeaveRequestService.getLeaveRequestsForHod(
+                req.user.user_id,
+                req.params.company_id,
+                { stage: req.query.stage ?? "hod", status: req.query.status ?? null }
+            );
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(403).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    // PATCH /api/companies/:company_id/hod/leave-requests/:id/approve
+    async hodApprove(req, res) {
+        try {
+            const result = await LeaveRequestService.hodApproveLeaveRequest(
+                req.params.id,
+                req.user.user_id,
+                req.params.company_id
+            );
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    // PATCH /api/companies/:company_id/hod/leave-requests/:id/reject
+    async hodReject(req, res) {
+        try {
+            const result = await LeaveRequestService.hodRejectLeaveRequest(
+                req.params.id,
+                req.user.user_id,
+                req.params.company_id,
+                req.body.rejection_reason
+            );
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(400).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
+    // GET /api/companies/:company_id/branches/:branch_id/employees/:employee_id/leave-requests/approval-route
+    // Who will approve this employee's next leave request.
+    async getApprovalRoute(req, res) {
+        try {
+            const result = await LeaveRequestService.getApprovalRouteForEmployee(
+                req.params.employee_id,
+                req.user.user_id,
+                req.params.company_id
+            );
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(404).json(result);
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Server error",
+                error: error.message,
+            });
+        }
+    },
+
     // --------------------------------------------------------
     // READ — date range (payroll / reporting)
     // --------------------------------------------------------
@@ -234,7 +350,8 @@ const LeaveRequestController = {
         try {
             const result = await LeaveRequestService.approveLeaveRequest(
                 req.params.id,
-                req.body.approved_by
+                req.body.approved_by,
+                { override_hod: req.body.override_hod === true }
             );
             if (result.success) {
                 return res.status(200).json(result);

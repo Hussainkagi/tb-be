@@ -11,9 +11,31 @@
       "value": "http://localhost:3000/api",
       "type": "string"
     },
-    { "key": "access_token", "value": "", "type": "string" },
-    { "key": "user_id", "value": "", "type": "string" },
-    { "key": "company_id", "value": "", "type": "string" }
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "department_id",
+      "value": "33333333-3333-3333-3333-333333333333",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "22222222-2222-2222-2222-222222222222",
+      "type": "string"
+    }
   ],
   "item": [
     {
@@ -23,11 +45,21 @@
           "name": "Register Company",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/register",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "register"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -41,7 +73,10 @@
               "status": "Created",
               "code": 201,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": true,\n  \"message\": \"Company registered. OTP sent to email for verification.\",\n  \"data\": {\n    \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000001\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"username\": \"AC0001\",\n    \"was_existing_user\": false\n  }\n}"
             },
@@ -50,7 +85,10 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Company code already taken\"\n}"
             },
@@ -59,22 +97,34 @@
               "status": "Bad Request",
               "code": 400,
               "header": [
-                { "key": "Content-Type", "value": "application/json" }
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Password must be at least 8 characters\"\n}"
             }
           ]
         },
-
         {
           "name": "Verify Email OTP",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/verify-otp",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "verify-otp"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "verify-otp"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -97,7 +147,6 @@
             }
           ]
         },
-
         {
           "name": "Login",
           "event": [
@@ -117,11 +166,21 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -156,21 +215,34 @@
             }
           ]
         },
-
         {
           "name": "Logout",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
             "description": "Clears the refresh token from DB. Requires valid JWT."
           },
           "response": [
@@ -182,16 +254,25 @@
             }
           ]
         },
-
         {
           "name": "Forgot Password",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/forgot-password",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "forgot-password"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -208,16 +289,25 @@
             }
           ]
         },
-
         {
           "name": "Reset Password",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/reset-password",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "reset-password"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -240,16 +330,25 @@
             }
           ]
         },
-
         {
           "name": "Set Password (Invite)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/auth/set-password",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "set-password"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "set-password"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -278,18 +377,25 @@
             }
           ]
         },
-
         {
           "name": "My Companies (Switcher List)",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/auth/my-companies",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "my-companies"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "my-companies"
+              ]
             },
             "description": "Returns all companies the logged-in user belongs to. Used to populate the company switcher UI."
           },
@@ -302,19 +408,29 @@
             }
           ]
         },
-
         {
           "name": "Switch Company",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/auth/switch-company",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "switch-company"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "switch-company"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -339,7 +455,6 @@
         }
       ]
     },
-
     {
       "name": "Company",
       "item": [
@@ -348,12 +463,19 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies",
-              "host": ["{{base_url}}"],
-              "path": ["companies"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies"
+              ]
             },
             "description": "Admin only. Returns all active companies on the platform."
           },
@@ -366,18 +488,25 @@
             }
           ]
         },
-
         {
           "name": "Get Company by ID",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}"
+              ]
             },
             "description": "Admin only. Fetch a single company by UUID."
           },
@@ -396,18 +525,26 @@
             }
           ]
         },
-
         {
           "name": "Get Company by Code",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/code/ACME",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "code", "ACME"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "code",
+                "ACME"
+              ]
             },
             "description": "Admin only. Fetch a company by its unique company_code."
           },
@@ -420,19 +557,29 @@
             }
           ]
         },
-
         {
           "name": "Update Company",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -449,19 +596,30 @@
             }
           ]
         },
-
         {
           "name": "Update Company Plan",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/plan",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "plan"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "plan"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -478,18 +636,26 @@
             }
           ]
         },
-
         {
           "name": "Deactivate Company",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/deactivate",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "deactivate"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "deactivate"
+              ]
             },
             "description": "Admin only. Disables a company without deleting it. Users lose access."
           },
@@ -502,18 +668,25 @@
             }
           ]
         },
-
         {
           "name": "Delete Company",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}"
+              ]
             },
             "description": "Admin only. Soft deletes a company (sets deleted_at). All historical data is preserved."
           },
@@ -528,7 +701,6 @@
         }
       ]
     },
-
     {
       "name": "Users",
       "item": [
@@ -537,12 +709,19 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
             },
             "description": "Admin only. Returns all non-deleted users across the platform."
           },
@@ -555,18 +734,25 @@
             }
           ]
         },
-
         {
           "name": "Get User by ID",
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Self or Admin. Employee can only fetch their own profile."
           },
@@ -585,19 +771,29 @@
             }
           ]
         },
-
         {
           "name": "Update User",
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -614,18 +810,25 @@
             }
           ]
         },
-
         {
           "name": "Delete User",
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/users/{{user_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["users", "{{user_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Admin only. Soft deletes a user globally across all companies."
           },
@@ -640,7 +843,6 @@
         }
       ]
     },
-
     {
       "name": "Company Users",
       "item": [
@@ -649,12 +851,21 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/users",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "users"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "users"
+              ]
             },
             "description": "Admin or Manager. Lists all active users within the company. validateTenant ensures you can only access your own company."
           },
@@ -667,59 +878,134 @@
             }
           ]
         },
-
         {
           "name": "Invite Employee",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/{{company_id}}/users/invite",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "{{company_id}}", "users", "invite"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "users",
+                "invite"
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Smith\",\n  \"email\": \"jane@acme.com\",\n  \"phone\": \"+971507654321\",\n  \"role\": \"2\",\n  \"branch_id\": null,\n  \"company_code\": \"ACME\"\n}"
+              "raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Smith\",\n  \"email\": \"jane@acme.com\",\n  \"phone\": \"+971507654321\",\n  \"role\": \"2\",\n  \"branch_id\": \"{{branch_id}}\",\n  \"department_id\": \"{{department_id}}\",\n  \"shift_id\": null,\n  \"gender\": \"female\",\n  \"date_of_birth\": \"1995-04-12\",\n  \"joining_date\": \"2025-02-01\",\n  \"employment_type\": \"full_time\",\n  \"employee_person_code\": null,\n  \"is_remote_job\": false,\n  \"is_department_head\": true,\n  \"company_code\": \"ACME\"\n}"
             },
-            "description": "Admin or Manager. Invites a user to the company. If the email already exists in the system, the existing user is reused — no duplicate created. Sends a password-set link valid for 48 hours."
+            "description": "Admin or Manager. Invites a user to the company. If the email already exists in the system, the existing user is reused — no duplicate created. Sends a password-set link valid for 48 hours.\n\nHEAD OF DEPARTMENT — pass `is_department_head: true` to make this new employee the head of `department_id`. Only allowed when a department is given and it has no head yet (check with GET /departments/:id/head-status first). The response always reports `is_department_head` and `department_needs_head`; the latter is true when the employee landed in a department that still has no head, so the UI should prompt for one."
           },
           "response": [
             {
-              "name": "201 — Invited",
+              "name": "201 — Invited (and made head of department)",
               "status": "Created",
               "code": 201,
-              "body": "{\n  \"success\": true,\n  \"message\": \"Employee invited. Password-set link sent to email.\",\n  \"data\": {\n    \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000005\",\n    \"username\": \"AC0002\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\"\n  }\n}"
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee invited and set as head of department. Password-set link sent to email.\",\n  \"data\": {\n    \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000005\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000009\",\n    \"username\": \"AC0002\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"is_department_head\": true,\n    \"department_needs_head\": false\n  }\n}"
+            },
+            {
+              "name": "201 — Invited (department still needs a head)",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee invited. Password-set link sent to email.\",\n  \"data\": {\n    \"user_id\": \"a1b2c3d4-0000-0000-0000-000000000005\",\n    \"employee_id\": \"a1b2c3d4-0000-0000-0000-000000000009\",\n    \"username\": \"AC0002\",\n    \"company_id\": \"a1b2c3d4-0000-0000-0000-000000000002\",\n    \"department_id\": \"33333333-3333-3333-3333-333333333333\",\n    \"is_department_head\": false,\n    \"department_needs_head\": true\n  }\n}"
+            },
+            {
+              "name": "400 — Department already has a head",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"\\\"Engineering\\\" already has a head of department. Change it from the department settings.\"\n}"
+            },
+            {
+              "name": "400 — Head without a department",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot mark employee as head of department without a department\"\n}"
             },
             {
               "name": "400 — Already a member",
               "status": "Bad Request",
               "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"success\": false,\n  \"message\": \"User is already a member of this company\"\n}"
             },
             {
               "name": "400 — Cannot invite as Admin",
               "status": "Bad Request",
               "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Cannot invite a user as Admin. Use company registration.\"\n}"
             }
           ]
         },
-
         {
           "name": "Deactivate User from Company",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/companies/users/uc-uuid-003/deactivate",
-              "host": ["{{base_url}}"],
-              "path": ["companies", "users", "uc-uuid-003", "deactivate"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "companies",
+                "users",
+                "uc-uuid-003",
+                "deactivate"
+              ]
             },
             "description": "Admin only. Removes a user's access from a company without deleting them globally. Their user record and data remain intact."
           },
@@ -740,7 +1026,6 @@
         }
       ]
     },
-
     {
       "name": "OTP",
       "item": [
@@ -749,12 +1034,20 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/otp/expired",
-              "host": ["{{base_url}}"],
-              "path": ["otp", "expired"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "otp",
+                "expired"
+              ]
             },
             "description": "Admin only. Cleans up expired OTP records from the database. Call periodically via cron job or manually."
           },
