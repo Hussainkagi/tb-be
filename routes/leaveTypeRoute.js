@@ -5,6 +5,14 @@ const LeaveTypeController = require("../controller/leaveTypeController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { requireFeature } = require("../middleware/enforceEntitlement");
+const { Feature } = require("../enums/features");
+
+// Leave balance & policy CONFIGURATION is Pro+. Trial companies still apply
+// for, approve and view leave — they just run on the seeded default types
+// instead of authoring their own. So /seed-defaults and every GET stay open;
+// creating, editing, toggling and deleting leave types are gated.
+const requireLeaveConfig = requireFeature(Feature.LEAVE_POLICY_CONFIG);
 
 // All routes scoped under /api/companies/:company_id/leave-types
 
@@ -44,6 +52,7 @@ router.post(
     verifyToken,
     validateTenant,
     isAdmin,
+    requireLeaveConfig,
     LeaveTypeController.create
 );
 
@@ -120,6 +129,7 @@ router.put(
     verifyToken,
     validateTenant,
     isAdmin,
+    requireLeaveConfig,
     LeaveTypeController.update
 );
 
@@ -133,6 +143,7 @@ router.patch(
     verifyToken,
     validateTenant,
     isAdmin,
+    requireLeaveConfig,
     LeaveTypeController.activate
 );
 
@@ -142,6 +153,7 @@ router.patch(
     verifyToken,
     validateTenant,
     isAdmin,
+    requireLeaveConfig,
     LeaveTypeController.deactivate
 );
 
@@ -155,6 +167,7 @@ router.delete(
     verifyToken,
     validateTenant,
     isAdmin,
+    requireLeaveConfig,
     LeaveTypeController.delete
 );
 

@@ -5,6 +5,8 @@ const UserCompanyController = require("../controller/userCompanyController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { enforceLimit } = require("../middleware/enforceEntitlement");
+const { Limit } = require("../enums/features");
 const multer = require("multer");
 
 const upload = multer({
@@ -63,11 +65,16 @@ router.get(
 );
 
 // Invite a new employee to the company
+//
+// The seat cap bites here, on CREATE. A company that downgrades while holding
+// more employees than its new plan allows keeps every one of them — it simply
+// cannot invite another until it is back under the cap or upgrades.
 router.post(
     "/companies/:company_id/users/invite",
     verifyToken,
     validateTenant,
     isManager,
+    enforceLimit(Limit.EMPLOYEES),
     UserCompanyController.inviteEmployee
 );
 // Invite multiple employees via Excel upload

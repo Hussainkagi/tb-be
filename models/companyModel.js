@@ -12,6 +12,7 @@ const Company = {
             currency = "USD",
             logo_url = null,
             plan = "trial",
+            plan_id = null,
             plan_expires_at = null,
         } = data;
 
@@ -19,12 +20,12 @@ const Company = {
             `INSERT INTO companies (
                 company_name, company_code, email, phone,
                 country, timezone, currency, logo_url,
-                plan, plan_expires_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+                plan, plan_id, plan_expires_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
             [
                 company_name, company_code, email, phone,
                 country, timezone, currency, logo_url,
-                plan, plan_expires_at,
+                plan, plan_id, plan_expires_at,
             ]
         );
         return result.rows[0];
@@ -82,11 +83,20 @@ const Company = {
         return result.rows[0];
     },
 
+    // Keeps plan_id (the gating column) and plan (the legacy label) in step.
+    // Writing only the text column would leave entitlements resolving against
+    // the OLD plan — the upgrade would appear to work and change nothing.
     async updatePlan(id, plan, plan_expires_at) {
         const result = await db.query(
-            `UPDATE companies
-             SET plan = $1, plan_expires_at = $2
-             WHERE id = $3 RETURNING *`,
+            `UPDATE companies c
+             SET plan = $1::VARCHAR,
+                 plan_expires_at = $2,
+                 plan_id = COALESCE(
+                     (SELECT p.id FROM plans p
+                       WHERE p.code = $1::VARCHAR AND p.deleted_at IS NULL),
+                     c.plan_id
+                 )
+             WHERE c.id = $3 RETURNING *`,
             [plan, plan_expires_at, id]
         );
         return result.rows[0];

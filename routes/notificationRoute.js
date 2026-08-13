@@ -5,6 +5,8 @@ const NotificationController = require("../controller/notificationController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { requireFeature } = require("../middleware/enforceEntitlement");
+const { Feature } = require("../enums/features");
 
 // All routes scoped under /api/companies/:company_id/notifications
 
@@ -25,7 +27,10 @@ router.delete("/templates/:id", verifyToken, validateTenant, isAdmin, Notificati
 router.get("/", verifyToken, validateTenant, isManager, NotificationController.getByCompany);
 router.get("/:id", verifyToken, validateTenant, isManager, NotificationController.getById);
 router.post("/send", verifyToken, validateTenant, isAdmin, NotificationController.send);
-router.post("/custom", verifyToken, validateTenant, isAdmin, NotificationController.sendCustom);
+// Custom announcements are Pro+. The automatic notifications (leave status,
+// check-in reminders, birthdays) stay on every plan — only the "broadcast
+// whatever you like" composer is gated.
+router.post("/custom", verifyToken, validateTenant, isAdmin, requireFeature(Feature.ANNOUNCEMENTS), NotificationController.sendCustom);
 router.patch("/:id/cancel", verifyToken, validateTenant, isAdmin, NotificationController.cancel);
 router.delete("/:id", verifyToken, validateTenant, isAdmin, NotificationController.delete);
 
