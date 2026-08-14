@@ -1,0 +1,2729 @@
+{
+  "info": {
+    "name": "HRMS — Leave Salary & Offboarding",
+    "_postman_id": "8d4c2f16-05a7-4e39-b7c1-2f9a6e51d380",
+    "description": "Annual-leave salary (the accrual bucket, advance payment and encashment) plus the resignation, termination and final-settlement flows.\n\nSpec: `leave_salary_module.xlsx` in the repo root. Legal basis: UAE Federal Decree-Law 33/2021, Art. 29 (annual leave & leave salary), Art. 43 (notice), Art. 44 (dismissal), Art. 51 (gratuity).\n\n## Setup\n\n1. Run **0. Auth → Login** — it stores `token` and `company_id` automatically.\n2. Set `employee_id`, and `leave_type_id` / `leave_request_id` when you reach those folders.\n3. Suggested first pass: flag your annual-leave type (folder 1) → dry-run the accrual (folder 2) → run it → read the summary.\n\n## The model in four lines\n\n- Every employee accrues annual leave monthly. Those days carry a cash value at their daily rate — `chosen base ÷ 30`.\n- **The balance is derived, never stored**: `opening + accrued − taken − encashed`. Days taken come from the leave requests the company already approves, so the bucket cannot disagree with the leave module.\n- **The value is revalued on read.** Art. 29 pays leave at the wage in force when it is taken, so `balance_value` uses today's rate. `booked_value` is what the days were worth when earned; the difference is the effect of pay rises.\n- **The final settlement is the one snapshot.** What was agreed and paid must not move when a salary is corrected later.\n\n## Accrual rules (UAE Art. 29)\n\n| Service | Rate |\n|---|---|\n| below 6 months | nothing accrues (booked as deferred rows) |\n| 6 – 12 months | 2 days/month, and the deferred months are credited retrospectively |\n| 12 months + | 2.5 days/month, applied to the whole first year too |\n\nSo an employee at 11 months holds 22 days, and one who has just completed a year holds the statutory 30 — the step-up shows on the ledger as `catch_up_days` rather than being folded silently into the rate.\n\n## Watch for\n\n- **Flag your annual-leave type first.** Until one carries `counts_toward_leave_salary`, leave taken never draws the balance down.\n- The daily rate is carried at **4 decimals** (`NUMERIC(12,4)`) and only the final amount is rounded. 8,000/30 rounded to 266.67 first turns a 20-day advance into 5,333.40 instead of 5,333.33.\n- Money from the calculation endpoints is JSON **numbers**; money read straight off a table comes back as **strings** (node-pg NUMERIC). Both appear in these examples.\n- The unpaid-leave deduction endpoint is **indicative only** — payroll generation applies the real one. Never render it as payable.\n- Nothing deactivates an employee until a separation is **completed**.\n\nNot legal advice — verify the statutory figures against your jurisdiction and contracts before go-live.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_ADMIN_JWT_HERE",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "22b016c2-f8bc-4cdf-a360-a47a57d735fc",
+      "type": "string"
+    },
+    {
+      "key": "employee_id",
+      "value": "b7e21c44-9a3f-4d18-8e52-6c0f1a92d773",
+      "type": "string"
+    },
+    {
+      "key": "leave_type_id",
+      "value": "3a7c9d12-5e84-4b03-9f61-8d2a4c7e0b19",
+      "type": "string"
+    },
+    {
+      "key": "leave_request_id",
+      "value": "6f5b3e08-2c91-4d7a-8e14-0b9d5a3f2c67",
+      "type": "string"
+    },
+    {
+      "key": "separation_id",
+      "value": "e91a7d34-8b02-4c56-9a1f-7d3e5c8b0a24",
+      "type": "string"
+    },
+    {
+      "key": "advance_id",
+      "value": "7e3a1c95-4d08-4b72-8f36-2a5e9c1d7b04",
+      "type": "string"
+    },
+    {
+      "key": "encashment_id",
+      "value": "b91c6f28-3a74-4e10-95d2-8c0b7a4e6f31",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Auth (prerequisite)",
+      "description": "Run Login first — it stores `token` and `company_id` on the collection.",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data && res.data.access_token) {",
+                  "    pm.collectionVariables.set('token', res.data.access_token);",
+                  "    pm.collectionVariables.set('company_id', res.data.user.company_id);",
+                  "    console.log('role:', res.data.user.role, '(0 = Admin)');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"AA0001\",\n  \"password\": \"yourpassword\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/user-companies/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "user-companies",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n      \"user_id\": \"uuid\",\n      \"username\": \"AA0001\",\n      \"role\": \"0\",\n      \"company_id\": \"{{company_id}}\",\n      \"is_super_admin\": false\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Configuration",
+      "description": "A config row is OPTIONAL — with none, the statutory UAE defaults apply and every employee accrues correctly out of the box.\n\n**Do not skip the leave-type flag.** Until at least one leave type carries `counts_toward_leave_salary`, annual leave taken never draws the balance down and every bucket only grows.",
+      "item": [
+        {
+          "name": "Get resolved config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "config"
+              ]
+            },
+            "description": "Manager-readable. Returns the rules in force, the statutory defaults behind them, and every leave type with its counting flag."
+          },
+          "response": [
+            {
+              "name": "200 — using statutory defaults (no config row yet)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"config\": {\n      \"days_in_month\": 30,\n      \"annual_entitlement_days\": 30,\n      \"accrual_rate_full\": 2.5,\n      \"accrual_rate_partial\": 2,\n      \"min_service_months\": 6,\n      \"full_service_months\": 12,\n      \"default_calculation_base\": \"basic\",\n      \"max_balance_days\": null,\n      \"advance_payment_enabled\": true,\n      \"encashment_enabled\": true,\n      \"is_default\": true\n    },\n    \"statutory_defaults\": {\n      \"days_in_month\": 30,\n      \"annual_entitlement_days\": 30,\n      \"accrual_rate_full\": 2.5,\n      \"accrual_rate_partial\": 2,\n      \"min_service_months\": 6,\n      \"full_service_months\": 12,\n      \"default_calculation_base\": \"basic\",\n      \"max_balance_days\": null,\n      \"advance_payment_enabled\": true,\n      \"encashment_enabled\": true\n    },\n    \"is_using_defaults\": true,\n    \"leave_types\": [\n      {\n        \"id\": \"3a7c...\",\n        \"leave_name\": \"Annual Leave\",\n        \"total_days\": 30,\n        \"is_paid\": true,\n        \"counts_toward_leave_salary\": true\n      },\n      {\n        \"id\": \"9b1e...\",\n        \"leave_name\": \"Sick Leave\",\n        \"total_days\": 15,\n        \"is_paid\": true,\n        \"counts_toward_leave_salary\": false\n      },\n      {\n        \"id\": \"44df...\",\n        \"leave_name\": \"Unpaid Leave\",\n        \"total_days\": 30,\n        \"is_paid\": false,\n        \"counts_toward_leave_salary\": false\n      }\n    ],\n    \"setup_warnings\": []\n  }\n}"
+            },
+            {
+              "name": "200 — nothing flagged as annual leave (act on this)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"config\": {\n      \"days_in_month\": 30,\n      \"annual_entitlement_days\": 30,\n      \"accrual_rate_full\": 2.5,\n      \"accrual_rate_partial\": 2,\n      \"min_service_months\": 6,\n      \"full_service_months\": 12,\n      \"default_calculation_base\": \"basic\",\n      \"max_balance_days\": null,\n      \"advance_payment_enabled\": true,\n      \"encashment_enabled\": true,\n      \"is_default\": true\n    },\n    \"is_using_defaults\": true,\n    \"leave_types\": [\n      {\n        \"id\": \"3a7c...\",\n        \"leave_name\": \"Vacation\",\n        \"total_days\": 30,\n        \"is_paid\": true,\n        \"counts_toward_leave_salary\": false\n      }\n    ],\n    \"setup_warnings\": [\n      \"No leave type is flagged as counting toward leave salary. Annual leave taken will not reduce the accrued balance until one is.\"\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Save config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days_in_month\": 30,\n  \"annual_entitlement_days\": 30,\n  \"accrual_rate_full\": 2.5,\n  \"accrual_rate_partial\": 2,\n  \"min_service_months\": 6,\n  \"full_service_months\": 12,\n  \"default_calculation_base\": \"basic\",\n  \"max_balance_days\": 60,\n  \"advance_payment_enabled\": true,\n  \"encashment_enabled\": true,\n  \"notes\": \"Standard UAE Art. 29 terms. Carry-forward capped at 60 days.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "config"
+              ]
+            },
+            "description": "Admin only. Every field is optional — omitted fields keep their current (or statutory) value."
+          },
+          "response": [
+            {
+              "name": "200 — saved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave salary configuration saved\",\n  \"data\": {\n    \"days_in_month\": 30,\n    \"annual_entitlement_days\": 30,\n    \"accrual_rate_full\": 2.5,\n    \"accrual_rate_partial\": 2,\n    \"min_service_months\": 6,\n    \"full_service_months\": 12,\n    \"default_calculation_base\": \"basic\",\n    \"max_balance_days\": 60,\n    \"advance_payment_enabled\": true,\n    \"encashment_enabled\": true,\n    \"notes\": \"Standard UAE Art. 29 terms. Carry-forward capped at 60 days.\",\n    \"is_default\": false\n  }\n}"
+            },
+            {
+              "name": "400 — validation failed",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"field\": \"full_service_months\",\n      \"message\": \"Must be greater than or equal to min_service_months\"\n    },\n    {\n      \"field\": \"default_calculation_base\",\n      \"message\": \"Must be 'basic' or 'gross'\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Flag a leave type as drawing down the bucket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"counts_toward_leave_salary\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/leave-types/{{leave_type_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "leave-types",
+                "{{leave_type_id}}"
+              ]
+            },
+            "description": "Only leave types flagged here consume accrued days. Sick and unpaid leave must stay false, or someone returning from sick leave silently loses annual-leave days."
+          },
+          "response": [
+            {
+              "name": "200 — flagged",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave type updated\",\n  \"data\": {\n    \"id\": \"3a7c...\",\n    \"leave_name\": \"Annual Leave\",\n    \"counts_toward_leave_salary\": true\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Set employee overrides (base, opening balance)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_enabled\": true,\n  \"calculation_base\": \"gross\",\n  \"accrual_start_date\": \"2023-01-15\",\n  \"opening_balance_days\": 5,\n  \"opening_balance_as_of\": \"2025-12-31\",\n  \"notes\": \"Balance carried over from the old HR system at year end.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/employees/{{employee_id}}/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "employees",
+                "{{employee_id}}",
+                "config"
+              ]
+            },
+            "description": "The opening balance is how a company arriving mid-year carries balances in from a spreadsheet.\n\n`opening_balance_as_of` is mandatory when a balance is set — it marks the months the accrual run must skip, so the import and the ledger cannot double-count."
+          },
+          "response": [
+            {
+              "name": "200 — saved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee leave salary settings saved\",\n  \"data\": {\n    \"id\": \"d41f...\",\n    \"company_id\": \"{{company_id}}\",\n    \"employee_id\": \"{{employee_id}}\",\n    \"is_enabled\": true,\n    \"calculation_base\": \"gross\",\n    \"custom_basis_amount\": null,\n    \"accrual_start_date\": \"2023-01-15T00:00:00.000Z\",\n    \"opening_balance_days\": \"5.00\",\n    \"opening_balance_as_of\": \"2025-12-31T00:00:00.000Z\",\n    \"notes\": \"Balance carried over from the old HR system at year end.\"\n  }\n}"
+            },
+            {
+              "name": "400 — opening balance without a date",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"field\": \"opening_balance_as_of\",\n      \"message\": \"Required when an opening balance is set — it marks the months accrual must skip\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Revert employee to company settings",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/employees/{{employee_id}}/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "employees",
+                "{{employee_id}}",
+                "config"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — reverted",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee reverted to the company leave salary settings\",\n  \"data\": {\n    \"id\": \"d41f...\",\n    \"employee_id\": \"{{employee_id}}\"\n  }\n}"
+            },
+            {
+              "name": "404 — nothing to revert",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"No leave salary settings found for this employee\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. The Bucket — balances & accrual",
+      "description": "The balance is DERIVED on every read: `opening + accrued − taken − encashed`. There is no balance column.\n\n`balance_value` is the balance revalued at TODAY's daily rate (what Art. 29 entitles the employee to). `booked_value` is what those days were worth when they were earned. The gap between them is the effect of pay rises — surface `revaluation_difference` on finance screens, not on the employee's.",
+      "item": [
+        {
+          "name": "Company summary — what everyone has collected",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/summary?as_of_date=2026-08-14",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "as_of_date",
+                  "value": "2026-08-14"
+                }
+              ]
+            },
+            "description": "Admin only. `accrued_liability` is the headline: what the outstanding balance would cost to pay out today."
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"currency\": \"AED\",\n    \"totals\": {\n      \"employee_count\": 4,\n      \"accruing_employee_count\": 4,\n      \"accrued_days\": 67,\n      \"days_taken\": 20,\n      \"days_encashed\": 0,\n      \"balance_days\": 60.5,\n      \"accrued_liability\": 18066.67,\n      \"booked_value\": 17400,\n      \"revaluation_difference\": 666.67,\n      \"forfeited_days\": 0,\n      \"advances_pending_amount\": 5333.33,\n      \"advances_pending_count\": 1,\n      \"advances_paid_amount\": 0,\n      \"encashments_pending_amount\": 0,\n      \"encashments_pending_count\": 0,\n      \"encashments_paid_amount\": 0\n    },\n    \"employees_missing_setup\": [\n      {\n        \"employee_id\": \"f2a9...\",\n        \"employee_name\": \"Priya Nair\",\n        \"warnings\": [\n          \"2 month(s) of service — below the 6-month eligibility threshold. Days accrue retrospectively once it is reached.\"\n        ]\n      }\n    ],\n    \"employees\": [\n      {\n        \"employee_id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n        \"employee_name\": \"Ahmed Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"branch_id\": \"5c1f8a20-1d3e-4a77-9b02-3e8c6d4f1a55\",\n        \"branch_name\": \"Dubai HQ\",\n        \"department_name\": \"Operations\",\n        \"employee_status\": \"active\",\n        \"as_of_date\": \"2026-08-14\",\n        \"is_enabled\": true,\n        \"service_months\": 42,\n        \"monthly_accrual_rate\": 2.5,\n        \"calculation_base\": \"basic\",\n        \"basis_amount\": 8000,\n        \"days_in_month\": 30,\n        \"daily_rate\": 266.6667,\n        \"currency\": \"AED\",\n        \"opening_balance_days\": 5,\n        \"accrued_days\": 30,\n        \"days_taken\": 20,\n        \"days_encashed\": 0,\n        \"balance_days\": 15,\n        \"uncapped_balance_days\": 15,\n        \"forfeited_days\": 0,\n        \"max_balance_days\": null,\n        \"is_capped\": false,\n        \"is_negative\": false,\n        \"current_daily_rate\": 266.6667,\n        \"balance_value\": 4000,\n        \"booked_value\": 3900,\n        \"revaluation_difference\": 100,\n        \"encashed_value\": 0,\n        \"last_accrued_period\": \"2026-07-15\",\n        \"warnings\": []\n      },\n      {\n        \"employee_id\": \"c8d3...\",\n        \"employee_name\": \"Fatima Hassan\",\n        \"employee_code\": \"EMP002\",\n        \"branch_id\": \"5c1f8a20-1d3e-4a77-9b02-3e8c6d4f1a55\",\n        \"branch_name\": \"Dubai HQ\",\n        \"department_name\": \"Operations\",\n        \"employee_status\": \"active\",\n        \"as_of_date\": \"2026-08-14\",\n        \"is_enabled\": true,\n        \"service_months\": 29,\n        \"monthly_accrual_rate\": 2.5,\n        \"calculation_base\": \"gross\",\n        \"basis_amount\": 9800,\n        \"days_in_month\": 30,\n        \"daily_rate\": 326.6667,\n        \"currency\": \"AED\",\n        \"opening_balance_days\": 8.5,\n        \"accrued_days\": 15,\n        \"days_taken\": 0,\n        \"days_encashed\": 0,\n        \"balance_days\": 23.5,\n        \"uncapped_balance_days\": 23.5,\n        \"forfeited_days\": 0,\n        \"max_balance_days\": null,\n        \"is_capped\": false,\n        \"is_negative\": false,\n        \"current_daily_rate\": 326.6667,\n        \"balance_value\": 7676.67,\n        \"booked_value\": 7350,\n        \"revaluation_difference\": 326.67,\n        \"encashed_value\": 0,\n        \"last_accrued_period\": \"2026-07-15\",\n        \"warnings\": []\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "One employee — balance, ledger, payouts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/employees/{{employee_id}}?as_of_date=2026-08-14",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "employees",
+                "{{employee_id}}"
+              ],
+              "query": [
+                {
+                  "key": "as_of_date",
+                  "value": "2026-08-14"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"balance\": {\n      \"employee_id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"employee_name\": \"Ahmed Al Mansoori\",\n      \"employee_code\": \"EMP001\",\n      \"branch_id\": \"5c1f8a20-1d3e-4a77-9b02-3e8c6d4f1a55\",\n      \"branch_name\": \"Dubai HQ\",\n      \"department_name\": \"Operations\",\n      \"employee_status\": \"active\",\n      \"as_of_date\": \"2026-08-14\",\n      \"is_enabled\": true,\n      \"service_months\": 42,\n      \"monthly_accrual_rate\": 2.5,\n      \"calculation_base\": \"basic\",\n      \"basis_amount\": 8000,\n      \"days_in_month\": 30,\n      \"daily_rate\": 266.6667,\n      \"currency\": \"AED\",\n      \"opening_balance_days\": 5,\n      \"accrued_days\": 30,\n      \"days_taken\": 20,\n      \"days_encashed\": 0,\n      \"balance_days\": 15,\n      \"uncapped_balance_days\": 15,\n      \"forfeited_days\": 0,\n      \"max_balance_days\": null,\n      \"is_capped\": false,\n      \"is_negative\": false,\n      \"current_daily_rate\": 266.6667,\n      \"balance_value\": 4000,\n      \"booked_value\": 3900,\n      \"revaluation_difference\": 100,\n      \"encashed_value\": 0,\n      \"last_accrued_period\": \"2026-07-15\",\n      \"warnings\": []\n    },\n    \"config\": {\n      \"days_in_month\": 30,\n      \"annual_entitlement_days\": 30,\n      \"accrual_rate_full\": 2.5,\n      \"accrual_rate_partial\": 2,\n      \"min_service_months\": 6,\n      \"full_service_months\": 12,\n      \"default_calculation_base\": \"basic\",\n      \"max_balance_days\": null,\n      \"advance_payment_enabled\": true,\n      \"encashment_enabled\": true,\n      \"is_default\": true,\n      \"applied_calculation_base\": \"basic\",\n      \"accrual_start_date\": \"2023-01-15\",\n      \"opening_balance_days\": 5,\n      \"opening_balance_as_of\": \"2025-12-31\",\n      \"is_enabled\": true\n    },\n    \"accrual_ledger\": [\n      {\n        \"id\": \"aa11...\",\n        \"period_year\": 2026,\n        \"period_month\": 7,\n        \"period_end_date\": \"2026-07-15T00:00:00.000Z\",\n        \"service_months\": \"41.00\",\n        \"accrual_rate\": \"2.50\",\n        \"accrued_days\": \"2.50\",\n        \"catch_up_days\": \"0.00\",\n        \"is_deferred\": false,\n        \"calculation_base\": \"basic\",\n        \"basis_amount\": \"8000.00\",\n        \"days_in_month\": 30,\n        \"daily_rate\": \"266.6667\",\n        \"accrued_amount\": \"666.67\",\n        \"note\": null\n      },\n      {\n        \"id\": \"aa10...\",\n        \"period_year\": 2026,\n        \"period_month\": 6,\n        \"period_end_date\": \"2026-06-15T00:00:00.000Z\",\n        \"service_months\": \"40.00\",\n        \"accrual_rate\": \"2.50\",\n        \"accrued_days\": \"2.50\",\n        \"catch_up_days\": \"0.00\",\n        \"is_deferred\": false,\n        \"calculation_base\": \"basic\",\n        \"basis_amount\": \"8000.00\",\n        \"days_in_month\": 30,\n        \"daily_rate\": \"266.6667\",\n        \"accrued_amount\": \"666.67\",\n        \"note\": null\n      }\n    ],\n    \"advances\": [],\n    \"encashments\": []\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Accrual ledger for one employee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/employees/{{employee_id}}/accruals?year=2026",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "employees",
+                "{{employee_id}}",
+                "accruals"
+              ],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2026"
+                }
+              ]
+            },
+            "description": "The audit trail. Two rows always need explaining in the UI, and both carry a `note`:\n\n- the month eligibility is reached (6 months) — the deferred months are credited at once via `catch_up_days`\n- the month service reaches a year — the rate steps 2 → 2.5 and applies to the whole first year, so the employee ends year one on the statutory 30 days"
+          },
+          "response": [
+            {
+              "name": "200 — first year, showing both catch-up rows",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee_id\": \"{{employee_id}}\",\n    \"total_accrued_days\": 30,\n    \"total_booked_value\": 8000,\n    \"entries\": [\n      {\n        \"period_year\": 2026,\n        \"period_month\": 9,\n        \"period_end_date\": \"2026-09-01T00:00:00.000Z\",\n        \"service_months\": \"12.00\",\n        \"accrual_rate\": \"2.50\",\n        \"accrued_days\": \"8.00\",\n        \"catch_up_days\": \"5.50\",\n        \"is_deferred\": false,\n        \"daily_rate\": \"266.6667\",\n        \"accrued_amount\": \"2133.33\",\n        \"note\": \"Rate stepped up to 2.5 days/month at 12 months of service; earlier months re-rated (+5.5 days)\"\n      },\n      {\n        \"period_year\": 2026,\n        \"period_month\": 8,\n        \"period_end_date\": \"2026-08-01T00:00:00.000Z\",\n        \"service_months\": \"11.00\",\n        \"accrual_rate\": \"2.00\",\n        \"accrued_days\": \"2.00\",\n        \"catch_up_days\": \"0.00\",\n        \"is_deferred\": false,\n        \"daily_rate\": \"266.6667\",\n        \"accrued_amount\": \"533.33\",\n        \"note\": null\n      },\n      {\n        \"period_year\": 2026,\n        \"period_month\": 3,\n        \"period_end_date\": \"2026-03-01T00:00:00.000Z\",\n        \"service_months\": \"6.00\",\n        \"accrual_rate\": \"2.00\",\n        \"accrued_days\": \"12.00\",\n        \"catch_up_days\": \"10.00\",\n        \"is_deferred\": false,\n        \"daily_rate\": \"266.6667\",\n        \"accrued_amount\": \"3200.00\",\n        \"note\": \"Eligibility reached at 6 months of service; deferred months credited (+10 days)\"\n      },\n      {\n        \"period_year\": 2026,\n        \"period_month\": 2,\n        \"period_end_date\": \"2026-02-01T00:00:00.000Z\",\n        \"service_months\": \"5.00\",\n        \"accrual_rate\": \"0.00\",\n        \"accrued_days\": \"0.00\",\n        \"catch_up_days\": \"0.00\",\n        \"is_deferred\": true,\n        \"daily_rate\": \"266.6667\",\n        \"accrued_amount\": \"0.00\",\n        \"note\": \"Below the 6-month eligibility threshold — accrual deferred\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Run accrual — DRY RUN (inspect first)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"as_of_date\": \"2026-08-14\",\n  \"dry_run\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/accruals/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "accruals",
+                "run"
+              ]
+            },
+            "description": "Writes nothing. Run this before the first real accrual against live data."
+          },
+          "response": [
+            {
+              "name": "200 — would book",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dry run — 3 employee(s) would accrue\",\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"dry_run\": true,\n    \"recalculate\": false,\n    \"processed_count\": 3,\n    \"skipped_count\": 1,\n    \"total_days_accrued\": 7.5,\n    \"total_value_accrued\": 2233.34,\n    \"results\": [\n      {\n        \"employee_id\": \"b7e2...\",\n        \"employee_name\": \"Ahmed Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"months_booked\": 1,\n        \"days_accrued\": 2.5,\n        \"value_accrued\": 666.67,\n        \"from_period\": \"2026-08-15\",\n        \"to_period\": \"2026-08-15\",\n        \"entries\": [\n          {\n            \"period_year\": 2026,\n            \"period_month\": 8,\n            \"period_end_date\": \"2026-08-15\",\n            \"service_months\": 43,\n            \"accrual_rate\": 2.5,\n            \"accrued_days\": 2.5,\n            \"catch_up_days\": 0,\n            \"is_deferred\": false,\n            \"calculation_base\": \"basic\",\n            \"basis_amount\": 8000,\n            \"days_in_month\": 30,\n            \"daily_rate\": 266.6667,\n            \"accrued_amount\": 666.67,\n            \"note\": null\n          }\n        ]\n      }\n    ],\n    \"skipped\": [\n      {\n        \"employee_id\": \"f2a9...\",\n        \"employee_name\": \"Priya Nair\",\n        \"reason\": \"Already up to date\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Run accrual — book it",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"as_of_date\": \"2026-08-14\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/accruals/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "accruals",
+                "run"
+              ]
+            },
+            "description": "Idempotent — months already booked are skipped, so the historical rate snapshots stay as they were. Safe to click twice.\n\n`recalculate: true` deliberately rebuilds booked months at today's salary. Use it only after fixing a wrong salary structure."
+          },
+          "response": [
+            {
+              "name": "200 — booked",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Accrual booked for 3 employee(s)\",\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"dry_run\": false,\n    \"recalculate\": false,\n    \"processed_count\": 3,\n    \"skipped_count\": 1,\n    \"total_days_accrued\": 7.5,\n    \"total_value_accrued\": 2233.34,\n    \"results\": [],\n    \"skipped\": []\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "My balance (employee self-service)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "me"
+              ]
+            },
+            "description": "Any authenticated employee. Setup warnings are stripped — those are for the admin screen to act on."
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"balance\": {\n      \"employee_id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"employee_name\": \"Ahmed Al Mansoori\",\n      \"employee_code\": \"EMP001\",\n      \"branch_id\": \"5c1f8a20-1d3e-4a77-9b02-3e8c6d4f1a55\",\n      \"branch_name\": \"Dubai HQ\",\n      \"department_name\": \"Operations\",\n      \"employee_status\": \"active\",\n      \"as_of_date\": \"2026-08-14\",\n      \"is_enabled\": true,\n      \"service_months\": 42,\n      \"monthly_accrual_rate\": 2.5,\n      \"calculation_base\": \"basic\",\n      \"basis_amount\": 8000,\n      \"days_in_month\": 30,\n      \"daily_rate\": 266.6667,\n      \"currency\": \"AED\",\n      \"opening_balance_days\": 5,\n      \"accrued_days\": 30,\n      \"days_taken\": 20,\n      \"days_encashed\": 0,\n      \"balance_days\": 15,\n      \"uncapped_balance_days\": 15,\n      \"forfeited_days\": 0,\n      \"max_balance_days\": null,\n      \"is_capped\": false,\n      \"is_negative\": false,\n      \"current_daily_rate\": 266.6667,\n      \"balance_value\": 4000,\n      \"booked_value\": 3900,\n      \"revaluation_difference\": 100,\n      \"encashed_value\": 0,\n      \"last_accrued_period\": \"2026-07-15\"\n    },\n    \"accrual_ledger\": [],\n    \"advances\": [],\n    \"encashments\": []\n  }\n}"
+            },
+            {
+              "name": "404 — user has no employee profile here",
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"No employee profile found for this user in this company\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Advance Leave Salary",
+      "description": "UAE Art. 29: leave salary is paid BEFORE the employee proceeds on leave.\n\nAn advance is a payment-timing record, **not** a second draw on the bucket — the days are consumed by the approved leave request. Linking `leave_request_id` is what keeps the two from being counted twice, and one live advance per leave request is enforced in the database.\n\nGated by `leave_salary.advance_payment` on top of the module key.",
+      "item": [
+        {
+          "name": "Preview (no write)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances/preview?employee_id={{employee_id}}&from_date=2026-09-01&to_date=2026-09-20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances",
+                "preview"
+              ],
+              "query": [
+                {
+                  "key": "employee_id",
+                  "value": "{{employee_id}}"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2026-09-01"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2026-09-20"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — 20 calendar days",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"from_date\": \"2026-09-01\",\n    \"to_date\": \"2026-09-20\",\n    \"calendar_days\": 20,\n    \"basis_amount\": 8000,\n    \"days_in_month\": 30,\n    \"daily_rate\": 266.6667,\n    \"amount\": 5333.33,\n    \"calculation_base\": \"basic\",\n    \"currency\": \"AED\",\n    \"balance_days\": 15,\n    \"exceeds_balance\": true\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create from an approved leave request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"leave_request_id\": \"{{leave_request_id}}\",\n  \"payroll_month\": \"2026-08\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances"
+              ]
+            },
+            "description": "Preferred form — dates and days come from the request itself."
+          },
+          "response": [
+            {
+              "name": "201 — raised",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Advance leave salary raised\",\n  \"data\": {\n    \"advance\": {\n      \"id\": \"7e3a...\",\n      \"company_id\": \"{{company_id}}\",\n      \"employee_id\": \"{{employee_id}}\",\n      \"leave_request_id\": \"{{leave_request_id}}\",\n      \"leave_from_date\": \"2026-09-01T00:00:00.000Z\",\n      \"leave_to_date\": \"2026-09-20T00:00:00.000Z\",\n      \"calendar_days\": \"20.00\",\n      \"calculation_base\": \"basic\",\n      \"basis_amount\": \"8000.00\",\n      \"days_in_month\": 30,\n      \"daily_rate\": \"266.6667\",\n      \"amount\": \"5333.33\",\n      \"payroll_month\": \"2026-08\",\n      \"status\": \"pending\",\n      \"approved_by\": null,\n      \"approved_at\": null,\n      \"paid_at\": null\n    },\n    \"calculation\": {\n      \"from_date\": \"2026-09-01\",\n      \"to_date\": \"2026-09-20\",\n      \"calendar_days\": 20,\n      \"basis_amount\": 8000,\n      \"days_in_month\": 30,\n      \"daily_rate\": 266.6667,\n      \"amount\": 5333.33\n    }\n  }\n}"
+            },
+            {
+              "name": "400 — leave not approved",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Leave salary is paid against approved leave only. This request is pending.\"\n}"
+            },
+            {
+              "name": "400 — already advanced",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"An advance already exists for this leave request (status: approved)\",\n  \"data\": {\n    \"advance_id\": \"7e3a...\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create from explicit dates",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"from_date\": \"2026-09-01\",\n  \"to_date\": \"2026-09-20\",\n  \"payroll_month\": \"2026-08\",\n  \"notes\": \"Verbally agreed with line manager.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances"
+              ]
+            },
+            "description": "For leave agreed outside the system."
+          },
+          "response": [
+            {
+              "name": "201 — raised",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Advance leave salary raised\",\n  \"data\": {\n    \"advance\": {\n      \"id\": \"7e3b...\",\n      \"status\": \"pending\",\n      \"amount\": \"5333.33\"\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances?status=pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"count\": 1,\n    \"total_amount\": 5333.33,\n    \"advances\": [\n      {\n        \"id\": \"7e3a...\",\n        \"employee_id\": \"{{employee_id}}\",\n        \"first_name\": \"Ahmed\",\n        \"last_name\": \"Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"branch_name\": \"Dubai HQ\",\n        \"leave_from_date\": \"2026-09-01T00:00:00.000Z\",\n        \"leave_to_date\": \"2026-09-20T00:00:00.000Z\",\n        \"calendar_days\": \"20.00\",\n        \"daily_rate\": \"266.6667\",\n        \"amount\": \"5333.33\",\n        \"payroll_month\": \"2026-08\",\n        \"status\": \"pending\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances/{{advance_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances",
+                "{{advance_id}}",
+                "approve"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — approved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Advance updated\",\n  \"data\": {\n    \"id\": \"7e3a...\",\n    \"status\": \"approved\",\n    \"approved_at\": \"2026-08-14T09:12:44.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 — wrong state",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Advance is paid — this action needs it to be pending.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mark paid",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_reference\": \"TT-2026-08-0142\",\n  \"payroll_month\": \"2026-08\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances/{{advance_id}}/mark-paid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances",
+                "{{advance_id}}",
+                "mark-paid"
+              ]
+            },
+            "description": "Guarded by a conditional UPDATE — a double-click pays once."
+          },
+          "response": [
+            {
+              "name": "200 — paid",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Advance updated\",\n  \"data\": {\n    \"id\": \"7e3a...\",\n    \"status\": \"paid\",\n    \"paid_at\": \"2026-08-14T09:20:03.000Z\",\n    \"payment_reference\": \"TT-2026-08-0142\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancelled_reason\": \"Employee postponed the leave\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/advances/{{advance_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "advances",
+                "{{advance_id}}",
+                "cancel"
+              ]
+            },
+            "description": "Paid advances are final — reversing one is a payroll adjustment."
+          },
+          "response": [
+            {
+              "name": "200 — cancelled",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Advance updated\",\n  \"data\": {\n    \"id\": \"7e3a...\",\n    \"status\": \"cancelled\"\n  }\n}"
+            },
+            {
+              "name": "400 — no reason given",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"A cancellation reason is required\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Leave Encashment",
+      "description": "Unused balance cashed out. Unlike advances, these days **do** leave the bucket.\n\nPending encashments already hold their days, so two payouts raised the same afternoon cannot together overdraw the balance.\n\nGated by `leave_salary.encashment`.",
+      "item": [
+        {
+          "name": "Create — specific number of days",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"days\": 10,\n  \"effective_date\": \"2026-08-31\",\n  \"payroll_month\": \"2026-08\",\n  \"notes\": \"Employee requested part encashment.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/encashments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "encashments"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 — raised",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave encashment raised\",\n  \"data\": {\n    \"encashment\": {\n      \"id\": \"b91c...\",\n      \"employee_id\": \"{{employee_id}}\",\n      \"separation_id\": null,\n      \"encashment_type\": \"in_service\",\n      \"effective_date\": \"2026-08-31T00:00:00.000Z\",\n      \"days_encashed\": \"10.00\",\n      \"calculation_base\": \"basic\",\n      \"basis_amount\": \"8000.00\",\n      \"days_in_month\": 30,\n      \"daily_rate\": \"266.6667\",\n      \"amount\": \"2666.67\",\n      \"payroll_month\": \"2026-08\",\n      \"status\": \"pending\"\n    },\n    \"calculation\": {\n      \"days_encashed\": 10,\n      \"basis_amount\": 8000,\n      \"days_in_month\": 30,\n      \"daily_rate\": 266.6667,\n      \"amount\": 2666.67\n    },\n    \"balance_before\": {\n      \"employee_id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n      \"employee_name\": \"Ahmed Al Mansoori\",\n      \"employee_code\": \"EMP001\",\n      \"branch_id\": \"5c1f8a20-1d3e-4a77-9b02-3e8c6d4f1a55\",\n      \"branch_name\": \"Dubai HQ\",\n      \"department_name\": \"Operations\",\n      \"employee_status\": \"active\",\n      \"as_of_date\": \"2026-08-14\",\n      \"is_enabled\": true,\n      \"service_months\": 42,\n      \"monthly_accrual_rate\": 2.5,\n      \"calculation_base\": \"basic\",\n      \"basis_amount\": 8000,\n      \"days_in_month\": 30,\n      \"daily_rate\": 266.6667,\n      \"currency\": \"AED\",\n      \"opening_balance_days\": 5,\n      \"accrued_days\": 30,\n      \"days_taken\": 20,\n      \"days_encashed\": 0,\n      \"balance_days\": 15,\n      \"uncapped_balance_days\": 15,\n      \"forfeited_days\": 0,\n      \"max_balance_days\": null,\n      \"is_capped\": false,\n      \"is_negative\": false,\n      \"current_daily_rate\": 266.6667,\n      \"balance_value\": 4000,\n      \"booked_value\": 3900,\n      \"revaluation_difference\": 100,\n      \"encashed_value\": 0,\n      \"last_accrued_period\": \"2026-07-15\",\n      \"warnings\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "400 — more than the balance",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only 15 day(s) are available to encash — 20 requested.\",\n  \"data\": {\n    \"available_days\": 15,\n    \"requested_days\": 20\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create — encash the whole balance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"encash_full_balance\": true,\n  \"effective_date\": \"2026-08-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/encashments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "encashments"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 — raised",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave encashment raised\",\n  \"data\": {\n    \"encashment\": {\n      \"id\": \"b91d...\",\n      \"days_encashed\": \"15.00\",\n      \"amount\": \"4000.00\",\n      \"status\": \"pending\"\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/encashments?status=pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "encashments"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"count\": 1,\n    \"total_amount\": 2666.67,\n    \"encashments\": [\n      {\n        \"id\": \"b91c...\",\n        \"first_name\": \"Ahmed\",\n        \"last_name\": \"Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"encashment_type\": \"in_service\",\n        \"effective_date\": \"2026-08-31T00:00:00.000Z\",\n        \"days_encashed\": \"10.00\",\n        \"amount\": \"2666.67\",\n        \"status\": \"pending\",\n        \"separation_id\": null\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/encashments/{{encashment_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "encashments",
+                "{{encashment_id}}",
+                "approve"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — approved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Encashment updated\",\n  \"data\": {\n    \"id\": \"b91c...\",\n    \"status\": \"approved\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mark paid",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_reference\": \"TT-2026-08-0199\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/encashments/{{encashment_id}}/mark-paid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "encashments",
+                "{{encashment_id}}",
+                "mark-paid"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — paid",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Encashment updated\",\n  \"data\": {\n    \"id\": \"b91c...\",\n    \"status\": \"paid\",\n    \"paid_at\": \"2026-08-31T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel (days return to the bucket)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancelled_reason\": \"Raised against the wrong employee\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/encashments/{{encashment_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "encashments",
+                "{{encashment_id}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — cancelled",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Encashment updated\",\n  \"data\": {\n    \"id\": \"b91c...\",\n    \"status\": \"cancelled\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Unpaid leave deduction (INDICATIVE only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/employees/{{employee_id}}/unpaid-leave-deduction?payroll_month=2026-08",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "employees",
+                "{{employee_id}}",
+                "unpaid-leave-deduction"
+              ],
+              "query": [
+                {
+                  "key": "payroll_month",
+                  "value": "2026-08"
+                }
+              ]
+            },
+            "description": "Reference figure for the leave-salary screens. **Payroll generation is the authority** on what actually comes off a payslip — this endpoint writes nothing, and the deduction is applied by the payroll engine. Render it as information, never as a payable line."
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee_id\": \"{{employee_id}}\",\n    \"employee_name\": \"John Smith\",\n    \"payroll_month\": \"2026-08\",\n    \"currency\": \"AED\",\n    \"calculation_base\": \"basic\",\n    \"unpaid_leave_days\": 3,\n    \"basis_amount\": 12000,\n    \"days_in_month\": 30,\n    \"daily_rate\": 400,\n    \"deduction_amount\": 1200,\n    \"is_authoritative\": false,\n    \"note\": \"Indicative. Payroll generation applies the actual unpaid-leave deduction.\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Resignation",
+      "description": "Employee submits → admin accepts with a last working date → notice → settlement → completion.\n\n**Nothing deactivates the employee until the case is completed.** Someone serving notice still checks in, still appears on payroll, still takes leave.\n\nOne open case per employee is enforced in the database.",
+      "item": [
+        {
+          "name": "Submit my own resignation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Relocating to another country for family reasons.\",\n  \"requested_last_working_date\": \"2026-09-30\",\n  \"notice_period_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/resignations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "resignations"
+              ]
+            },
+            "description": "Any authenticated employee. `employee_id` in the body is ignored — the case belongs to the token holder."
+          },
+          "response": [
+            {
+              "name": "201 — submitted",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Resignation submitted\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"company_id\": \"{{company_id}}\",\n    \"employee_id\": \"{{employee_id}}\",\n    \"separation_type\": \"resignation\",\n    \"status\": \"pending\",\n    \"reason\": \"Relocating to another country for family reasons.\",\n    \"requested_last_working_date\": \"2026-09-30T00:00:00.000Z\",\n    \"notice_period_days\": 30,\n    \"notice_start_date\": \"2026-08-14T00:00:00.000Z\",\n    \"last_working_date\": null,\n    \"is_notice_waived\": false,\n    \"notice_shortfall_days\": \"0.00\",\n    \"submitted_at\": \"2026-08-14T08:02:11.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 — already has an open case",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"This employee already has an open resignation (status: pending).\",\n  \"data\": {\n    \"separation_id\": \"e91a...\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Admin files a resignation on someone's behalf",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"reason\": \"Resignation letter received 14 Aug, filed by HR.\",\n  \"requested_last_working_date\": \"2026-09-13\",\n  \"notice_period_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/resignations/for-employee",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "resignations",
+                "for-employee"
+              ]
+            },
+            "description": "For a resignation handed in on paper or given verbally."
+          },
+          "response": [
+            {
+              "name": "201 — submitted",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Resignation submitted\",\n  \"data\": {\n    \"id\": \"e91b...\",\n    \"separation_type\": \"resignation\",\n    \"status\": \"pending\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Withdraw my resignation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"withdrawal_reason\": \"Counter-offer accepted.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/withdraw",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "withdraw"
+              ]
+            },
+            "description": "Identity-checked, not role-checked: only the person who resigned may withdraw it, and only before a decision."
+          },
+          "response": [
+            {
+              "name": "200 — withdrawn",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Resignation withdrawn\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"status\": \"withdrawn\",\n    \"withdrawn_at\": \"2026-08-16T11:00:00.000Z\"\n  }\n}"
+            },
+            {
+              "name": "400 — already accepted",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"This resignation has already been accepted — ask an admin to cancel it instead.\"\n}"
+            },
+            {
+              "name": "400 — not yours",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"You can only withdraw your own resignation\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "My cases (employee self-service)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "me"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"employee_id\": \"{{employee_id}}\",\n    \"open_case\": {\n      \"id\": \"e91a...\",\n      \"separation_type\": \"resignation\",\n      \"status\": \"pending\",\n      \"requested_last_working_date\": \"2026-09-30T00:00:00.000Z\",\n      \"notice_period_days\": 30\n    },\n    \"history\": [\n      {\n        \"id\": \"e91a...\",\n        \"separation_type\": \"resignation\",\n        \"status\": \"pending\",\n        \"submitted_at\": \"2026-08-14T08:02:11.000Z\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Termination",
+      "description": "Admin-initiated. Same workflow as a resignation from the decision onwards.\n\n**Gratuity forfeiture is never a side effect of the dropdown.** `forfeits_gratuity_by_default` on the termination type is a UI hint only; `is_gratuity_forfeited` requires an explicit `forfeiture_reason` (UAE Art. 44 requires stated grounds).",
+      "item": [
+        {
+          "name": "Termination grounds (form reference data)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/termination-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "termination-types"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"types\": [\n      {\n        \"code\": \"with_cause\",\n        \"label\": \"Dismissal for cause\",\n        \"requires_notice\": false,\n        \"forfeits_gratuity_by_default\": true\n      },\n      {\n        \"code\": \"without_cause\",\n        \"label\": \"Termination without cause\",\n        \"requires_notice\": true,\n        \"forfeits_gratuity_by_default\": false\n      },\n      {\n        \"code\": \"probation\",\n        \"label\": \"Failed probation\",\n        \"requires_notice\": true,\n        \"forfeits_gratuity_by_default\": false\n      },\n      {\n        \"code\": \"redundancy\",\n        \"label\": \"Redundancy\",\n        \"requires_notice\": true,\n        \"forfeits_gratuity_by_default\": false\n      },\n      {\n        \"code\": \"contract_end\",\n        \"label\": \"Contract expiry\",\n        \"requires_notice\": false,\n        \"forfeits_gratuity_by_default\": false\n      },\n      {\n        \"code\": \"absconded\",\n        \"label\": \"Absconded\",\n        \"requires_notice\": false,\n        \"forfeits_gratuity_by_default\": true\n      },\n      {\n        \"code\": \"retirement\",\n        \"label\": \"Retirement\",\n        \"requires_notice\": true,\n        \"forfeits_gratuity_by_default\": false\n      },\n      {\n        \"code\": \"death\",\n        \"label\": \"Death in service\",\n        \"requires_notice\": false,\n        \"forfeits_gratuity_by_default\": false\n      }\n    ],\n    \"note\": \"forfeits_gratuity_by_default is a suggestion for the form only. Forfeiture must be set explicitly with a stated reason.\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Initiate — redundancy (30 days' notice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"termination_type\": \"redundancy\",\n  \"reason\": \"Role removed following the Q3 restructure.\",\n  \"requested_last_working_date\": \"2026-09-30\",\n  \"notice_period_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/terminations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "terminations"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 — initiated",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Termination initiated\",\n  \"data\": {\n    \"id\": \"f30c...\",\n    \"separation_type\": \"termination\",\n    \"status\": \"pending\",\n    \"termination_type\": \"redundancy\",\n    \"reason\": \"Role removed following the Q3 restructure.\",\n    \"notice_period_days\": 30,\n    \"requested_last_working_date\": \"2026-09-30T00:00:00.000Z\",\n    \"is_gratuity_forfeited\": false,\n    \"forfeiture_reason\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Initiate — dismissal with gratuity forfeited",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": \"{{employee_id}}\",\n  \"termination_type\": \"with_cause\",\n  \"reason\": \"Gross misconduct — verified findings of the disciplinary panel dated 12 Aug 2026.\",\n  \"is_gratuity_forfeited\": true,\n  \"forfeiture_reason\": \"Dismissal under Art. 44(a) — disclosure of confidential company information. Panel minutes ref DP-2026-014.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/terminations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "terminations"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 — initiated",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Termination initiated\",\n  \"data\": {\n    \"id\": \"f30d...\",\n    \"termination_type\": \"with_cause\",\n    \"is_gratuity_forfeited\": true,\n    \"notice_period_days\": 0,\n    \"status\": \"pending\"\n  }\n}"
+            },
+            {
+              "name": "400 — forfeiture without grounds",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"forfeiture_reason is required when gratuity is forfeited (UAE Art. 44 requires stated grounds)\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Case Workflow (shared)",
+      "description": "`pending → approved → completed`, with `rejected`, `withdrawn` and `cancelled` as terminal exits.\n\nThese endpoints are not plan-gated separately: they only act on cases that already exist, and a company that lapses mid-notice must still be able to close cases it is legally obliged to close.",
+      "item": [
+        {
+          "name": "List cases",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations?status=pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                }
+              ]
+            },
+            "description": "`overdue_completion` is the one to surface loudly — approved cases whose last day has passed and which nobody closed. Those are ex-employees who can still log in."
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"count\": 2,\n    \"counts_by_status\": [\n      {\n        \"status\": \"pending\",\n        \"separation_type\": \"resignation\",\n        \"count\": 1\n      },\n      {\n        \"status\": \"approved\",\n        \"separation_type\": \"termination\",\n        \"count\": 1\n      }\n    ],\n    \"overdue_completion\": [\n      {\n        \"separation_id\": \"f30c...\",\n        \"employee_id\": \"a12b...\",\n        \"employee_name\": \"Fatima Hassan\",\n        \"last_working_date\": \"2026-07-31\"\n      }\n    ],\n    \"separations\": [\n      {\n        \"id\": \"e91a...\",\n        \"employee_id\": \"{{employee_id}}\",\n        \"first_name\": \"Ahmed\",\n        \"last_name\": \"Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"separation_type\": \"resignation\",\n        \"status\": \"pending\",\n        \"reason\": \"Relocating to another country for family reasons.\",\n        \"requested_last_working_date\": \"2026-09-30T00:00:00.000Z\",\n        \"last_working_date\": null,\n        \"notice_period_days\": 30,\n        \"branch_name\": \"Dubai HQ\",\n        \"department_name\": \"Operations\",\n        \"submitted_at\": \"2026-08-14T08:02:11.000Z\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get one case",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"separation\": {\n      \"id\": \"e91a...\",\n      \"separation_type\": \"resignation\",\n      \"status\": \"approved\",\n      \"last_working_date\": \"2026-09-30T00:00:00.000Z\",\n      \"notice_period_days\": 30,\n      \"notice_shortfall_days\": \"0.00\",\n      \"is_notice_waived\": false,\n      \"clearance_checklist\": [\n        {\n          \"item\": \"Laptop returned\",\n          \"done\": false\n        }\n      ]\n    },\n    \"settlement\": null,\n    \"termination_meta\": null\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Edit (pending only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notice_period_days\": 60,\n  \"clearance_checklist\": [\n    {\n      \"item\": \"Laptop returned\",\n      \"done\": false\n    },\n    {\n      \"item\": \"Access badge returned\",\n      \"done\": false\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — updated",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Separation updated\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"notice_period_days\": 60\n  }\n}"
+            },
+            {
+              "name": "400 — already decided",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only a pending case can be edited — this one is approved.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve / confirm",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"last_working_date\": \"2026-09-30\",\n  \"is_notice_waived\": false,\n  \"decision_notes\": \"Accepted. Handover to R. Kumar.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "approve"
+              ]
+            },
+            "description": "Fixes the last working date everything downstream depends on, and prices the notice shortfall once — the settlement will not recompute it against dates that have since moved."
+          },
+          "response": [
+            {
+              "name": "200 — accepted",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Resignation accepted\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"status\": \"approved\",\n    \"last_working_date\": \"2026-09-30T00:00:00.000Z\",\n    \"notice_start_date\": \"2026-08-14T00:00:00.000Z\",\n    \"notice_shortfall_days\": \"0.00\",\n    \"is_notice_waived\": false,\n    \"notice\": {\n      \"notice_start_date\": \"2026-08-14\",\n      \"required_days\": 30,\n      \"shortfall_days\": 0,\n      \"is_waived\": false\n    }\n  }\n}"
+            },
+            {
+              "name": "400 — no date",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"last_working_date is required — the settlement and final payroll depend on it\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reject",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejection_reason\": \"Notice period does not meet contractual terms — resubmit with a 60-day notice.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "reject"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — rejected",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Separation rejected\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"status\": \"rejected\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel an approved case",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cancellation_reason\": \"Employee retained after renegotiation.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "cancel"
+              ]
+            },
+            "description": "The employee stays employed. Any unpaid encashment raised for the settlement is cancelled too, so the days go back into the bucket."
+          },
+          "response": [
+            {
+              "name": "200 — cancelled",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Separation cancelled\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"status\": \"cancelled\"\n  }\n}"
+            },
+            {
+              "name": "400 — settlement already paid",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The final settlement has already been paid — this case cannot be cancelled.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Complete — stand the employee down",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exit_interview_notes\": \"Positive exit interview. Cited relocation only.\",\n  \"is_rehire_eligible\": true,\n  \"clearance_checklist\": [\n    {\n      \"item\": \"Laptop returned\",\n      \"done\": true\n    },\n    {\n      \"item\": \"Access badge returned\",\n      \"done\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "complete"
+              ]
+            },
+            "description": "Sets `employees.status` to `resigned` / `terminated` and `is_active = false`, in one transaction with the case. That is what removes them from payroll, attendance and the headcount your plan limit counts.\n\nRefuses before the last working date unless `force: true`, and refuses without a settlement unless `allow_without_settlement: true`."
+          },
+          "response": [
+            {
+              "name": "200 — completed",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Separation completed — employee marked resigned\",\n  \"data\": {\n    \"id\": \"e91a...\",\n    \"status\": \"completed\",\n    \"completed_at\": \"2026-09-30T16:00:00.000Z\",\n    \"is_rehire_eligible\": true\n  }\n}"
+            },
+            {
+              "name": "400 — too early",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The last working date (2026-09-30) has not passed yet. Pass force: true to close the case early.\"\n}"
+            },
+            {
+              "name": "400 — no settlement recorded",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"No final settlement has been recorded. Save one first, or pass allow_without_settlement: true if it is being handled outside the system.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Final Settlement",
+      "description": "The preview is computed live and writes nothing. Saving FREEZES it — unlike balances and gratuity, which are derived on every read everywhere else, what was agreed and paid must not move when a salary is corrected next month.\n\nSaving also raises the encashment that pays the balance out, which is what removes those days from the bucket.\n\nGated by `offboarding.settlement`.",
+      "item": [
+        {
+          "name": "Preview (live, nothing written)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/settlement/preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "settlement",
+                "preview"
+              ]
+            },
+            "description": "Three figures are derived — leave encashment, gratuity, notice shortfall. Two are not: `pending_salary_amount` (payroll owns the final part-month) and the `other_*` adjustments. Both come back as 0 with `inputs_required` telling the UI to ask."
+          },
+          "response": [
+            {
+              "name": "200 — full settlement (Gold: gratuity included)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"separation_id\": \"e91a...\",\n    \"employee_id\": \"{{employee_id}}\",\n    \"employee_name\": \"Ahmed Al Mansoori\",\n    \"separation_type\": \"resignation\",\n    \"last_working_date\": \"2026-09-30\",\n    \"service\": {\n      \"joining_date\": \"2023-01-15\",\n      \"total_days\": 1355\n    },\n    \"calculation_base\": \"basic\",\n    \"basis_amount\": 8000,\n    \"days_in_month\": 30,\n    \"daily_rate\": 266.6667,\n    \"currency\": \"AED\",\n    \"earnings\": {\n      \"leave_encashment_days\": 15,\n      \"leave_encashment_amount\": 4000,\n      \"gratuity_amount\": 20911.11,\n      \"gratuity_note\": null,\n      \"pending_salary_amount\": 0,\n      \"other_earnings_amount\": 0\n    },\n    \"deductions\": {\n      \"notice_shortfall_days\": 0,\n      \"notice_shortfall_amount\": 0,\n      \"advance_recovery_amount\": 5333.33,\n      \"other_deductions_amount\": 0\n    },\n    \"total_earnings\": 24911.11,\n    \"total_deductions\": 5333.33,\n    \"net_settlement_amount\": 19577.78,\n    \"breakdown\": {\n      \"leave_salary_balance\": {\n        \"employee_id\": \"b7e21c44-9a3f-4d18-8e52-6c0f1a92d773\",\n        \"employee_name\": \"Ahmed Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"branch_id\": \"5c1f8a20-1d3e-4a77-9b02-3e8c6d4f1a55\",\n        \"branch_name\": \"Dubai HQ\",\n        \"department_name\": \"Operations\",\n        \"employee_status\": \"active\",\n        \"as_of_date\": \"2026-08-14\",\n        \"is_enabled\": true,\n        \"service_months\": 42,\n        \"monthly_accrual_rate\": 2.5,\n        \"calculation_base\": \"basic\",\n        \"basis_amount\": 8000,\n        \"days_in_month\": 30,\n        \"daily_rate\": 266.6667,\n        \"currency\": \"AED\",\n        \"opening_balance_days\": 5,\n        \"accrued_days\": 30,\n        \"days_taken\": 20,\n        \"days_encashed\": 0,\n        \"balance_days\": 15,\n        \"uncapped_balance_days\": 15,\n        \"forfeited_days\": 0,\n        \"max_balance_days\": null,\n        \"is_capped\": false,\n        \"is_negative\": false,\n        \"current_daily_rate\": 266.6667,\n        \"balance_value\": 4000,\n        \"booked_value\": 3900,\n        \"revaluation_difference\": 100,\n        \"encashed_value\": 0,\n        \"last_accrued_period\": \"2026-07-15\",\n        \"warnings\": []\n      },\n      \"gratuity\": {\n        \"eligible\": true,\n        \"service_years_decimal\": 3.71,\n        \"daily_wage\": 266.67,\n        \"amount\": 20911.11\n      },\n      \"notice\": {\n        \"notice_start_date\": \"2026-08-14\",\n        \"last_working_date\": \"2026-09-30\",\n        \"required_notice_days\": 30,\n        \"served_notice_days\": 30,\n        \"shortfall_days\": 0,\n        \"shortfall_amount\": 0\n      },\n      \"recoverable_advances\": [\n        {\n          \"advance_id\": \"7e3a...\",\n          \"leave_from_date\": \"2026-10-05\",\n          \"leave_to_date\": \"2026-10-24\",\n          \"amount\": 5333.33\n        }\n      ]\n    },\n    \"inputs_required\": [\n      \"pending_salary_amount — unpaid salary up to the last working day (from payroll)\",\n      \"other_earnings_amount / other_deductions_amount — anything agreed outside the system\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 — Pro plan: gratuity excluded, and said so",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"separation_id\": \"e91a...\",\n    \"last_working_date\": \"2026-09-30\",\n    \"earnings\": {\n      \"leave_encashment_days\": 15,\n      \"leave_encashment_amount\": 4000,\n      \"gratuity_amount\": 0,\n      \"gratuity_note\": \"Gratuity is not included in your current plan — calculate it separately or upgrade to include it in the settlement.\",\n      \"pending_salary_amount\": 0,\n      \"other_earnings_amount\": 0\n    },\n    \"deductions\": {\n      \"notice_shortfall_days\": 0,\n      \"notice_shortfall_amount\": 0,\n      \"advance_recovery_amount\": 0,\n      \"other_deductions_amount\": 0\n    },\n    \"total_earnings\": 4000,\n    \"total_deductions\": 0,\n    \"net_settlement_amount\": 4000\n  }\n}"
+            },
+            {
+              "name": "200 — gratuity forfeited (dismissal for cause)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"separation_id\": \"f30d...\",\n    \"separation_type\": \"termination\",\n    \"last_working_date\": \"2026-08-20\",\n    \"earnings\": {\n      \"leave_encashment_days\": 8,\n      \"leave_encashment_amount\": 2133.33,\n      \"gratuity_amount\": 0,\n      \"gratuity_note\": \"Gratuity forfeited: Dismissal under Art. 44(a) — disclosure of confidential company information. Panel minutes ref DP-2026-014.\",\n      \"pending_salary_amount\": 0,\n      \"other_earnings_amount\": 0\n    },\n    \"deductions\": {\n      \"notice_shortfall_days\": 0,\n      \"notice_shortfall_amount\": 0,\n      \"advance_recovery_amount\": 0,\n      \"other_deductions_amount\": 0\n    },\n    \"total_earnings\": 2133.33,\n    \"total_deductions\": 0,\n    \"net_settlement_amount\": 2133.33\n  }\n}"
+            },
+            {
+              "name": "400 — not approved yet",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"This case has no last working date yet — approve it first\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Save (freeze + raise the encashment)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pending_salary_amount\": 8000,\n  \"other_deductions_amount\": 500,\n  \"other_deductions_note\": \"Unreturned company phone.\",\n  \"notes\": \"Agreed with employee 28 Sep 2026.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/settlement",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "settlement"
+              ]
+            },
+            "description": "Anything you omit keeps the previewed figure. Supply the two the system cannot know."
+          },
+          "response": [
+            {
+              "name": "200 — saved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Final settlement saved\",\n  \"data\": {\n    \"settlement\": {\n      \"id\": \"9c02...\",\n      \"separation_id\": \"e91a...\",\n      \"employee_id\": \"{{employee_id}}\",\n      \"last_working_date\": \"2026-09-30T00:00:00.000Z\",\n      \"calculation_base\": \"basic\",\n      \"basis_amount\": \"8000.00\",\n      \"daily_rate\": \"266.6667\",\n      \"leave_encashment_days\": \"15.00\",\n      \"leave_encashment_amount\": \"4000.00\",\n      \"gratuity_amount\": \"20911.11\",\n      \"gratuity_note\": null,\n      \"pending_salary_amount\": \"8000.00\",\n      \"other_earnings_amount\": \"0.00\",\n      \"notice_shortfall_days\": \"0.00\",\n      \"notice_shortfall_amount\": \"0.00\",\n      \"advance_recovery_amount\": \"5333.33\",\n      \"other_deductions_amount\": \"500.00\",\n      \"other_deductions_note\": \"Unreturned company phone.\",\n      \"total_earnings\": \"32911.11\",\n      \"total_deductions\": \"5833.33\",\n      \"net_settlement_amount\": \"27077.78\",\n      \"currency\": \"AED\",\n      \"status\": \"draft\"\n    },\n    \"encashment\": {\n      \"id\": \"b91e...\",\n      \"encashment_type\": \"final_settlement\",\n      \"separation_id\": \"e91a...\",\n      \"days_encashed\": \"15.00\",\n      \"amount\": \"4000.00\",\n      \"status\": \"pending\"\n    }\n  }\n}"
+            },
+            {
+              "name": "400 — already approved",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The settlement is already approved and can no longer be edited.\",\n  \"data\": {\n    \"id\": \"9c02...\",\n    \"status\": \"approved\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/settlement/approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "settlement",
+                "approve"
+              ]
+            },
+            "description": "Approves the linked encashment alongside it."
+          },
+          "response": [
+            {
+              "name": "200 — approved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Final settlement approved\",\n  \"data\": {\n    \"id\": \"9c02...\",\n    \"status\": \"approved\",\n    \"approved_at\": \"2026-09-29T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Mark paid",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_reference\": \"TT-2026-09-0311\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/{{separation_id}}/settlement/mark-paid",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "{{separation_id}}",
+                "settlement",
+                "mark-paid"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — paid",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Final settlement marked as paid\",\n  \"data\": {\n    \"id\": \"9c02...\",\n    \"status\": \"paid\",\n    \"paid_at\": \"2026-09-30T12:00:00.000Z\",\n    \"payment_reference\": \"TT-2026-09-0311\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List settlements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/settlements?status=draft",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "settlements"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "draft"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 — OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"count\": 1,\n    \"total_net\": 27077.78,\n    \"settlements\": [\n      {\n        \"id\": \"9c02...\",\n        \"first_name\": \"Ahmed\",\n        \"last_name\": \"Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"separation_type\": \"resignation\",\n        \"separation_status\": \"approved\",\n        \"last_working_date\": \"2026-09-30T00:00:00.000Z\",\n        \"net_settlement_amount\": \"27077.78\",\n        \"status\": \"draft\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9. Plan Gating (expected 403s)",
+      "description": "Every key here is ON for Pro and Gold, OFF for Trial. Denials use the same shape as the rest of the platform, so one interceptor handles all of them.\n\nReads stay open on the leave-salary module (`allowReads: true`) — a company that lapses can still open the ledger and payouts it already recorded, it just cannot book or pay more.",
+      "item": [
+        {
+          "name": "Trial company tries to run accrual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"as_of_date\": \"2026-08-14\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/accruals/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "accruals",
+                "run"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "403 — FEATURE_NOT_IN_PLAN",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"code\": \"FEATURE_NOT_IN_PLAN\",\n  \"message\": \"Leave salary accrual & balance tracking is not included in your current plan.\",\n  \"data\": {\n    \"feature\": \"leave_salary.manage\",\n    \"current_plan\": \"trial\",\n    \"plan_expired\": false,\n    \"required_plans\": [\n      {\n        \"code\": \"pro\",\n        \"name\": \"Pro\",\n        \"tier\": 10\n      },\n      {\n        \"code\": \"gold\",\n        \"name\": \"Gold\",\n        \"tier\": 20\n      }\n    ],\n    \"upgrade_path\": \"/billing/pricing\"\n  },\n  \"timestamp\": \"2026-08-14T09:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Trial company tries to resign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Moving on.\",\n  \"notice_period_days\": 30\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/separations/resignations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "separations",
+                "resignations"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "403 — FEATURE_NOT_IN_PLAN",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"code\": \"FEATURE_NOT_IN_PLAN\",\n  \"message\": \"Resignation workflow is not included in your current plan.\",\n  \"data\": {\n    \"feature\": \"offboarding.resignation\",\n    \"current_plan\": \"trial\",\n    \"plan_expired\": false,\n    \"required_plans\": [\n      {\n        \"code\": \"pro\",\n        \"name\": \"Pro\",\n        \"tier\": 10\n      },\n      {\n        \"code\": \"gold\",\n        \"name\": \"Gold\",\n        \"tier\": 20\n      }\n    ],\n    \"upgrade_path\": \"/billing/pricing\"\n  },\n  \"timestamp\": \"2026-08-14T09:00:00.000Z\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

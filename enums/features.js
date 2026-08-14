@@ -48,6 +48,16 @@ const Feature = Object.freeze({
     GRATUITY_CROSS_BORDER:   "gratuity.cross_border",
     GRATUITY_PRESETS:        "gratuity.statutory_presets",
 
+    // ── Leave Salary ─────────────────────────────────────────────────────────
+    LEAVE_SALARY:            "leave_salary.manage",
+    LEAVE_SALARY_ADVANCE:    "leave_salary.advance_payment",
+    LEAVE_SALARY_ENCASHMENT: "leave_salary.encashment",
+
+    // ── Offboarding ──────────────────────────────────────────────────────────
+    RESIGNATION:             "offboarding.resignation",
+    TERMINATION:             "offboarding.termination",
+    FINAL_SETTLEMENT:        "offboarding.settlement",
+
     // ── Reporting ────────────────────────────────────────────────────────────
     DASHBOARD:               "reporting.dashboard",
     DASHBOARD_ALERTS:        "reporting.dashboard_alerts",
