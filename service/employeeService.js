@@ -5,6 +5,33 @@ const DepartmentModel = require("../models/departmentModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const DepartmentService = require("./departmentService");
 
+// Employment states a list may be filtered to. `all` is the default so that
+// adding the filter cannot change what an existing caller receives.
+const EMPLOYEE_STATES = ["active", "former", "all"];
+
+/**
+ * Rejects an unknown state rather than silently ignoring it.
+ *
+ * A typo'd `?state=activ` that falls back to "all" looks like the filter is
+ * broken — worse, on a headcount screen it silently over-reports.
+ */
+function validateEmployeeFilters({ state = null, status = null } = {}) {
+    if (state !== null && state !== undefined && !EMPLOYEE_STATES.includes(state)) {
+        return {
+            success: false,
+            message: `state must be one of: ${EMPLOYEE_STATES.join(", ")}`,
+        };
+    }
+
+    return {
+        success: true,
+        data: {
+            state: state || "all",
+            status: status || null,
+        },
+    };
+}
+
 // An employee who leaves (deactivated / deleted) stops being head of their
 // department. Returns the now-headless department when it still has employees,
 // so the caller can tell the admin a replacement is needed.
@@ -43,28 +70,49 @@ const EmployeeService = {
         }
     },
 
-    async getEmployeesByCompany(company_id) {
+    /**
+     * @param {object} [filters]  { state: 'active'|'former'|'all', status }
+     *
+     * `counts` rides along on the company-wide list so the UI can label its
+     * filter chips ("Active 48 / Former 3") without a second request — and so a
+     * user who filters to Active can still see that leavers exist rather than
+     * assuming someone was deleted.
+     */
+    async getEmployeesByCompany(company_id, filters = {}) {
         try {
-            const result = await EmployeeModel.getAllByCompany(company_id);
-            return { success: true, data: result };
+            const validated = validateEmployeeFilters(filters);
+            if (!validated.success) return validated;
+
+            const [result, counts] = await Promise.all([
+                EmployeeModel.getAllByCompany(company_id, validated.data),
+                EmployeeModel.countsByState(company_id),
+            ]);
+
+            return { success: true, data: result, counts, filters: validated.data };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
     },
 
-    async getEmployeesByBranch(company_id, branch_id) {
+    async getEmployeesByBranch(company_id, branch_id, filters = {}) {
         try {
-            const result = await EmployeeModel.getAllByBranch(company_id, branch_id);
-            return { success: true, data: result };
+            const validated = validateEmployeeFilters(filters);
+            if (!validated.success) return validated;
+
+            const result = await EmployeeModel.getAllByBranch(company_id, branch_id, validated.data);
+            return { success: true, data: result, filters: validated.data };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
     },
 
-    async getEmployeesByDepartment(company_id, department_id) {
+    async getEmployeesByDepartment(company_id, department_id, filters = {}) {
         try {
-            const result = await EmployeeModel.getAllByDepartment(company_id, department_id);
-            return { success: true, data: result };
+            const validated = validateEmployeeFilters(filters);
+            if (!validated.success) return validated;
+
+            const result = await EmployeeModel.getAllByDepartment(company_id, department_id, validated.data);
+            return { success: true, data: result, filters: validated.data };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

@@ -158,6 +158,33 @@ app.use(
 const leaveRequestAdminRoutes = require("./routes/leaveRequestAdminRoute");
 app.use("/api/companies/:company_id", leaveRequestAdminRoutes);
 
+// ─────────────────────────────────────────────
+// LEAVE SALARY — Pro and above
+// ─────────────────────────────────────────────
+//
+// The annual-leave bucket: monthly accrual, the accrued liability, advance
+// leave salary and encashment. Gated with allowReads: true for the same reason
+// as payroll — a company that lapses can still open the accrual ledger and the
+// payouts it already recorded, it just cannot book or pay more. The two payout
+// paths carry their own keys inside the router.
+const leaveSalaryRoutes = require("./routes/leaveSalaryRoute");
+app.use(
+    "/api/companies/:company_id/leave-salary",
+    requireFeature(Feature.LEAVE_SALARY, { allowReads: true }),
+    leaveSalaryRoutes
+);
+
+// ─────────────────────────────────────────────
+// OFFBOARDING — Pro and above
+// ─────────────────────────────────────────────
+//
+// Resignation, termination and the final settlement. Gating sits inside the
+// router, on the endpoints that raise a case or a settlement: a company must
+// always be able to finish offboarding someone it has already started, even if
+// its plan lapses mid-notice.
+const employeeSeparationRoutes = require("./routes/employeeSeparationRoute");
+app.use("/api/companies/:company_id/separations", employeeSeparationRoutes);
+
 
 // ─────────────────────────────────────────────
 // PAYROLL — Pro and above

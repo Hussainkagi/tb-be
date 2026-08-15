@@ -33,7 +33,11 @@ const EmployeeController = {
 
     async getByCompany(req, res) {
         try {
-            const result = await EmployeeService.getEmployeesByCompany(req.params.company_id);
+            // ?state=active|former|all (default all) &status=<exact>
+            const result = await EmployeeService.getEmployeesByCompany(req.params.company_id, {
+                state: req.query.state,
+                status: req.query.status,
+            });
             if (result.success) {
                 return res.status(200).json(result);
             } else {
@@ -46,7 +50,11 @@ const EmployeeController = {
 
     async getByBranch(req, res) {
         try {
-            const result = await EmployeeService.getEmployeesByBranch(req.params.company_id, req.params.branch_id);
+            const result = await EmployeeService.getEmployeesByBranch(
+                req.params.company_id,
+                req.params.branch_id,
+                { state: req.query.state, status: req.query.status }
+            );
             if (result.success) {
                 return res.status(200).json(result);
             } else {
@@ -59,7 +67,11 @@ const EmployeeController = {
 
     async getByDepartment(req, res) {
         try {
-            const result = await EmployeeService.getEmployeesByDepartment(req.params.company_id, req.params.department_id);
+            const result = await EmployeeService.getEmployeesByDepartment(
+                req.params.company_id,
+                req.params.department_id,
+                { state: req.query.state, status: req.query.status }
+            );
             if (result.success) {
                 return res.status(200).json(result);
             } else {

@@ -1,5 +1,48 @@
 const db = require("../config/database");
 
+/**
+ * DATE columns, re-projected as plain 'YYYY-MM-DD' strings.
+ *
+ * node-pg hands a DATE back as a JS Date built at the SERVER's local midnight,
+ * which serializes to JSON as the previous evening in UTC — 14 August on a
+ * GMT+4 box becomes "2026-08-13T20:00:00.000Z". Every consumer then has to know
+ * to parse-and-localise rather than slice, and the ones that slice are a day
+ * early on joining dates, birthdays and exit dates.
+ *
+ * Selected AFTER `e.*` so these win over the raw columns (Postgres allows the
+ * duplicate name; node-pg keeps the last). Done this way rather than by listing
+ * every column explicitly, because the employees table grows by migration —
+ * exit_date itself arrived in 30_payroll_run.sql — and an explicit list would
+ * silently start dropping new columns.
+ */
+const DATE_COLUMNS_AS_TEXT = `
+    to_char(e.joining_date,   'YYYY-MM-DD') AS joining_date,
+    to_char(e.date_of_birth,  'YYYY-MM-DD') AS date_of_birth,
+    to_char(e.exit_date,      'YYYY-MM-DD') AS exit_date
+`;
+
+/**
+ * Employment-state filter for the list endpoints.
+ *
+ *   active  → currently employed
+ *   former  → left or stood down (resigned, terminated, inactive)
+ *   all     → everything (the default, so existing callers are unaffected)
+ *
+ * `active` deliberately tests BOTH flags. `is_active` alone cannot distinguish
+ * a resigned employee from a terminated one, and `status` alone misses someone
+ * deactivated without a separation case.
+ */
+const STATE_CLAUSE = `
+    AND (
+        $STATE::text IS NULL OR $STATE = 'all'
+        OR ($STATE = 'active' AND e.is_active = TRUE  AND e.status = 'active')
+        OR ($STATE = 'former' AND (e.is_active = FALSE OR e.status <> 'active'))
+    )
+`;
+
+/** Bind STATE_CLAUSE to a parameter number. */
+const stateClause = (n) => STATE_CLAUSE.replace(/\$STATE/g, `$${n}`);
+
 const Employee = {
 
     async create(data) {
@@ -55,6 +98,7 @@ const Employee = {
         const result = await db.query(
             `SELECT
                 e.*,
+                ${DATE_COLUMNS_AS_TEXT},
                 s.shift_name      AS shift_name,
                 d.department_name AS department_name,
                 uc.role           AS role
@@ -75,8 +119,9 @@ const Employee = {
 
     async findByCode(company_id, employee_code) {
         const result = await db.query(
-            `SELECT * FROM employees
-             WHERE company_id = $1 AND employee_code = $2 AND deleted_at IS NULL`,
+            `SELECT e.*, ${DATE_COLUMNS_AS_TEXT}
+             FROM employees e
+             WHERE e.company_id = $1 AND e.employee_code = $2 AND e.deleted_at IS NULL`,
             [company_id, employee_code]
         );
         return result.rows[0];
@@ -86,6 +131,7 @@ const Employee = {
         const result = await db.query(
             `SELECT
                 e.*,
+                ${DATE_COLUMNS_AS_TEXT},
                 s.shift_name      AS shift_name,
                 d.department_name AS department_name
              FROM employees e
@@ -99,47 +145,99 @@ const Employee = {
 
     async findByUserAndCompany(user_id, company_id) {
         const result = await db.query(
-            `SELECT * FROM employees
-             WHERE user_id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+            `SELECT e.*, ${DATE_COLUMNS_AS_TEXT}
+             FROM employees e
+             WHERE e.user_id = $1 AND e.company_id = $2 AND e.deleted_at IS NULL`,
             [user_id, company_id]
         );
         return result.rows[0];
     },
 
-    async getAllByCompany(company_id) {
-        const result = await db.query(
-            `SELECT * FROM employees
-             WHERE company_id = $1 AND deleted_at IS NULL
-             ORDER BY created_at DESC`,
-            [company_id]
-        );
-        return result.rows;
-    },
-
-    async getAllByBranch(company_id, branch_id) {
+    /**
+     * @param {object} [filters]
+     * @param {string} [filters.state]   active | former | all  (default all)
+     * @param {string} [filters.status]  exact employees.status match
+     *
+     * Leavers are RETURNED BY DEFAULT and always have been — their records,
+     * payroll history and documents have to stay reachable. Filtering is the
+     * caller's choice, never the default.
+     */
+    async getAllByCompany(company_id, { state = null, status = null } = {}) {
         const result = await db.query(
             `SELECT
                 e.*,
+                ${DATE_COLUMNS_AS_TEXT},
                 s.shift_name      AS shift_name,
                 d.department_name AS department_name
              FROM employees e
              LEFT JOIN shifts s ON e.shift_id = s.id
              LEFT JOIN departments d ON e.department_id = d.id
-             WHERE e.company_id = $1 AND e.branch_id = $2 AND e.deleted_at IS NULL
+             WHERE e.company_id = $1
+               AND e.deleted_at IS NULL
+               AND ($3::text IS NULL OR e.status = $3)
+               ${stateClause(2)}
              ORDER BY e.created_at DESC`,
-            [company_id, branch_id]
+            [company_id, state, status]
         );
         return result.rows;
     },
 
-    async getAllByDepartment(company_id, department_id) {
+    async getAllByBranch(company_id, branch_id, { state = null, status = null } = {}) {
         const result = await db.query(
-            `SELECT * FROM employees
-             WHERE company_id = $1 AND department_id = $2 AND deleted_at IS NULL
-             ORDER BY created_at DESC`,
-            [company_id, department_id]
+            `SELECT
+                e.*,
+                ${DATE_COLUMNS_AS_TEXT},
+                s.shift_name      AS shift_name,
+                d.department_name AS department_name
+             FROM employees e
+             LEFT JOIN shifts s ON e.shift_id = s.id
+             LEFT JOIN departments d ON e.department_id = d.id
+             WHERE e.company_id = $1
+               AND e.branch_id = $2
+               AND e.deleted_at IS NULL
+               AND ($4::text IS NULL OR e.status = $4)
+               ${stateClause(3)}
+             ORDER BY e.created_at DESC`,
+            [company_id, branch_id, state, status]
         );
         return result.rows;
+    },
+
+    async getAllByDepartment(company_id, department_id, { state = null, status = null } = {}) {
+        const result = await db.query(
+            `SELECT
+                e.*,
+                ${DATE_COLUMNS_AS_TEXT},
+                s.shift_name      AS shift_name,
+                d.department_name AS department_name
+             FROM employees e
+             LEFT JOIN shifts s ON e.shift_id = s.id
+             LEFT JOIN departments d ON e.department_id = d.id
+             WHERE e.company_id = $1
+               AND e.department_id = $2
+               AND e.deleted_at IS NULL
+               AND ($4::text IS NULL OR e.status = $4)
+               ${stateClause(3)}
+             ORDER BY e.created_at DESC`,
+            [company_id, department_id, state, status]
+        );
+        return result.rows;
+    },
+
+    /** Headcount by state — powers the filter chips' counts in one round trip. */
+    async countsByState(company_id) {
+        const result = await db.query(
+            `SELECT
+                COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE is_active = TRUE  AND status = 'active')::int  AS active,
+                COUNT(*) FILTER (WHERE is_active = FALSE OR  status <> 'active')::int AS former,
+                COUNT(*) FILTER (WHERE status = 'resigned')::int   AS resigned,
+                COUNT(*) FILTER (WHERE status = 'terminated')::int AS terminated
+             FROM employees
+             WHERE company_id = $1 AND deleted_at IS NULL`,
+            [company_id]
+        );
+        return result.rows[0];
     },
 
     async update(id, data) {
