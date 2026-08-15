@@ -42,6 +42,28 @@ router.put("/config", verifyToken, validateTenant, isAdmin,
 router.patch("/leave-types/:leave_type_id", verifyToken, validateTenant, isAdmin,
     LeaveSalaryController.setLeaveTypeCounting);
 
+// ── Going live: opening balances ─────────────────────────────────────────────
+//
+// How a company that has been running for years starts using the module: one
+// cutoff date (their go-live), and a day count per employee. Accrual is then
+// only booked for months completing after that date, so the imported figure and
+// the ledger cannot cover the same month twice.
+
+// GET /leave-salary/opening-balances?branch_id=
+// Every active employee with their current opening balance — the grid the
+// import screen is filled in from, and exported as the template.
+router.get("/opening-balances", verifyToken, validateTenant, isAdmin,
+    LeaveSalaryController.getOpeningBalanceSheet);
+
+// POST /leave-salary/opening-balances
+// { cutoff_date, dry_run?, entries: [{ employee_code | employee_id, opening_balance_days }] }
+//
+// All-or-nothing — one bad row rejects the batch and writes nothing. Clears any
+// accrual already booked on or before the cutoff, which the imported figure
+// supersedes.
+router.post("/opening-balances", verifyToken, validateTenant, isAdmin,
+    LeaveSalaryController.bulkSetOpeningBalances);
+
 // ── Company-wide ─────────────────────────────────────────────────────────────
 
 // GET /leave-salary/summary?branch_id=&as_of_date=

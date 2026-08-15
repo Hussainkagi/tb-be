@@ -225,7 +225,33 @@
                 }
               ],
               "_postman_previewlanguage": "json",
-              "body": "{\n  \"success\": true,\n  \"message\": \"Leave salary configuration saved\",\n  \"data\": {\n    \"days_in_month\": 30,\n    \"annual_entitlement_days\": 30,\n    \"accrual_rate_full\": 2.5,\n    \"accrual_rate_partial\": 2,\n    \"min_service_months\": 6,\n    \"full_service_months\": 12,\n    \"default_calculation_base\": \"basic\",\n    \"max_balance_days\": 60,\n    \"advance_payment_enabled\": true,\n    \"encashment_enabled\": true,\n    \"notes\": \"Standard UAE Art. 29 terms. Carry-forward capped at 60 days.\",\n    \"is_default\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave salary configuration saved\",\n  \"data\": {\n    \"opening_balance_cutoff_date\": \"2026-07-31\",\n    \"days_in_month\": 30,\n    \"annual_entitlement_days\": 30,\n    \"accrual_rate_full\": 2.5,\n    \"accrual_rate_partial\": 2,\n    \"min_service_months\": 6,\n    \"full_service_months\": 12,\n    \"default_calculation_base\": \"basic\",\n    \"max_balance_days\": 60,\n    \"advance_payment_enabled\": true,\n    \"encashment_enabled\": true,\n    \"notes\": \"Standard UAE Art. 29 terms. Carry-forward capped at 60 days.\",\n    \"is_default\": false\n  },\n  \"warnings\": []\n}"
+            },
+            {
+              "name": "200 — saved, but a rule changed (act on this)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave salary configuration saved\",\n  \"data\": {\n    \"min_service_months\": 5,\n    \"accrual_rate_full\": 2.5,\n    \"annual_entitlement_days\": 30,\n    \"is_default\": false\n  },\n  \"warnings\": [\n    \"Changed: min_service_months. Months already booked keep their old day counts — the new rules apply only to months not yet accrued. Run accrual with recalculate: true to restate the existing ledger (rate snapshots are preserved).\"\n  ]\n}"
+            },
+            {
+              "name": "200 — saved, entitlement disagrees with the rate",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Leave salary configuration saved\",\n  \"data\": {\n    \"annual_entitlement_days\": 24,\n    \"accrual_rate_full\": 2.5,\n    \"is_default\": false\n  },\n  \"warnings\": [\n    \"Accruing 2.5 days/month works out to 30 days a year, but the stated annual entitlement is 24. The monthly rate is what accrues — update it if 24 days is the intent (2 days/month).\"\n  ]\n}"
             },
             {
               "name": "400 — validation failed",
@@ -413,6 +439,235 @@
               ],
               "_postman_previewlanguage": "json",
               "body": "{\n  \"success\": false,\n  \"message\": \"No leave salary settings found for this employee\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1b. Going Live — opening balances",
+      "description": "How a company that has been running for years starts using the module.\n\nOne **cutoff date** (their go-live) plus a day count per employee. Accrual is then only booked for months completing after that date, so the imported figure and the ledger cannot cover the same month twice.\n\nThe import is **all-or-nothing** — one bad row rejects the batch and writes nothing.",
+      "item": [
+        {
+          "name": "Get the balance sheet (the import grid)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/opening-balances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "opening-balances"
+              ]
+            },
+            "description": "Every active employee with their current opening balance and how many months are already booked. Export this as the CSV template — it is keyed by employee_code."
+          },
+          "response": [
+            {
+              "name": "200 — before any import",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"cutoff_date\": null,\n    \"is_cutoff_set\": false,\n    \"default_calculation_base\": \"basic\",\n    \"employee_count\": 2,\n    \"with_opening_balance\": 0,\n    \"total_opening_days\": 0,\n    \"employees\": [\n      {\n        \"employee_id\": \"b7e2...\",\n        \"employee_code\": \"EMP001\",\n        \"first_name\": \"Ahmed\",\n        \"last_name\": \"Al Mansoori\",\n        \"employee_status\": \"active\",\n        \"joining_date\": \"2016-03-01\",\n        \"branch_name\": \"Dubai HQ\",\n        \"department_name\": \"Operations\",\n        \"opening_balance_days\": 0,\n        \"opening_balance_as_of\": null,\n        \"calculation_base\": null,\n        \"accrual_start_date\": null,\n        \"is_enabled\": null,\n        \"months_booked\": 0,\n        \"first_accrued_period\": null,\n        \"service_months\": 125,\n        \"has_accrual_before_cutoff\": false\n      },\n      {\n        \"employee_id\": \"c8d3...\",\n        \"employee_code\": \"EMP002\",\n        \"first_name\": \"Fatima\",\n        \"last_name\": \"Hassan\",\n        \"employee_status\": \"active\",\n        \"joining_date\": \"2024-03-01\",\n        \"branch_name\": \"Dubai HQ\",\n        \"department_name\": \"Finance\",\n        \"opening_balance_days\": 0,\n        \"opening_balance_as_of\": null,\n        \"calculation_base\": null,\n        \"accrual_start_date\": null,\n        \"is_enabled\": null,\n        \"months_booked\": 0,\n        \"first_accrued_period\": null,\n        \"service_months\": 29,\n        \"has_accrual_before_cutoff\": false\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Import — DRY RUN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cutoff_date\": \"2026-07-31\",\n  \"dry_run\": true,\n  \"entries\": [\n    {\n      \"employee_code\": \"EMP001\",\n      \"opening_balance_days\": 21\n    },\n    {\n      \"employee_code\": \"EMP002\",\n      \"opening_balance_days\": 8.5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/opening-balances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "opening-balances"
+              ]
+            },
+            "description": "Writes nothing. `accruals_to_remove` is the number of ledger rows the real import would delete as superseded — show it in the confirmation."
+          },
+          "response": [
+            {
+              "name": "200 — would import",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dry run — 2 opening balance(s) would be imported\",\n  \"data\": {\n    \"dry_run\": true,\n    \"cutoff_date\": \"2026-07-31\",\n    \"employee_count\": 2,\n    \"total_opening_days\": 29.5,\n    \"accruals_to_remove\": 13,\n    \"entries\": [\n      {\n        \"employee_id\": \"b7e2...\",\n        \"employee_code\": \"EMP001\",\n        \"employee_name\": \"Ahmed Al Mansoori\",\n        \"opening_balance_days\": 21,\n        \"opening_balance_as_of\": \"2026-07-31\",\n        \"calculation_base\": null,\n        \"accrual_start_date\": null\n      },\n      {\n        \"employee_id\": \"c8d3...\",\n        \"employee_code\": \"EMP002\",\n        \"employee_name\": \"Fatima Hassan\",\n        \"opening_balance_days\": 8.5,\n        \"opening_balance_as_of\": \"2026-07-31\",\n        \"calculation_base\": null,\n        \"accrual_start_date\": null\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Import — commit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cutoff_date\": \"2026-07-31\",\n  \"entries\": [\n    {\n      \"employee_code\": \"EMP001\",\n      \"opening_balance_days\": 21\n    },\n    {\n      \"employee_code\": \"EMP002\",\n      \"opening_balance_days\": 8.5\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/opening-balances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "opening-balances"
+              ]
+            },
+            "description": "Stores the cutoff on the company config, writes the balances, and clears accrual already booked on or before the cutoff."
+          },
+          "response": [
+            {
+              "name": "200 — imported",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Imported 2 opening balance(s) as of 2026-07-31. Removed 13 superseded accrual row(s).\",\n  \"data\": {\n    \"dry_run\": false,\n    \"cutoff_date\": \"2026-07-31\",\n    \"employee_count\": 2,\n    \"total_opening_days\": 29.5,\n    \"accruals_removed\": 13,\n    \"entries\": []\n  },\n  \"next_step\": \"Run accrual to book the months since the cutoff: POST /leave-salary/accruals/run (dry_run first).\"\n}"
+            },
+            {
+              "name": "400 — bad rows, nothing written",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"3 of 12 row(s) are invalid — nothing was imported.\",\n  \"errors\": [\n    {\n      \"row\": 0,\n      \"employee_code\": \"NOPE123\",\n      \"message\": \"No active employee with code \\\"NOPE123\\\" in this company\"\n    },\n    {\n      \"row\": 1,\n      \"employee_code\": \"EMP001\",\n      \"message\": \"opening_balance_days must be a number >= 0 (got -4)\"\n    },\n    {\n      \"row\": 3,\n      \"employee_code\": \"EMP002\",\n      \"message\": \"Duplicate — this employee appears more than once in the import\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "400 — no cutoff date anywhere",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"No cutoff date. Pass cutoff_date, or set opening_balance_cutoff_date in the leave salary settings — it is the date these balances were true on, and accrual is only booked for months completing after it.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Per-employee override (one late reconciliation)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"opening_balance_days\": 12,\n  \"opening_balance_as_of\": \"2026-08-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/employees/{{employee_id}}/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "employees",
+                "{{employee_id}}",
+                "config"
+              ]
+            },
+            "description": "The bulk import covers everyone at the company cutoff. This is for the one employee reconciled on a different date."
+          },
+          "response": [
+            {
+              "name": "200 — saved",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Employee leave salary settings saved\",\n  \"data\": {\n    \"employee_id\": \"{{employee_id}}\",\n    \"opening_balance_days\": \"12.00\",\n    \"opening_balance_as_of\": \"2026-08-31T00:00:00.000Z\"\n  }\n}"
             }
           ]
         }
@@ -654,7 +909,7 @@
                 "run"
               ]
             },
-            "description": "Idempotent — months already booked are skipped, so the historical rate snapshots stay as they were. Safe to click twice.\n\n`recalculate: true` deliberately rebuilds booked months at today's salary. Use it only after fixing a wrong salary structure."
+            "description": "Idempotent — months already booked are skipped, so historical rate snapshots stay as they were. Safe to click twice."
           },
           "response": [
             {
@@ -668,7 +923,111 @@
                 }
               ],
               "_postman_previewlanguage": "json",
-              "body": "{\n  \"success\": true,\n  \"message\": \"Accrual booked for 3 employee(s)\",\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"dry_run\": false,\n    \"recalculate\": false,\n    \"processed_count\": 3,\n    \"skipped_count\": 1,\n    \"total_days_accrued\": 7.5,\n    \"total_value_accrued\": 2233.34,\n    \"results\": [],\n    \"skipped\": []\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Accrual booked for 3 employee(s)\",\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"dry_run\": false,\n    \"recalculate\": false,\n    \"revalue\": false,\n    \"processed_count\": 3,\n    \"skipped_count\": 1,\n    \"total_days_accrued\": 7.5,\n    \"total_value_accrued\": 2233.34,\n    \"results\": [],\n    \"skipped\": []\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Rebuild after changing an accrual rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"as_of_date\": \"2026-08-14\",\n  \"recalculate\": true,\n  \"dry_run\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/accruals/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "accruals",
+                "run"
+              ]
+            },
+            "description": "Run this after changing min_service_months, full_service_months or either rate — the settings save returns a warning telling you so.\n\n`recalculate` rebuilds the DAY COUNTS under the current rules and **keeps each month's original rate snapshot** (a rule change did not alter what a day was worth in March).\n\nWithout it, lowering the eligibility threshold from 6 to 5 leaves an affected employee on 4 days where they should hold 14 — the catch-up belongs to a month already on the ledger as a zero, and a normal run never revisits it."
+          },
+          "response": [
+            {
+              "name": "200 — dry run of the rebuild",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dry run — 1 employee(s) would accrue\",\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"dry_run\": true,\n    \"recalculate\": true,\n    \"revalue\": false,\n    \"processed_count\": 1,\n    \"skipped_count\": 0,\n    \"total_days_accrued\": 14,\n    \"total_value_accrued\": 3200,\n    \"results\": [\n      {\n        \"employee_id\": \"b7e2...\",\n        \"employee_name\": \"Ahmed Al Mansoori\",\n        \"employee_code\": \"EMP001\",\n        \"months_booked\": 7,\n        \"days_accrued\": 14,\n        \"value_accrued\": 3200,\n        \"from_period\": \"2026-02-15\",\n        \"to_period\": \"2026-08-15\",\n        \"entries\": []\n      }\n    ],\n    \"skipped\": []\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Revalue after fixing a wrong salary structure",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"as_of_date\": \"2026-08-14\",\n  \"employee_id\": \"{{employee_id}}\",\n  \"revalue\": true,\n  \"dry_run\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/leave-salary/accruals/run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "companies",
+                "{{company_id}}",
+                "leave-salary",
+                "accruals",
+                "run"
+              ]
+            },
+            "description": "The OTHER repair, and the only time you want it: restate already-booked months at today's salary. Use when a salary structure was entered wrong and the ledger recorded the wrong value.\n\nNever reach for this after a rule change — it would silently restate a year of accrued liability at current pay."
+          },
+          "response": [
+            {
+              "name": "200 — dry run of the revaluation",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dry run — 1 employee(s) would accrue\",\n  \"data\": {\n    \"as_of_date\": \"2026-08-14\",\n    \"dry_run\": true,\n    \"recalculate\": false,\n    \"revalue\": true,\n    \"processed_count\": 1,\n    \"skipped_count\": 0,\n    \"total_days_accrued\": 35,\n    \"total_value_accrued\": 10500,\n    \"results\": [],\n    \"skipped\": []\n  }\n}"
             }
           ]
         },

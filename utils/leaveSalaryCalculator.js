@@ -256,6 +256,24 @@ function computeBalance({
     const isCapped = cap !== null && rawBalance > cap;
     const balance = isCapped ? round2(cap) : rawBalance;
 
+    const rate = Number(current_daily_rate) || 0;
+    const booked = Number(booked_value) || 0;
+
+    /**
+     * What the ledger paid per day on average, across everything ever booked.
+     *
+     * The revaluation figure has to compare like with like: the REMAINING days
+     * at today's rate against those same days at the rate they were earned at.
+     * Subtracting the whole booked value from the remaining balance's value
+     * instead would mostly measure how much leave has been taken — an employee
+     * who used half their days on an unchanged salary would show a large
+     * "revaluation", which is nonsense.
+     *
+     * Undefined when nothing has been booked (a pure opening-balance import),
+     * and reported as null rather than guessed at.
+     */
+    const avgBookedRate = accrued > 0 && booked > 0 ? booked / accrued : null;
+
     return {
         opening_balance_days: round2(opening),
         accrued_days: round2(accrued),
@@ -269,12 +287,12 @@ function computeBalance({
         // A negative balance means leave was granted beyond what was earned —
         // legitimate (advance leave), but the admin should see it.
         is_negative: balance < 0,
-        current_daily_rate: round4(current_daily_rate),
-        balance_value: round2(balance * (Number(current_daily_rate) || 0)),
-        booked_value: round2(booked_value),
-        revaluation_difference: round2(
-            balance * (Number(current_daily_rate) || 0) - (Number(booked_value) || 0)
-        ),
+        current_daily_rate: round4(rate),
+        balance_value: round2(balance * rate),
+        booked_value: round2(booked),
+        average_booked_rate: avgBookedRate === null ? null : round4(avgBookedRate),
+        revaluation_difference:
+            avgBookedRate === null ? 0 : round2(balance * (rate - avgBookedRate)),
     };
 }
 

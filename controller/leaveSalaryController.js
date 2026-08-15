@@ -39,6 +39,41 @@ const LeaveSalaryController = {
         }
     },
 
+    // ── Going live: opening balances ─────────────────────────────────────────
+
+    /** The grid the import screen is filled in from. ?branch_id= */
+    async getOpeningBalanceSheet(req, res) {
+        try {
+            const result = await LeaveSalaryService.getOpeningBalanceSheet(
+                req.params.company_id,
+                { branch_id: req.query.branch_id ?? null }
+            );
+            return send(res, result);
+        } catch (error) {
+            return fail(res, error);
+        }
+    },
+
+    /**
+     * Bulk import. All-or-nothing: one bad row rejects the batch with per-row
+     * errors and writes nothing. Send dry_run first.
+     */
+    async bulkSetOpeningBalances(req, res) {
+        try {
+            const result = await LeaveSalaryService.bulkSetOpeningBalances(
+                req.params.company_id,
+                {
+                    entries: req.body.entries,
+                    cutoff_date: req.body.cutoff_date ?? null,
+                    dry_run: req.body.dry_run === true,
+                }
+            );
+            return send(res, result);
+        } catch (error) {
+            return fail(res, error);
+        }
+    },
+
     async upsertEmployeeConfig(req, res) {
         try {
             const result = await LeaveSalaryService.upsertEmployeeConfig(
@@ -115,7 +150,11 @@ const LeaveSalaryController = {
                 employee_id: req.body.employee_id ?? null,
                 branch_id: req.body.branch_id ?? null,
                 dry_run: req.body.dry_run === true || req.query.dry_run === "true",
+                // recalculate → rebuild day counts under the current rules,
+                //               keeping each month's original rate snapshot
+                // revalue     → also restate those months at today's salary
                 recalculate: req.body.recalculate === true,
+                revalue: req.body.revalue === true,
             });
             return send(res, result);
         } catch (error) {

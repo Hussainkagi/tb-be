@@ -12,6 +12,7 @@ const db = require("../config/database");
  */
 
 const COMPANY_CONFIG_COLUMNS = [
+    "opening_balance_cutoff_date",
     "days_in_month",
     "annual_entitlement_days",
     "accrual_rate_full",
@@ -143,6 +144,145 @@ const LeaveSalaryModel = {
             values
         );
         return result.rows[0];
+    },
+
+    /**
+     * Import opening balances for many employees at once, and clear the accrual
+     * they supersede — in one transaction.
+     *
+     * The purge is the part that cannot be left out. An opening balance says
+     * "as of this date the employee held N days"; any ledger row for a month
+     * ending on or before that date is now counted twice, once in the imported
+     * figure and once in the ledger. Importing without clearing them silently
+     * inflates every balance, and the error only surfaces when somebody leaves
+     * and is overpaid.
+     *
+     * @param {Array} entries  [{ employee_id, opening_balance_days,
+     *                            opening_balance_as_of, calculation_base?,
+     *                            accrual_start_date? }]
+     */
+    async bulkSetOpeningBalances(company_id, entries = []) {
+        if (!entries.length) return { updated: [], accruals_removed: 0 };
+
+        const client = await db.getClient();
+        try {
+            await client.query("BEGIN");
+
+            const updated = [];
+
+            for (const e of entries) {
+                const result = await client.query(
+                    `INSERT INTO employee_leave_salary_configs
+                        (company_id, employee_id, opening_balance_days, opening_balance_as_of,
+                         calculation_base, accrual_start_date, is_enabled)
+                     VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+                     ON CONFLICT (employee_id) DO UPDATE SET
+                        opening_balance_days  = EXCLUDED.opening_balance_days,
+                        opening_balance_as_of = EXCLUDED.opening_balance_as_of,
+                        -- Only overwrite these when the import supplied them;
+                        -- an import of balances must not silently reset a base
+                        -- somebody configured deliberately.
+                        calculation_base   = COALESCE(EXCLUDED.calculation_base,
+                                                      employee_leave_salary_configs.calculation_base),
+                        accrual_start_date = COALESCE(EXCLUDED.accrual_start_date,
+                                                      employee_leave_salary_configs.accrual_start_date),
+                        deleted_at = NULL
+                     RETURNING *`,
+                    [company_id, e.employee_id, e.opening_balance_days, e.opening_balance_as_of,
+                     e.calculation_base ?? null, e.accrual_start_date ?? null]
+                );
+                updated.push(result.rows[0]);
+            }
+
+            const purge = await client.query(
+                `DELETE FROM leave_salary_accruals a
+                 USING employee_leave_salary_configs c
+                 WHERE a.employee_id = c.employee_id
+                   AND a.employee_id = ANY($1::uuid[])
+                   AND c.opening_balance_as_of IS NOT NULL
+                   AND a.period_end_date <= c.opening_balance_as_of`,
+                [entries.map((e) => e.employee_id)]
+            );
+
+            await client.query("COMMIT");
+            return { updated, accruals_removed: purge.rowCount };
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        } finally {
+            client.release();
+        }
+    },
+
+    /** How many ledger rows an import would clear. Powers the dry run. */
+    async countAccrualsOnOrBefore(employee_ids = [], cutoff_date) {
+        if (!employee_ids.length || !cutoff_date) return 0;
+
+        const result = await db.query(
+            `SELECT COUNT(*)::int AS count
+             FROM leave_salary_accruals
+             WHERE employee_id = ANY($1::uuid[]) AND period_end_date <= $2::date`,
+            [employee_ids, cutoff_date]
+        );
+        return result.rows[0]?.count ?? 0;
+    },
+
+    /** Resolve a spreadsheet's employee codes to ids, within one company. */
+    async findEmployeeIdsByCodes(company_id, codes = []) {
+        if (!codes.length) return [];
+
+        const result = await db.query(
+            `SELECT id, employee_code, first_name, last_name, status
+             FROM employees
+             WHERE company_id = $1
+               AND employee_code = ANY($2::text[])
+               AND deleted_at IS NULL`,
+            [company_id, codes]
+        );
+        return result.rows;
+    },
+
+    /**
+     * Every employee alongside their opening balance and whether accrual has
+     * already been booked — the grid the import screen is filled in from.
+     */
+    async getOpeningBalanceSheet(company_id, { branch_id = null } = {}) {
+        const result = await db.query(
+            `SELECT
+                e.id                AS employee_id,
+                e.employee_code,
+                e.first_name, e.last_name,
+                e.status            AS employee_status,
+                to_char(e.joining_date, 'YYYY-MM-DD')            AS joining_date,
+                b.branch_name,
+                d.department_name,
+                COALESCE(lc.opening_balance_days, 0)             AS opening_balance_days,
+                to_char(lc.opening_balance_as_of, 'YYYY-MM-DD')  AS opening_balance_as_of,
+                lc.calculation_base,
+                to_char(lc.accrual_start_date, 'YYYY-MM-DD')     AS accrual_start_date,
+                lc.is_enabled,
+                COALESCE(acc.months_booked, 0)                   AS months_booked,
+                to_char(acc.first_period, 'YYYY-MM-DD')          AS first_accrued_period
+             FROM employees e
+             LEFT JOIN branches b    ON b.id = e.branch_id
+             LEFT JOIN departments d ON d.id = e.department_id
+             LEFT JOIN employee_leave_salary_configs lc
+                    ON lc.employee_id = e.id AND lc.deleted_at IS NULL
+             LEFT JOIN (
+                SELECT employee_id,
+                       COUNT(*)::int      AS months_booked,
+                       MIN(period_end_date) AS first_period
+                FROM leave_salary_accruals
+                GROUP BY employee_id
+             ) acc ON acc.employee_id = e.id
+             WHERE e.company_id = $1
+               AND e.deleted_at IS NULL
+               AND e.is_active = TRUE
+               AND ($2::uuid IS NULL OR e.branch_id = $2)
+             ORDER BY e.employee_code NULLS LAST, e.first_name`,
+            [company_id, branch_id]
+        );
+        return result.rows;
     },
 
     async softDeleteEmployeeConfig(employee_id) {

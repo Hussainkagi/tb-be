@@ -61,6 +61,9 @@ const resolveRules = (configRow) => {
     if (!configRow) return { ...DEFAULT_LEAVE_SALARY_RULES, is_default: true };
 
     return {
+        opening_balance_cutoff_date: configRow.opening_balance_cutoff_date
+            ? toISODate(toUTCDate(configRow.opening_balance_cutoff_date))
+            : null,
         days_in_month: Number(configRow.days_in_month),
         annual_entitlement_days: Number(configRow.annual_entitlement_days),
         accrual_rate_full: Number(configRow.accrual_rate_full),
@@ -237,6 +240,12 @@ const LeaveSalaryService = {
             const base = resolveRules(current);
 
             const merged = {
+                // Carried explicitly: upsertCompanyConfig writes every column,
+                // so a field left out of this object is nulled on every save.
+                opening_balance_cutoff_date:
+                    payload.opening_balance_cutoff_date === undefined
+                        ? base.opening_balance_cutoff_date
+                        : asDate(payload.opening_balance_cutoff_date),
                 days_in_month: payload.days_in_month ?? base.days_in_month,
                 annual_entitlement_days: payload.annual_entitlement_days ?? base.annual_entitlement_days,
                 accrual_rate_full: payload.accrual_rate_full ?? base.accrual_rate_full,
@@ -287,10 +296,54 @@ const LeaveSalaryService = {
 
             const saved = await LeaveSalaryModel.upsertCompanyConfig(company_id, merged);
 
+            // accrual_rate_full is what the maths actually uses;
+            // annual_entitlement_days is descriptive. They are separate fields
+            // because a company may accrue at a rate that does not divide its
+            // headline entitlement evenly — but when they disagree by accident,
+            // the admin has changed the number they were looking at and not the
+            // one that pays out. Say so rather than diverging in silence.
+            const impliedAnnual = round2(Number(merged.accrual_rate_full) * 12);
+            const warnings = [];
+
+            // Changing a rule does NOT retroactively fix months already booked.
+            // The accrual run resumes after the last booked month, so a lowered
+            // eligibility threshold never credits the deferred months it now
+            // covers — their catch-up belonged to a month that is already on the
+            // ledger as a zero, and the days are simply lost. Nobody would guess
+            // that from a settings form, so the save says it outright.
+            const RULE_FIELDS = [
+                "accrual_rate_full", "accrual_rate_partial",
+                "min_service_months", "full_service_months",
+            ];
+            const changedRules = current
+                ? RULE_FIELDS.filter(
+                    (f) => Number(current[f]) !== Number(merged[f])
+                )
+                : [];
+
+            if (changedRules.length) {
+                warnings.push(
+                    `Changed: ${changedRules.join(", ")}. Months already booked keep their old ` +
+                    `day counts — the new rules apply only to months not yet accrued. ` +
+                    `Run accrual with recalculate: true to restate the existing ledger ` +
+                    `(rate snapshots are preserved).`
+                );
+            }
+
+            if (Math.abs(impliedAnnual - Number(merged.annual_entitlement_days)) > 0.01) {
+                warnings.push(
+                    `Accruing ${merged.accrual_rate_full} days/month works out to ${impliedAnnual} days a year, ` +
+                    `but the stated annual entitlement is ${merged.annual_entitlement_days}. ` +
+                    `The monthly rate is what accrues — update it if ${merged.annual_entitlement_days} days is the intent ` +
+                    `(${round2(Number(merged.annual_entitlement_days) / 12)} days/month).`
+                );
+            }
+
             return {
                 success: true,
                 message: "Leave salary configuration saved",
                 data: resolveRules(saved),
+                warnings,
             };
         } catch (error) {
             return { success: false, message: error.message, error };
@@ -372,6 +425,231 @@ const LeaveSalaryService = {
                 success: true,
                 message: "Employee leave salary settings saved",
                 data: saved,
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GOING LIVE — opening balances at a cutoff date
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The grid the import screen is filled in from: every active employee, the
+     * opening balance they currently carry, and whether accrual has already
+     * been booked for them.
+     */
+    async getOpeningBalanceSheet(company_id, { branch_id = null } = {}) {
+        try {
+            const [rows, configRow] = await Promise.all([
+                LeaveSalaryModel.getOpeningBalanceSheet(company_id, { branch_id }),
+                LeaveSalaryModel.getCompanyConfig(company_id),
+            ]);
+
+            const rules = resolveRules(configRow);
+            const cutoff = asDate(configRow?.opening_balance_cutoff_date);
+
+            const employees = rows.map((r) => ({
+                ...r,
+                opening_balance_days: Number(r.opening_balance_days),
+                months_booked: Number(r.months_booked),
+                service_months: r.joining_date
+                    ? completedServiceMonths(r.accrual_start_date || r.joining_date, today())
+                    : 0,
+                // An employee whose ledger starts on or before the cutoff would
+                // double-count if a balance were imported without clearing it.
+                // The import does clear it — this flags it in advance.
+                has_accrual_before_cutoff:
+                    !!cutoff && !!r.first_accrued_period && r.first_accrued_period <= cutoff,
+            }));
+
+            return {
+                success: true,
+                data: {
+                    cutoff_date: cutoff,
+                    is_cutoff_set: !!cutoff,
+                    default_calculation_base: rules.default_calculation_base,
+                    employee_count: employees.length,
+                    with_opening_balance: employees.filter((e) => e.opening_balance_days > 0).length,
+                    total_opening_days: round2(
+                        employees.reduce((a, e) => a + e.opening_balance_days, 0)
+                    ),
+                    employees,
+                },
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    /**
+     * Import opening balances for the whole company in one go.
+     *
+     * Rows may identify an employee by `employee_id` or by `employee_code` —
+     * the spreadsheet a company arrives with is keyed by code.
+     *
+     * ALL-OR-NOTHING. Every row is validated before anything is written, and a
+     * single bad row rejects the batch. A half-applied balance import is worse
+     * than none: the totals look plausible, and nobody can tell which employees
+     * made it in without checking each one.
+     */
+    async bulkSetOpeningBalances(company_id, payload = {}) {
+        try {
+            const { entries = [], cutoff_date = null, dry_run = false } = payload;
+
+            if (!Array.isArray(entries) || entries.length === 0) {
+                return { success: false, message: "entries must be a non-empty array" };
+            }
+
+            const configRow = await LeaveSalaryModel.getCompanyConfig(company_id);
+            const rules = resolveRules(configRow);
+
+            // The cutoff is the company's go-live date: one date for everyone,
+            // overridable per row for a late reconciliation.
+            const companyCutoff = asDate(cutoff_date) || asDate(configRow?.opening_balance_cutoff_date);
+            if (!companyCutoff) {
+                return {
+                    success: false,
+                    message:
+                        "No cutoff date. Pass cutoff_date, or set opening_balance_cutoff_date in " +
+                        "the leave salary settings — it is the date these balances were true on, " +
+                        "and accrual is only booked for months completing after it.",
+                };
+            }
+
+            // ── Resolve employees ────────────────────────────────────────────
+            const codes = entries
+                .filter((e) => !e.employee_id && e.employee_code)
+                .map((e) => String(e.employee_code).trim());
+
+            const byCode = new Map(
+                (await LeaveSalaryModel.findEmployeeIdsByCodes(company_id, codes))
+                    .map((r) => [r.employee_code, r])
+            );
+
+            const resolved = [];
+            const errors = [];
+            const seen = new Set();
+
+            entries.forEach((entry, i) => {
+                const match = entry.employee_id
+                    ? { id: entry.employee_id }
+                    : byCode.get(String(entry.employee_code ?? "").trim());
+
+                if (!match) {
+                    errors.push({
+                        row: i,
+                        employee_code: entry.employee_code ?? null,
+                        message: entry.employee_code
+                            ? `No active employee with code "${entry.employee_code}" in this company`
+                            : "Provide employee_id or employee_code",
+                    });
+                    return;
+                }
+
+                if (seen.has(match.id)) {
+                    errors.push({ row: i, employee_code: entry.employee_code ?? null,
+                        message: "Duplicate — this employee appears more than once in the import" });
+                    return;
+                }
+                seen.add(match.id);
+
+                const days = entry.opening_balance_days;
+                if (!isNum(days) || Number(days) < 0) {
+                    errors.push({ row: i, employee_code: entry.employee_code ?? null,
+                        message: `opening_balance_days must be a number >= 0 (got ${JSON.stringify(days)})` });
+                    return;
+                }
+
+                const base = entry.calculation_base ?? null;
+                if (base !== null && !Object.values(CalculationBase).includes(base)) {
+                    errors.push({ row: i, employee_code: entry.employee_code ?? null,
+                        message: `calculation_base must be one of: ${Object.values(CalculationBase).join(", ")}` });
+                    return;
+                }
+
+                const asOf = asDate(entry.opening_balance_as_of) || companyCutoff;
+                if (!asOf) {
+                    errors.push({ row: i, employee_code: entry.employee_code ?? null,
+                        message: "Could not read opening_balance_as_of as a date" });
+                    return;
+                }
+
+                resolved.push({
+                    employee_id: match.id,
+                    employee_code: match.employee_code ?? entry.employee_code ?? null,
+                    employee_name: match.first_name ? `${match.first_name} ${match.last_name}` : null,
+                    opening_balance_days: round2(Number(days)),
+                    opening_balance_as_of: asOf,
+                    calculation_base: base,
+                    accrual_start_date: asDate(entry.accrual_start_date),
+                });
+            });
+
+            if (errors.length) {
+                return {
+                    success: false,
+                    message: `${errors.length} of ${entries.length} row(s) are invalid — nothing was imported.`,
+                    errors,
+                };
+            }
+
+            const employee_ids = resolved.map((r) => r.employee_id);
+            const supersededAccruals = await LeaveSalaryModel.countAccrualsOnOrBefore(
+                employee_ids, companyCutoff
+            );
+
+            if (dry_run) {
+                return {
+                    success: true,
+                    message: `Dry run — ${resolved.length} opening balance(s) would be imported`,
+                    data: {
+                        dry_run: true,
+                        cutoff_date: companyCutoff,
+                        employee_count: resolved.length,
+                        total_opening_days: round2(
+                            resolved.reduce((a, r) => a + r.opening_balance_days, 0)
+                        ),
+                        // Ledger rows the import would delete because the
+                        // imported figure already accounts for those months.
+                        accruals_to_remove: supersededAccruals,
+                        entries: resolved,
+                    },
+                };
+            }
+
+            // Persist the company cutoff so the next import (and the accrual
+            // run) inherit it without being told again.
+            if (!configRow?.opening_balance_cutoff_date || asDate(cutoff_date)) {
+                await LeaveSalaryModel.upsertCompanyConfig(company_id, {
+                    ...rules,
+                    opening_balance_cutoff_date: companyCutoff,
+                });
+            }
+
+            const result = await LeaveSalaryModel.bulkSetOpeningBalances(company_id, resolved);
+
+            return {
+                success: true,
+                message:
+                    `Imported ${resolved.length} opening balance(s) as of ${companyCutoff}` +
+                    (result.accruals_removed
+                        ? `. Removed ${result.accruals_removed} superseded accrual row(s).`
+                        : "."),
+                data: {
+                    dry_run: false,
+                    cutoff_date: companyCutoff,
+                    employee_count: resolved.length,
+                    total_opening_days: round2(
+                        resolved.reduce((a, r) => a + r.opening_balance_days, 0)
+                    ),
+                    accruals_removed: result.accruals_removed,
+                    entries: resolved,
+                },
+                next_step:
+                    "Run accrual to book the months since the cutoff: " +
+                    "POST /leave-salary/accruals/run (dry_run first).",
             };
         } catch (error) {
             return { success: false, message: error.message, error };
@@ -560,6 +838,7 @@ const LeaveSalaryService = {
         branch_id = null,
         dry_run = false,
         recalculate = false,
+        revalue = false,
     } = {}) {
         try {
             const asOf = as_of_date || today();
@@ -594,7 +873,7 @@ const LeaveSalaryService = {
 
                 // Never book past a completed separation: the bucket stops on
                 // the last working day, and the settlement is built from it.
-                const lastBooked = recalculate
+                const lastBooked = recalculate || revalue
                     ? null
                     : await LeaveSalaryModel.getLastAccrualDate(ctx.employee_id);
 
@@ -623,9 +902,24 @@ const LeaveSalaryService = {
                     continue;
                 }
 
+                // On a rebuild, keep each month's ORIGINAL rate snapshot unless
+                // a revaluation was explicitly asked for.
+                //
+                // The two reasons to rebuild are different and must not be
+                // conflated. Changing an accrual RULE (a threshold, a rate)
+                // changes how many days a month earned — but not what a day was
+                // worth back then, and silently restating a year of history at
+                // today's salary would misstate the accrued liability. Fixing a
+                // wrong SALARY structure is the opposite case, and that is what
+                // `revalue` is for.
+                const finalSchedule =
+                    recalculate && !revalue
+                        ? await this._preserveRateSnapshots(ctx.employee_id, schedule)
+                        : schedule;
+
                 const written = dry_run
-                    ? schedule
-                    : await LeaveSalaryModel.upsertAccruals(company_id, ctx.employee_id, schedule);
+                    ? finalSchedule
+                    : await LeaveSalaryModel.upsertAccruals(company_id, ctx.employee_id, finalSchedule);
 
                 results.push({
                     employee_id: ctx.employee_id,
@@ -649,6 +943,7 @@ const LeaveSalaryService = {
                     as_of_date: asOf,
                     dry_run,
                     recalculate,
+                    revalue,
                     processed_count: results.length,
                     skipped_count: skipped.length,
                     total_days_accrued: round2(results.reduce((a, r) => a + r.days_accrued, 0)),
@@ -660,6 +955,38 @@ const LeaveSalaryService = {
         } catch (error) {
             return { success: false, message: error.message, error };
         }
+    },
+
+    /**
+     * Re-stamp a rebuilt schedule with the rates each month was ORIGINALLY
+     * booked at, leaving the recomputed day counts alone.
+     *
+     * A month that has never been booked keeps the rate from the rebuild —
+     * there is no history to preserve for it.
+     */
+    async _preserveRateSnapshots(employee_id, schedule) {
+        const existing = await LeaveSalaryModel.getAccruals(employee_id);
+        if (!existing.length) return schedule;
+
+        const byPeriod = new Map(
+            existing.map((r) => [`${r.period_year}-${r.period_month}`, r])
+        );
+
+        return schedule.map((row) => {
+            const prior = byPeriod.get(`${row.period_year}-${row.period_month}`);
+            if (!prior) return row;
+
+            const daily_rate = Number(prior.daily_rate);
+
+            return {
+                ...row,
+                calculation_base: prior.calculation_base,
+                basis_amount: Number(prior.basis_amount),
+                days_in_month: prior.days_in_month,
+                daily_rate,
+                accrued_amount: round2(row.accrued_days * daily_rate),
+            };
+        });
     },
 
     // ─────────────────────────────────────────────────────────────────────────
