@@ -3,8 +3,13 @@ const router = express.Router();
 
 const SuperAdminController = require("../controller/superAdminController");
 const PlanController = require("../controller/planController");
+const PolicyController = require("../controller/policyController");
 const verifyToken = require("../middleware/verifyToken");
 const { requireSuperAdmin } = require("../middleware/isSuperAdmin");
+const {
+    uploadPolicyDocument,
+    handlePolicyUploadError,
+} = require("../middleware/uploadPolicyDocument");
 
 // Every route below is platform-level: the caller must be authenticated AND
 // carry users.is_super_admin = TRUE (re-checked against the DB per request).
@@ -98,6 +103,48 @@ router.get("/coupons", PlanController.listCoupons);
 router.post("/coupons", PlanController.createCoupon);
 router.get("/coupons/:coupon_id", PlanController.getCoupon);
 router.patch("/coupons/:coupon_id/revoke", PlanController.revokeCoupon);
+
+// ─────────────────────────────────────────────
+// LEGAL POLICIES — TERMS & CONDITIONS, PRIVACY POLICY
+// ─────────────────────────────────────────────
+//
+// Documents are country-scoped and versioned. Publishing never edits: it
+// uploads a new .docx, extracts the text, files it as the next version, and
+// retires the incumbent. Every superseded version stays readable HERE and
+// nowhere else — a company sees the terms it is bound by today, while Legal
+// keeps the archive an old agreement will be argued against.
+//
+// A blank `country` means the global default, served to every country that has
+// no document of its own.
+
+// Index: one row per (policy_type, country) lane, with version counts.
+router.get("/policies", PolicyController.listLanes);
+
+// Every live document across all countries. ?policy_type&country
+router.get("/policies/current", PolicyController.listCurrent);
+
+// The archive for one lane. ?policy_type=terms&country=AE&page&limit
+router.get("/policies/versions", PolicyController.listVersions);
+
+// Publish a new version — multipart/form-data.
+//   file (.docx, required) | policy_type | country | title | change_note
+//   effective_from | requires_reacceptance | notify
+//
+// On success every company admin in the affected country receives an in-app
+// notification and an email pointing at their company profile.
+router.post(
+    "/policies",
+    uploadPolicyDocument.single("file"),   // must run before the controller
+    PolicyController.publishPolicy
+);
+
+// Static paths above, parameterised ones below — otherwise "current" and
+// "versions" would be captured as document ids.
+router.get("/policies/:id", PolicyController.getDocument);
+router.get("/policies/:id/acceptances", PolicyController.listDocumentAcceptances);
+
+// Rejected uploads (wrong type, too large) become 400s instead of 500s.
+router.use(handlePolicyUploadError);
 
 // ─────────────────────────────────────────────
 // SUPER ADMIN MANAGEMENT

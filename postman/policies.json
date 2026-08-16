@@ -1,0 +1,333 @@
+{
+  "info": {
+    "name": "HRMS — Terms & Policies Module",
+    "description": "Country-scoped Terms and Conditions and Privacy Policy. Super Admin publishes a new version by uploading a .docx; the backend extracts the content, files it as the next version, retires the previous one, and notifies every company admin in that country by in-app notification and email. Companies accept at registration and can re-accept from their profile. Set collection variables: base_url, token, super_admin_token, company_id, policy_document_id.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000" },
+    { "key": "token", "value": "company_admin_jwt_here" },
+    { "key": "super_admin_token", "value": "super_admin_jwt_here" },
+    { "key": "company_id", "value": "a1b2c3d4-0000-0000-0000-000000000001" },
+    { "key": "policy_document_id", "value": "p1b2c3d4-0000-0000-0000-000000000001" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "1. Public — Registration Screen",
+      "item": [
+        {
+          "name": "Get policies for a country (both)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/policies?country=AE",
+              "host": ["{{base_url}}"],
+              "path": ["api", "policies"],
+              "query": [
+                { "key": "country", "value": "AE", "description": "ISO alpha-2 OR a country name — 'uae' and 'United Arab Emirates' both work. Falls back to the global policy when the country has none of its own." }
+              ]
+            },
+            "description": "No auth. The signup form calls this to render the consent links before an account exists."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Success\",\n  \"data\": {\n    \"country_code\": \"AE\",\n    \"resolved_from\": \"AE\",\n    \"policies\": [\n      {\n        \"id\": \"p1b2c3d4-0000-0000-0000-000000000001\",\n        \"policy_type\": \"terms\",\n        \"policy_label\": \"Terms and Conditions\",\n        \"country_code\": \"AE\",\n        \"version\": 2,\n        \"title\": \"IKRATION teamBook\",\n        \"effective_from\": \"2026-08-16\",\n        \"requires_reacceptance\": true,\n        \"source_file_url\": \"https://res.cloudinary.com/.../tnc.docx\",\n        \"content_html\": \"<p><strong>IKRATION teamBook</strong></p>...\"\n      },\n      {\n        \"policy_type\": \"privacy\",\n        \"country_code\": null,\n        \"version\": 1\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get one policy type only",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/policies?country=India&policy_type=privacy",
+              "host": ["{{base_url}}"],
+              "path": ["api", "policies"],
+              "query": [
+                { "key": "country", "value": "India" },
+                { "key": "policy_type", "value": "privacy", "description": "terms | privacy" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register a company (consent required)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/user-companies/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user-companies", "auth", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Hussain\",\n  \"last_name\": \"Kagi\",\n  \"email\": \"admin@acme.ae\",\n  \"phone\": \"+971501234567\",\n  \"password\": \"Str0ngPassw0rd\",\n  \"company_name\": \"Acme Trading LLC\",\n  \"company_code\": \"ACME01\",\n  \"country\": \"United Arab Emirates\",\n  \"timezone\": \"Asia/Dubai\",\n  \"currency\": \"AED\",\n\n  \"accepted_terms\": true,\n  \"accepted_privacy\": true\n}"
+            },
+            "description": "Both consent flags are mandatory. They are validated BEFORE anything is written, so a refused registration leaves no company behind. The acceptance is filed against the versions live at that moment, along with the caller's IP and user agent (taken from the request, not the body)."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Company registered. OTP sent to email for verification.\",\n  \"data\": {\n    \"user_id\": \"...\",\n    \"company_id\": \"...\",\n    \"username\": \"AA0007\",\n    \"was_existing_user\": false,\n    \"policy_acceptance\": {\n      \"recorded\": [\n        { \"policy_type\": \"terms\", \"version\": 2, \"accepted_at\": \"2026-08-16T10:04:00.000Z\" },\n        { \"policy_type\": \"privacy\", \"version\": 1, \"accepted_at\": \"2026-08-16T10:04:00.000Z\" }\n      ],\n      \"missing\": []\n    }\n  }\n}"
+            },
+            {
+              "name": "400 Consent not given",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"code\": \"POLICY_NOT_ACCEPTED\",\n  \"message\": \"You must accept the Terms and Conditions and the Privacy Policy to register.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Company — Profile Legal Tab",
+      "item": [
+        {
+          "name": "Policy status (current + accepted + pending)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/policies",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "policies"]
+            },
+            "description": "Any authenticated user of the company. `pending_acceptance` is computed, not stored — it appears the moment Super Admin publishes a version marked requires_reacceptance."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"company_id\": \"...\",\n    \"country\": \"United Arab Emirates\",\n    \"country_code\": \"AE\",\n    \"policies\": [\n      {\n        \"policy_type\": \"terms\",\n        \"policy_label\": \"Terms and Conditions\",\n        \"version\": 2,\n        \"accepted\": false,\n        \"action_required\": true,\n        \"accepted_version\": 1,\n        \"accepted_at\": \"2026-05-02T09:00:00.000Z\",\n        \"accepted_by\": \"Hussain Kagi\"\n      },\n      {\n        \"policy_type\": \"privacy\",\n        \"version\": 1,\n        \"accepted\": true,\n        \"action_required\": false\n      }\n    ],\n    \"pending_acceptance\": [{ \"policy_type\": \"terms\", \"version\": 2 }]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Read the full document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/policies/terms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "policies", "terms"]
+            },
+            "description": "Returns content_html for rendering plus source_file_url to download the original .docx. Serves the current version for the company's own country only."
+          },
+          "response": []
+        },
+        {
+          "name": "Accept the current version (Admin only)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/policies/terms/accept",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "policies", "terms", "accept"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"policy_document_id\": \"{{policy_document_id}}\"\n}"
+            },
+            "description": "Send back the id of the document that was displayed. If it has since been superseded the call is rejected with 409 rather than silently recording consent to text the admin never saw. Omit the field to accept whatever is current."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Terms and Conditions v2 accepted\",\n  \"data\": {\n    \"policy_type\": \"terms\",\n    \"policy_version\": 2,\n    \"acceptance_context\": \"reacceptance\",\n    \"accepted_at\": \"2026-08-16T10:12:00.000Z\",\n    \"ip_address\": \"203.0.113.9\"\n  }\n}"
+            },
+            {
+              "name": "409 Superseded",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"code\": \"POLICY_SUPERSEDED\",\n  \"message\": \"This document has been superseded. Reload the page and review the current version before accepting.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Acceptance history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/companies/{{company_id}}/policies/acceptances?policy_type=terms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "companies", "{{company_id}}", "policies", "acceptances"],
+              "query": [{ "key": "policy_type", "value": "terms", "description": "Optional. Omit for both." }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Super Admin — Publish & Archive",
+      "item": [
+        {
+          "name": "Publish a new version (.docx upload)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{super_admin_token}}", "type": "string" }] },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/policies",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "policies"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [], "description": "REQUIRED. Word .docx only — the legacy binary .doc is rejected with a Save-As hint. Max 15MB." },
+                { "key": "policy_type", "value": "terms", "type": "text", "description": "terms | privacy" },
+                { "key": "country", "value": "AE", "type": "text", "description": "ISO alpha-2 or a country name. Leave BLANK for the global default, which serves every country without its own document." },
+                { "key": "title", "value": "", "type": "text", "description": "Optional — defaults to the document's own opening heading." },
+                { "key": "change_note", "value": "Section 6 fees clarified", "type": "text", "description": "Shown in the notification and the email." },
+                { "key": "effective_from", "value": "2026-09-01", "type": "text", "description": "Optional — defaults to today." },
+                { "key": "requires_reacceptance", "value": "true", "type": "text", "description": "false for a typo fix: admins are told, but no outstanding action is raised." },
+                { "key": "notify", "value": "true", "type": "text", "description": "false to publish quietly." }
+              ]
+            },
+            "description": "Parses the .docx into HTML BEFORE writing anything, so a malformed file leaves the previous version live and no orphan upload behind. Then, in one transaction: bump the version, retire the incumbent, insert the new document. Afterwards it audits the action and notifies every company admin in the affected country. Notification and email failures are logged, never rolled back."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Terms and Conditions v2 published\",\n  \"data\": {\n    \"document\": {\n      \"id\": \"p1b2c3d4-0000-0000-0000-000000000001\",\n      \"policy_type\": \"terms\",\n      \"country_code\": \"AE\",\n      \"version\": 2,\n      \"title\": \"IKRATION teamBook\",\n      \"effective_from\": \"2026-09-01\",\n      \"source_file_url\": \"https://res.cloudinary.com/.../tnc.docx\"\n    },\n    \"superseded_version\": 1,\n    \"notified\": { \"admins\": 12, \"companies\": 9, \"emails_sent\": 12 }\n  }\n}"
+            },
+            {
+              "name": "400 Wrong file type",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Only Word documents (.docx) are accepted for policy uploads\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Index — one row per (type, country) lane",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{super_admin_token}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/policies",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "policies"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    { \"policy_type\": \"terms\", \"country_code\": null, \"latest_version\": 1, \"version_count\": 1, \"current_title\": \"IKRATION teamBook\" },\n    { \"policy_type\": \"terms\", \"country_code\": \"AE\", \"latest_version\": 2, \"version_count\": 2 },\n    { \"policy_type\": \"privacy\", \"country_code\": null, \"latest_version\": 1, \"version_count\": 1 }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "All live documents",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{super_admin_token}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/policies/current?policy_type=terms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "policies", "current"],
+              "query": [
+                { "key": "policy_type", "value": "terms", "description": "Optional" },
+                { "key": "country", "value": "AE", "description": "Optional", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Version archive (Super Admin only)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{super_admin_token}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/policies/versions?policy_type=terms&country=AE&page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "policies", "versions"],
+              "query": [
+                { "key": "policy_type", "value": "terms" },
+                { "key": "country", "value": "AE", "description": "Omit for the global lane." },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Superseded versions are never deleted and are never exposed to companies — an old agreement is what a future dispute is argued against."
+          },
+          "response": []
+        },
+        {
+          "name": "Read any version in full",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{super_admin_token}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/policies/{{policy_document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "policies", "{{policy_document_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Who accepted this version",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{super_admin_token}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/super-admin/policies/{{policy_document_id}}/acceptances?page=1&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "super-admin", "policies", "{{policy_document_id}}", "acceptances"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            },
+            "description": "The evidence list: company, who clicked, when, and from which IP."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -86,8 +86,20 @@ app.use("/api/super-admin", SuperAdminRoutes);
 const UserRoutes = require("./routes/userRoute");
 app.use("/api/users", UserRoutes);
 
+// Terms & Conditions and the Privacy Policy, current version only. Public and
+// ungated: the registration form has to render the consent links before an
+// account — or a plan — exists.
+const PolicyRoutes = require("./routes/policyRoute");
+app.use("/api/policies", PolicyRoutes);
+
 const CompanyRoutes = require("./routes/companyRoute");
 app.use("/api/companies", CompanyRoutes);
+
+// The company's Legal tab: which policies apply to its country, what it has
+// accepted, and what a newly published version leaves outstanding. Never plan
+// gated — a legal obligation is not a paid feature.
+const CompanyPolicyRoutes = require("./routes/companyPolicyRoute");
+app.use("/api/companies/:company_id/policies", CompanyPolicyRoutes);
 
 // Plan entitlements, the pricing page and coupon redemption. Never gated by a
 // plan itself — a company whose plan has lapsed must still be able to reach the

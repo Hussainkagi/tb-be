@@ -1,4 +1,5 @@
 const db = require("../config/database");
+const { resolveCountryCode } = require("../utils/countryCodes");
 
 const Company = {
     async create(data) {
@@ -14,17 +15,25 @@ const Company = {
             plan = "trial",
             plan_id = null,
             plan_expires_at = null,
+            country_code = null,
         } = data;
+
+        // `country` is free text ("UAE", "United Arab Emirates", "uae"), which
+        // is fine for display but useless for matching. The normalised alpha-2
+        // code is derived once here so every caller gets it — country-scoped
+        // Terms & Conditions resolve against this column, and a company created
+        // without it would silently receive the global policy.
+        const normalisedCode = country_code || resolveCountryCode(country);
 
         const result = await db.query(
             `INSERT INTO companies (
                 company_name, company_code, email, phone,
-                country, timezone, currency, logo_url,
+                country, country_code, timezone, currency, logo_url,
                 plan, plan_id, plan_expires_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
             [
                 company_name, company_code, email, phone,
-                country, timezone, currency, logo_url,
+                country, normalisedCode, timezone, currency, logo_url,
                 plan, plan_id, plan_expires_at,
             ]
         );
@@ -67,7 +76,15 @@ const Company = {
         const values = [];
         let paramCount = 1;
 
-        for (const [key, value] of Object.entries(data)) {
+        // Moving a company to another country must move the policies it is
+        // shown with it. Re-deriving the code here keeps the two columns from
+        // drifting when a caller edits only the free-text `country`.
+        const payload =
+            data.country !== undefined && data.country_code === undefined
+                ? { ...data, country_code: resolveCountryCode(data.country) }
+                : data;
+
+        for (const [key, value] of Object.entries(payload)) {
             updates.push(`${key} = $${paramCount}`);
             values.push(value);
             paramCount++;

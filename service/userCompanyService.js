@@ -17,6 +17,7 @@ const {
 const { Role } = require("../enums/roles");
 const { Limit } = require("../enums/features");
 const EntitlementService = require("./entitlementService");
+const { PolicyService } = require("./policyService");
 const PlanModel = require("../models/planModel");
 const crypto = require("crypto");
 
@@ -66,6 +67,9 @@ const UserCompanyService = {
                 // company fields
                 company_name, company_code, company_email,
                 company_phone, country, timezone, currency, logo_url,
+                // legal consent
+                accepted_terms, accepted_privacy,
+                ip_address = null, user_agent = null,
             } = data;
 
             // 1. Validate password strength
@@ -73,18 +77,34 @@ const UserCompanyService = {
                 return { success: false, message: "Password must be at least 8 characters" };
             }
 
-            // 2. Check company_code not taken
+            // 2. Both consents are mandatory and are checked BEFORE anything is
+            //    written. Creating the company first and recording consent
+            //    afterwards would leave tenants in the database that never
+            //    agreed to anything — the exact gap the acceptance trail exists
+            //    to close.
+            const isAccepted = (v) => v === true || v === "true" || v === 1 || v === "1";
+
+            if (!isAccepted(accepted_terms) || !isAccepted(accepted_privacy)) {
+                return {
+                    success: false,
+                    code: "POLICY_NOT_ACCEPTED",
+                    message:
+                        "You must accept the Terms and Conditions and the Privacy Policy to register.",
+                };
+            }
+
+            // 3. Check company_code not taken
             const codeExists = await CompanyModel.findByCode(company_code);
             if (codeExists) {
                 return { success: false, message: "Company code already taken" };
             }
 
-            // 3. Find or create user (handles case: same email registers another company)
+            // 4. Find or create user (handles case: same email registers another company)
             const { user, created } = await UserModel.findOrCreate({
                 first_name, last_name, email, phone,
             });
 
-            // 4. Create company, on the fallback (Trial) plan.
+            // 5. Create company, on the fallback (Trial) plan.
             //
             // The plan row is resolved here rather than defaulted in SQL so the
             // trial clock starts from the plan's own duration_days — change the
@@ -105,17 +125,17 @@ const UserCompanyService = {
                 plan_expires_at: planExpiresAt,
             });
 
-            // 5. Check user isn't already in this company (edge case: race condition)
+            // 6. Check user isn't already in this company (edge case: race condition)
             const existingLink = await UserCompanyModel.findByUserAndCompany(user.id, company.id);
             if (existingLink) {
                 return { success: false, message: "User already linked to this company" };
             }
 
-            // 6. Generate username + hash password
+            // 7. Generate username + hash password
             const username = await generateUsername();
             const password_hash = await hashPassword(password);
 
-            // 7. Link user to company as Admin
+            // 8. Link user to company as Admin
             const userCompany = await UserCompanyModel.create({
                 user_id: user.id,
                 company_id: company.id,
@@ -136,9 +156,35 @@ const UserCompanyService = {
                 joining_date : new Date().toISOString(),
             });
 
+            // 9. File the consent captured in step 2 against the versions that
+            //    were live at this moment.
+            //
+            //    Deliberately not fatal: a country whose policy has not been
+            //    published yet must not block signups, and a failure here would
+            //    otherwise abandon a fully created company mid-flow. Whatever
+            //    could not be recorded comes back in the response so it is
+            //    visible rather than silent, and the admin is prompted to
+            //    accept from the company profile once the document exists.
+            let policy_acceptance = { recorded: [], missing: [] };
+            try {
+                policy_acceptance = await PolicyService.recordRegistrationAcceptance({
+                    company_id: company.id,
+                    country,
+                    accepted_by_user_id: user.id,
+                    accepted_by_name: `${first_name} ${last_name}`.trim(),
+                    accepted_by_email: email,
+                    ip_address,
+                    user_agent,
+                    acceptance_context: "registration",
+                });
+            } catch (error) {
+                console.error(
+                    `[Registration] Could not record policy acceptance for company ${company.id}:`,
+                    error.message
+                );
+            }
 
-
-            // 8. Generate OTP + store
+            // 10. Generate OTP + store
             const otp = generateOTP();
             const expires_at = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
@@ -150,7 +196,7 @@ const UserCompanyService = {
                 expires_at,
             });
 
-            // 9. Send OTP email
+            // 11. Send OTP email
             await sendEmail({
                 to: email,
                 subject: "Verify your email — HRMS",
@@ -170,6 +216,7 @@ const UserCompanyService = {
                     company_id: company.id,
                     username,
                     was_existing_user: !created,
+                    policy_acceptance,
                 },
             };
         } catch (error) {
