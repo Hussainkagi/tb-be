@@ -4,7 +4,19 @@ const UserCompanyController = {
     // ── COMPANY REGISTRATION ──────────────────────────────────────────────────
     async registerCompany(req, res) {
         try {
-            const result = await UserCompanyService.registerCompany(req.body);
+            // The consent recorded at signup has to carry where it came from —
+            // an acceptance with no IP or user agent is weak evidence if the
+            // agreement is ever disputed. Neither can come from the body, so
+            // they are read from the request and passed through explicitly.
+            const result = await UserCompanyService.registerCompany({
+                ...req.body,
+                ip_address:
+                    (req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+                    req.ip ||
+                    req.connection?.remoteAddress ||
+                    null,
+                user_agent: req.headers["user-agent"] || null,
+            });
             if (result.success) {
                 return res.status(201).json(result);
             } else {

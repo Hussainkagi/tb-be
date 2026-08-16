@@ -291,10 +291,94 @@ const payslipTemplate = ({
 `;
 };
 
+// ── 6. POLICY UPDATE (Terms & Conditions / Privacy Policy) ────────────────────
+//
+// Sent to every company admin in the affected country when Super Admin
+// publishes a new version. The version number and effective date are in the
+// body rather than only behind a link, so the email itself is a record of what
+// the admin was told and when.
+const policyUpdateTemplate = ({
+  first_name,
+  company_name,
+  policy_label,
+  version,
+  previous_version,
+  effective_from,
+  change_note,
+  requires_reacceptance,
+  view_url,
+  download_url,
+}) => `
+<div style="${baseStyle}">
+  ${header(company_name)}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">Our ${policy_label} has been updated</h2>
+    <p style="color:#333;">Hi ${first_name},</p>
+    <p style="color:#333;">
+      We have published a new version of our <strong>${policy_label}</strong>,
+      which applies to <strong>${company_name}</strong>.
+    </p>
+
+    <table style="width:100%; border-collapse:collapse; margin:24px 0;
+                  background:#fff; border-radius:6px; overflow:hidden;">
+      <tr>
+        <td style="padding:10px 16px; color:#888; font-size:13px;">Version</td>
+        <td style="padding:10px 16px; color:#1a1a2e; font-weight:bold; text-align:right;">
+          v${version}${previous_version ? ` <span style="color:#888; font-weight:normal;">(was v${previous_version})</span>` : ""}
+        </td>
+      </tr>
+      <tr style="background:#fafafa;">
+        <td style="padding:10px 16px; color:#888; font-size:13px;">Effective from</td>
+        <td style="padding:10px 16px; color:#1a1a2e; font-weight:bold; text-align:right;">
+          ${effective_from}
+        </td>
+      </tr>
+    </table>
+
+    ${change_note
+    ? `<div style="background:#fff; border-left:3px solid #1a1a2e; padding:12px 16px; margin:20px 0;">
+           <p style="color:#666; font-size:12px; margin:0 0 4px; text-transform:uppercase;
+                     letter-spacing:1px;">What changed</p>
+           <p style="color:#333; margin:0;">${change_note}</p>
+         </div>`
+    : ""}
+
+    ${requires_reacceptance
+    ? `<p style="color:#333;">
+           Please review the updated document in your company profile and confirm
+           your acceptance. Continued use of TeamBook after the effective date
+           means these terms apply to your account.
+         </p>`
+    : `<p style="color:#333;">
+           No action is needed — this update is provided for your records.
+         </p>`}
+
+    <div style="text-align:center; margin:28px 0 8px;">
+      ${button(requires_reacceptance ? "Review and accept" : "View the update", view_url)}
+    </div>
+
+    ${download_url
+    ? `<p style="text-align:center; margin-top:16px;">
+           <a href="${download_url}" style="color:#1a1a2e; font-size:13px;">
+             Download a copy of the full document
+           </a>
+         </p>`
+    : ""}
+
+    <p style="color:#888; font-size:13px; margin-top:24px;">
+      You are receiving this because you are in management team of ${company_name}
+      on TeamBook.
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
 module.exports = {
   registrationOtpTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
   welcomeTemplate,
-  payslipTemplate
+  payslipTemplate,
+  policyUpdateTemplate
 };
