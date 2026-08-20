@@ -388,7 +388,19 @@ const NotificationService = {
                 notification.id, company_id
             );
 
-            if (!employeeIds.length) return { success: true, recipients: 0 };
+            if (!employeeIds.length) {
+                // Nobody to deliver to — but the notification IS finished, and
+                // has to be recorded as such. Returning while the row sits at
+                // 'processing' strands it: processDispatchQueue's stale-row
+                // reset flips it back to 'queued' ten minutes later, the next
+                // tick sets it to 'processing' again, and it loops forever.
+                // Twenty rows were doing exactly that in production for two
+                // months before the dedicated worker made the churn visible.
+                await Notification.updateDispatchStatus(
+                    notification.id, "dispatched", new Date()
+                );
+                return { success: true, recipients: 0 };
+            }
 
             // 2. Filter out employees who have opted out
             const preferences = await NotificationPreference.findByEmployeeIds(
@@ -406,7 +418,14 @@ const NotificationService = {
                 (id) => prefMap[id] !== false
             );
 
-            if (!filteredIds.length) return { success: true, recipients: 0 };
+            if (!filteredIds.length) {
+                // Everyone opted out. Same reasoning as above — a notification
+                // nobody wants is delivered, not pending.
+                await Notification.updateDispatchStatus(
+                    notification.id, "dispatched", new Date()
+                );
+                return { success: true, recipients: 0 };
+            }
 
             // 3. Fetch active device tokens for all recipients in one query
             const deviceTokens = notification.channel === "push"
