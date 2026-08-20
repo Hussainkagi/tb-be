@@ -27,9 +27,20 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 // Security headers
 app.use(helmet());
 
-// server.js
-require("./jobs/attendanceReminderJob");
-require("./jobs/birthdayNotificationJob");
+// ─────────────────────────────────────────────
+// BACKGROUND JOBS
+// ─────────────────────────────────────────────
+//
+// Registered only when RUN_JOBS is enabled for this process. An API scaled to
+// several instances must not register the same crons N times — the per-minute
+// notification dispatch flush in particular would push duplicates. Run the API
+// with RUN_JOBS=false and exactly one process (the `worker` service in
+// docker-compose.yml) with RUN_JOBS=true. See jobs/scheduler.js.
+//
+// Imported here, but STARTED in startServer() after migrations have run — a
+// job that fires mid-migration would be querying tables an ALTER is holding
+// an exclusive lock on.
+const { registerAllJobs, startupSummary } = require("./jobs/scheduler");
 
 // CORS configuration
 const corsOptions = {
@@ -256,6 +267,41 @@ app.use(
 const dashboardRoutes = require("./routes/dashboardRoute");
 app.use("/api/companies/:company_id/dashboard", dashboardRoutes);
 
+// ─────────────────────────────────────────────
+// TASKS
+// ─────────────────────────────────────────────
+//
+// Gated with allowReads: true, on the same reasoning as payroll: a company
+// that lapses off the plan must still be able to open the work it already
+// assigned. Hiding a team's live task board behind an expired plan reads as
+// data loss, not as an upsell.
+//
+// Note the routers themselves are mounted for every authenticated member of
+// the company — admin, HOD and employee alike. Being a head of department is
+// not a role (it is departments.head_employee_id), so the real authorization
+// happens in service/Task/taskAccessService.js. See the header of
+// routes/Task/taskRoute.js.
+const taskRoutes = require("./routes/Task/taskRoute");
+app.use(
+    "/api/companies/:company_id/tasks",
+    requireFeature(Feature.TASK_MANAGEMENT, { allowReads: true }),
+    taskRoutes
+);
+
+// Reading categories is needed to render any task list, so the router gates
+// only its write endpoints — see routes/Task/taskCategoryRoute.js.
+const taskCategoryRoutes = require("./routes/Task/taskCategoryRoute");
+app.use("/api/companies/:company_id/task-categories", taskCategoryRoutes);
+
+// The performance dashboard is fully gated: it is a reporting feature, and
+// the underlying task data stays reachable through /tasks regardless.
+const taskPerformanceRoutes = require("./routes/Task/taskPerformanceRoute");
+app.use(
+    "/api/companies/:company_id/task-performance",
+    requireFeature(Feature.TASK_PERFORMANCE),
+    taskPerformanceRoutes
+);
+
 
 
 // 404 handler
@@ -285,6 +331,12 @@ const startServer = async () => {
         // ✅ Run migrations before server starts
         console.log("Running migrations...");
         await migrate();
+
+        // Jobs come up only once the schema they query is in place. On a
+        // two-container deploy the worker blocks on the migration lock first,
+        // so its crons cannot race the API's ALTER TABLEs.
+        registerAllJobs();
+        startupSummary();
 
         // Start listening
         app.listen(PORT, () => {

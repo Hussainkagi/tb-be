@@ -19,6 +19,7 @@ services:
 
   api:
     build: .
+    image: teambook-backend:latest
     container_name: hrms_api
     restart: unless-stopped
     depends_on:
@@ -33,8 +34,44 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      # Serves HTTP only. Safe to scale to several replicas: no cron is
+      # registered here, so nothing is duplicated by adding instances.
+      RUN_JOBS: "false"
     ports:
       - "5000:5000"
+
+  # Background jobs. Same image, same entrypoint — RUN_JOBS is the only
+  # difference, so there is no second build and no worker.js to keep in sync.
+  #
+  # Keep this at ONE replica. The schedules are guarded against duplicate
+  # registration inside a process (jobs/scheduler.js), not across processes:
+  # two workers would both fire the per-minute dispatch flush.
+  #
+  # No ports published — it never serves traffic. It does still listen on
+  # PORT internally, because server.js is a single entrypoint for both roles.
+  worker:
+    # Reuses the image `api` builds — no `build:` here on purpose, so
+    # `docker compose build --no-cache` compiles the code once instead of
+    # twice. On a 1 vCPU box that is the difference between a two-minute
+    # deploy and a four-minute one.
+    image: teambook-backend:latest
+    container_name: hrms_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      RUN_JOBS: "true"
 
 volumes:
   postgres_data:

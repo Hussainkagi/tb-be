@@ -1,4 +1,4 @@
-const cron = require("node-cron");
+const { scheduleJob } = require("./scheduler");
 const { DateTime } = require("luxon");
 const db = require("../config/database");
 const NotificationService = require("../service/notificationService");
@@ -186,9 +186,7 @@ async function runBirthdayNotificationJob() {
 // so an hourly pass catches every timezone; the unique index absorbs the
 // repeated evaluations of the same birthday.
 // ─────────────────────────────────────────────────────────────────────────────
-cron.schedule("5 * * * *", runBirthdayNotificationJob, { timezone: "UTC" });
-
-console.log("[CRON] Birthday notification job registered.");
+scheduleJob("birthday-notifications", "5 * * * *", runBirthdayNotificationJob, { timezone: "UTC" });
 
 module.exports = {
     runBirthdayNotificationJob,

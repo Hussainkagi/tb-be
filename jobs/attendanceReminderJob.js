@@ -1,4 +1,4 @@
-const cron = require("node-cron");
+const { scheduleJob } = require("./scheduler");
 const { DateTime } = require("luxon"); // npm install luxon
 const db = require("../config/database");
 const NotificationService = require("../service/notificationService");
@@ -277,17 +277,15 @@ async function runDispatchQueueJob() {
 // Job 1: Schedule attendance reminders — runs once daily at 18:01 UTC
 // All employees across all companies are processed in one pass
 // Adjust time to run before the earliest possible shift start across all timezones
-cron.schedule("1 18 * * *", runAttendanceReminderJob, {
+scheduleJob("attendance-reminder-sweep", "1 18 * * *", runAttendanceReminderJob, {
     timezone: "UTC",
 });
 
 // Job 2: Dispatch queue flush — runs every minute
 // Picks up scheduled reminders whose scheduled_at has now passed and sends them
-cron.schedule("* * * * *", runDispatchQueueJob, {
+scheduleJob("notification-dispatch-queue", "* * * * *", runDispatchQueueJob, {
     timezone: "UTC",
 });
-
-console.log("[CRON] Attendance reminder jobs registered.");
 
 module.exports = {
     runAttendanceReminderJob,
