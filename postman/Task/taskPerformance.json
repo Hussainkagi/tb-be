@@ -1,0 +1,332 @@
+{
+ "info": {
+  "name": "Task Performance Dashboard API",
+  "description": "Employee performance, built on tasks.\n\nEvery endpoint reads task_performance_daily \u2014 a pre-aggregated table the hourly rollup job fills, never a live scan of tasks or the transition log. That is what keeps the page fast for a company years into using the module, and it means a company that turned the module on today sees an empty dashboard until the first rollup runs. /rebuild exists so an admin does not have to wait.\n\nScoping: an admin sees the company, an HOD sees the department they head, an employee sees only their own numbers \u2014 asking for someone else's returns 403, not a quietly empty result.\n\nScore is 0-100: 50% completion rate, 40% on-time rate, 10% quality (1 - reopen rate). Points weight completions by criticality (urgent 6, high 4, medium 2, low 1), halved when delivered late. All of it lives in enums/Task/taskPerformance.js.\n\nPlan gate: reporting.task_performance.",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "base_url",
+   "value": "http://localhost:4000/api"
+  },
+  {
+   "key": "company_id",
+   "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  {
+   "key": "token",
+   "value": "your_jwt_token_here"
+  },
+  {
+   "key": "employee_id",
+   "value": "d9e3a4f5-6b7c-8901-def0-123456789012"
+  },
+  {
+   "key": "department_id",
+   "value": "e0f4b5a6-7c8d-9012-ef01-234567890123"
+  }
+ ],
+ "item": [
+  {
+   "name": "Reports",
+   "item": [
+    {
+     "name": "Employee report",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-performance/employees?from=2026-07-22&to=2026-08-20&employee_id={{employee_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-performance",
+        "employees"
+       ],
+       "query": [
+        {
+         "key": "from",
+         "value": "2026-07-22"
+        },
+        {
+         "key": "to",
+         "value": "2026-08-20"
+        },
+        {
+         "key": "employee_id",
+         "value": "{{employee_id}}"
+        }
+       ]
+      },
+      "description": "Per-employee totals for a window. Defaults to the last 30 days. Pass employee_id for one person's card; an employee may only pass their own."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"range\": {\n            \"from\": \"2026-07-22\",\n            \"to\": \"2026-08-20\"\n        },\n        \"scope\": \"admin\",\n        \"employees\": [\n            {\n                \"employee_id\": \"{{employee_id}}\",\n                \"employee_name\": \"Aisha Rahman\",\n                \"employee_code\": \"EMP1042\",\n                \"department_id\": \"{{department_id}}\",\n                \"department_name\": \"Finance Dept\",\n                \"assigned\": 24,\n                \"completed\": 21,\n                \"on_time\": 18,\n                \"late\": 3,\n                \"reopened\": 1,\n                \"cancelled\": 0,\n                \"points\": 62.5,\n                \"avg_completion_hours\": \"18.40\",\n                \"score\": 88.21,\n                \"on_time_rate\": 85.7,\n                \"completion_rate\": 87.5\n            }\n        ]\n    }\n}"
+      },
+      {
+       "name": "Employee asking about someone else",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"You can only view your own task performance.\"\n}"
+      }
+     ]
+    },
+    {
+     "name": "Leaderboard",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-performance/leaderboard?from=2026-07-22&to=2026-08-20&limit=10",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-performance",
+        "leaderboard"
+       ],
+       "query": [
+        {
+         "key": "from",
+         "value": "2026-07-22"
+        },
+        {
+         "key": "to",
+         "value": "2026-08-20"
+        },
+        {
+         "key": "limit",
+         "value": "10"
+        }
+       ]
+      },
+      "description": "The same numbers ranked by score, then points. People with nothing assigned in the window are left off \u2014 their score is null, and a leaderboard is not the place to rank someone who was on leave."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"range\": {\n            \"from\": \"2026-07-22\",\n            \"to\": \"2026-08-20\"\n        },\n        \"scope\": \"admin\",\n        \"employees\": [\n            {\n                \"employee_id\": \"{{employee_id}}\",\n                \"employee_name\": \"Aisha Rahman\",\n                \"employee_code\": \"EMP1042\",\n                \"department_id\": \"{{department_id}}\",\n                \"department_name\": \"Finance Dept\",\n                \"assigned\": 24,\n                \"completed\": 21,\n                \"on_time\": 18,\n                \"late\": 3,\n                \"reopened\": 1,\n                \"cancelled\": 0,\n                \"points\": 62.5,\n                \"avg_completion_hours\": \"18.40\",\n                \"score\": 88.21,\n                \"on_time_rate\": 85.7,\n                \"completion_rate\": 87.5\n            }\n        ]\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Trend",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-performance/trend?from=2026-08-14&to=2026-08-20&employee_id={{employee_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-performance",
+        "trend"
+       ],
+       "query": [
+        {
+         "key": "from",
+         "value": "2026-08-14"
+        },
+        {
+         "key": "to",
+         "value": "2026-08-20"
+        },
+        {
+         "key": "employee_id",
+         "value": "{{employee_id}}"
+        }
+       ]
+      },
+      "description": "Day-by-day series for a chart. Each point is one local calendar day in the company's timezone."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"range\": {\n            \"from\": \"2026-08-14\",\n            \"to\": \"2026-08-20\"\n        },\n        \"series\": [\n            {\n                \"stat_date\": \"2026-08-19\",\n                \"assigned\": 3,\n                \"completed\": 2,\n                \"on_time\": 2,\n                \"late\": 0,\n                \"points\": \"8.00\"\n            },\n            {\n                \"stat_date\": \"2026-08-20\",\n                \"assigned\": 1,\n                \"completed\": 3,\n                \"on_time\": 2,\n                \"late\": 1,\n                \"points\": \"9.00\"\n            }\n        ]\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Department comparison (admin)",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-performance/departments?from=2026-07-22&to=2026-08-20",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-performance",
+        "departments"
+       ],
+       "query": [
+        {
+         "key": "from",
+         "value": "2026-07-22"
+        },
+        {
+         "key": "to",
+         "value": "2026-08-20"
+        }
+       ]
+      },
+      "description": "Cross-department totals. Admin only \u2014 an HOD comparing their department against their peers' is a politics feature, not a management one."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"range\": {\n            \"from\": \"2026-07-22\",\n            \"to\": \"2026-08-20\"\n        },\n        \"departments\": [\n            {\n                \"department_id\": \"{{department_id}}\",\n                \"department_name\": \"Finance Dept\",\n                \"employee_count\": 6,\n                \"assigned\": 88,\n                \"completed\": 74,\n                \"on_time\": 61,\n                \"late\": 13,\n                \"reopened\": 4,\n                \"points\": \"214.50\",\n                \"score\": 81.34\n            }\n        ]\n    }\n}"
+      },
+      {
+       "name": "Not an admin",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"Admin access required.\"\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Maintenance",
+   "item": [
+    {
+     "name": "Rebuild one day (admin)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-performance/rebuild",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-performance",
+        "rebuild"
+       ]
+      },
+      "description": "Recompute a single local day. For onboarding \u2014 so a company that just enabled the module sees numbers immediately \u2014 and for the morning after a worker outage.\n\nSafe to run repeatedly: the rollup restates a day rather than adding to it. timezone is optional and defaults to the company's own.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"date\": \"2026-08-19\",\n    \"timezone\": \"Asia/Dubai\"\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"date\": \"2026-08-19\",\n    \"employees\": 14\n}"
+      },
+      {
+       "name": "Missing date",
+       "status": "Error",
+       "code": 400,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"date (YYYY-MM-DD) is required\"\n}"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

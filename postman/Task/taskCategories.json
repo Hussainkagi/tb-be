@@ -1,0 +1,429 @@
+{
+ "info": {
+  "name": "Task Categories API",
+  "description": "The buckets a company files work under \u2014 Bug, Feature, Operations and whatever else the business actually tracks.\n\nCategories are company configuration, so unlike /tasks these ARE role-gated: an HOD assigns work, an admin decides what the buckets are.\n\nPlan gate: tasks.categories on the writes only. A company on a plan without custom categories still files work under the six seeded defaults, so every GET and /seed-defaults stay open.",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "base_url",
+   "value": "http://localhost:4000/api"
+  },
+  {
+   "key": "company_id",
+   "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  {
+   "key": "token",
+   "value": "your_jwt_token_here"
+  },
+  {
+   "key": "category_id",
+   "value": "c8d2f3e4-5a6b-7890-cdef-012345678901"
+  }
+ ],
+ "item": [
+  {
+   "name": "Onboarding",
+   "item": [
+    {
+     "name": "Check categories exist",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories/has-defaults",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories",
+        "has-defaults"
+       ]
+      },
+      "description": "Returns true/false to show or hide the 'Create Default Categories' button during onboarding."
+     },
+     "response": [
+      {
+       "name": "Nothing seeded yet \u2014 show button",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"has_categories\": false\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Preview the defaults",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories/defaults",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories",
+        "defaults"
+       ]
+      },
+      "description": "What seeding will create, so the panel can show it before the admin commits."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"name\": \"Bug\",\n            \"description\": \"Something is broken and needs fixing\",\n            \"color_hex\": \"#E5484D\"\n        },\n        {\n            \"name\": \"Feature\",\n            \"description\": \"New capability or enhancement\",\n            \"color_hex\": \"#3E63DD\"\n        },\n        {\n            \"name\": \"Operations\",\n            \"description\": \"Day-to-day operational work\",\n            \"color_hex\": \"#F5A524\"\n        }\n    ]\n}"
+      }
+     ]
+    },
+    {
+     "name": "Seed defaults",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories/seed-defaults",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories",
+        "seed-defaults"
+       ]
+      },
+      "description": "Creates the six default categories. Safe to re-run: existing names are left alone, so a company that renamed 'Bug' and lost the rest can pull the missing ones back in."
+     },
+     "response": [
+      {
+       "name": "Created",
+       "status": "OK",
+       "code": 201,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"6 default task categories created successfully\",\n    \"data\": [\n        {\n            \"id\": \"{{category_id}}\",\n            \"company_id\": \"{{company_id}}\",\n            \"name\": \"Bug\",\n            \"description\": \"Something is broken and needs fixing\",\n            \"color_hex\": \"#E5484D\",\n            \"is_active\": true,\n            \"task_count\": \"7\"\n        }\n    ]\n}"
+      },
+      {
+       "name": "Already complete",
+       "status": "OK",
+       "code": 201,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"All default task categories already exist for this company\",\n    \"data\": []\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Manage",
+   "item": [
+    {
+     "name": "Create a category",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories"
+       ]
+      },
+      "description": "Admin only, and gated on tasks.categories. Names are unique per company, case-insensitively \u2014 'Bug' and 'bug' are the same bucket.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"name\": \"Infrastructure\",\n    \"description\": \"Servers, pipelines and tooling\",\n    \"color_hex\": \"#0091FF\"\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "Created",
+       "status": "OK",
+       "code": 201,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task category created successfully\",\n    \"data\": {\n        \"id\": \"{{category_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"name\": \"Bug\",\n        \"description\": \"Something is broken and needs fixing\",\n        \"color_hex\": \"#E5484D\",\n        \"is_active\": true,\n        \"task_count\": \"7\"\n    }\n}"
+      },
+      {
+       "name": "Duplicate name",
+       "status": "Error",
+       "code": 400,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"A task category with this name already exists.\"\n}"
+      },
+      {
+       "name": "Not in plan",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"code\": \"FEATURE_NOT_IN_PLAN\",\n    \"message\": \"Custom task categories is not included in your current plan.\",\n    \"data\": {\n        \"feature\": \"tasks.categories\",\n        \"required_plans\": [\n            \"pro\",\n            \"gold\"\n        ],\n        \"upgrade_path\": \"/billing/pricing\"\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "List categories",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories?active=true",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories"
+       ],
+       "query": [
+        {
+         "key": "active",
+         "value": "true"
+        }
+       ]
+      },
+      "description": "Open to every authenticated member \u2014 the list is needed to render or filter any task board. task_count is every task ever filed under the category, finished or not. Pass active=true to hide retired buckets."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"{{category_id}}\",\n            \"company_id\": \"{{company_id}}\",\n            \"name\": \"Bug\",\n            \"description\": \"Something is broken and needs fixing\",\n            \"color_hex\": \"#E5484D\",\n            \"is_active\": true,\n            \"task_count\": \"7\"\n        }\n    ]\n}"
+      }
+     ]
+    },
+    {
+     "name": "Get one category",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories/{{category_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories",
+        "{{category_id}}"
+       ]
+      },
+      "description": "A single category."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"id\": \"{{category_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"name\": \"Bug\",\n        \"description\": \"Something is broken and needs fixing\",\n        \"color_hex\": \"#E5484D\",\n        \"is_active\": true,\n        \"task_count\": \"7\"\n    }\n}"
+      },
+      {
+       "name": "Not found",
+       "status": "Error",
+       "code": 404,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"Task category not found\"\n}"
+      }
+     ]
+    },
+    {
+     "name": "Update a category",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories/{{category_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories",
+        "{{category_id}}"
+       ]
+      },
+      "description": "Rename, recolour, or retire with is_active:false. Retiring keeps existing tasks filed where they are but takes the bucket out of the assignment dropdown \u2014 usually what you want instead of deleting.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"name\": \"Bug / Defect\",\n    \"color_hex\": \"#E5484D\",\n    \"is_active\": true\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task category updated successfully\",\n    \"data\": {\n        \"id\": \"{{category_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"name\": \"Bug\",\n        \"description\": \"Something is broken and needs fixing\",\n        \"color_hex\": \"#E5484D\",\n        \"is_active\": true,\n        \"task_count\": \"7\"\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Delete a category",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/task-categories/{{category_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "task-categories",
+        "{{category_id}}"
+       ]
+      },
+      "description": "Soft delete, and it refuses while unfinished tasks still use the category \u2014 losing a live task's classification while people are looking at it is worse than keeping a bucket around. Finished work is fine: it keeps its category_id."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task category deleted successfully\"\n}"
+      },
+      {
+       "name": "Still in use",
+       "status": "Error",
+       "code": 400,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"3 unfinished task(s) still use this category. Move them first, or deactivate the category instead of deleting it.\"\n}"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

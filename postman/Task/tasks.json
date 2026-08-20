@@ -1,0 +1,688 @@
+{
+ "info": {
+  "name": "Tasks API",
+  "description": "Task assignment and tracking.\n\nEvery route is open to any authenticated member of the company, because being a head of department is not a role \u2014 an HOD is whoever departments.head_employee_id points at, and they may hold any user_companies.role. The real authorization runs in service/Task/taskAccessService.js against the actual employee and department records.\n\nPlan gate: tasks.manage (reads stay open when a plan lapses).",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "variable": [
+  {
+   "key": "base_url",
+   "value": "http://localhost:4000/api"
+  },
+  {
+   "key": "company_id",
+   "value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  {
+   "key": "token",
+   "value": "your_jwt_token_here"
+  },
+  {
+   "key": "task_id",
+   "value": "b7c1e2d3-4f5a-6789-bcde-f01234567890"
+  },
+  {
+   "key": "category_id",
+   "value": "c8d2f3e4-5a6b-7890-cdef-012345678901"
+  },
+  {
+   "key": "employee_id",
+   "value": "d9e3a4f5-6b7c-8901-def0-123456789012"
+  },
+  {
+   "key": "department_id",
+   "value": "e0f4b5a6-7c8d-9012-ef01-234567890123"
+  },
+  {
+   "key": "comment_id",
+   "value": "f1a5c6b7-8d9e-0123-f012-345678901234"
+  }
+ ],
+ "item": [
+  {
+   "name": "Assign",
+   "item": [
+    {
+     "name": "Create a task (admin or HOD)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks"
+       ]
+      },
+      "description": "Assign work to an employee.\n\nWho may call it: an admin (any employee in the company) or a head of department (only employees in the department they head \u2014 departments.head_employee_id). Anyone else gets 403.\n\ndue_at without an offset is read in the company's timezone, so '2026-08-25T17:00' means 5 PM where the work happens. department_id is NOT accepted \u2014 it is frozen from the assignee's record, because it is both the HOD permission boundary and the dashboard's grouping key.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"title\": \"Fix the payslip export\",\n    \"description\": \"PDF renders blank for December\",\n    \"category_id\": \"{{category_id}}\",\n    \"assigned_to_employee_id\": \"{{employee_id}}\",\n    \"priority\": \"urgent\",\n    \"due_at\": \"2026-08-25T17:00\",\n    \"due_timezone\": \"Asia/Dubai\",\n    \"watcher_employee_ids\": []\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "Created",
+       "status": "OK",
+       "code": 201,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task assigned successfully\",\n    \"data\": {\n        \"id\": \"{{task_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"title\": \"Fix the payslip export\",\n        \"description\": \"PDF renders blank for December\",\n        \"priority\": \"urgent\",\n        \"status\": \"open\",\n        \"category_id\": \"{{category_id}}\",\n        \"category_name\": \"Bug\",\n        \"category_color\": \"#E5484D\",\n        \"department_id\": \"{{department_id}}\",\n        \"department_name\": \"Finance Dept\",\n        \"assigned_to_employee_id\": \"{{employee_id}}\",\n        \"assigned_to_name\": \"Aisha Rahman\",\n        \"assigned_by_name\": \"Omar Farouk\",\n        \"due_at\": \"2026-08-25T13:00:00.000Z\",\n        \"due_timezone\": \"Asia/Dubai\",\n        \"is_overdue\": false,\n        \"comment_count\": 0\n    }\n}"
+      },
+      {
+       "name": "HOD reaching outside their department",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"You can only assign tasks to employees in the department you head.\"\n}"
+      },
+      {
+       "name": "Deadline in the past",
+       "status": "Error",
+       "code": 400,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"The deadline is in the past.\"\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Read",
+   "item": [
+    {
+     "name": "My tasks",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/my?include_completed=false&page=1&limit=20",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "my"
+       ],
+       "query": [
+        {
+         "key": "include_completed",
+         "value": "false"
+        },
+        {
+         "key": "page",
+         "value": "1"
+        },
+        {
+         "key": "limit",
+         "value": "20"
+        }
+       ]
+      },
+      "description": "The signed-in employee's own board \u2014 assigned to them or raised by them. Finished work is hidden unless include_completed=true. Sorted by deadline by default."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"{{task_id}}\",\n            \"company_id\": \"{{company_id}}\",\n            \"title\": \"Fix the payslip export\",\n            \"description\": \"PDF renders blank for December\",\n            \"priority\": \"urgent\",\n            \"status\": \"open\",\n            \"category_id\": \"{{category_id}}\",\n            \"category_name\": \"Bug\",\n            \"category_color\": \"#E5484D\",\n            \"department_id\": \"{{department_id}}\",\n            \"department_name\": \"Finance Dept\",\n            \"assigned_to_employee_id\": \"{{employee_id}}\",\n            \"assigned_to_name\": \"Aisha Rahman\",\n            \"assigned_by_name\": \"Omar Farouk\",\n            \"due_at\": \"2026-08-25T13:00:00.000Z\",\n            \"due_timezone\": \"Asia/Dubai\",\n            \"is_overdue\": false,\n            \"comment_count\": 0\n        }\n    ],\n    \"pagination\": {\n        \"page\": 1,\n        \"limit\": 20,\n        \"total\": 1,\n        \"totalPages\": 1\n    },\n    \"meta\": {\n        \"scope\": \"employee\"\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "List / filter tasks",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks?status=open,in_progress&priority=urgent,high&category_id={{category_id}}&assigned_to={{employee_id}}&department_id={{department_id}}&search=payslip&overdue=false&include_completed=true&due_from=2026-08-01&due_to=2026-08-31&sort_by=due_at&sort_dir=asc&page=1&limit=20",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks"
+       ],
+       "query": [
+        {
+         "key": "status",
+         "value": "open,in_progress"
+        },
+        {
+         "key": "priority",
+         "value": "urgent,high"
+        },
+        {
+         "key": "category_id",
+         "value": "{{category_id}}"
+        },
+        {
+         "key": "assigned_to",
+         "value": "{{employee_id}}"
+        },
+        {
+         "key": "department_id",
+         "value": "{{department_id}}"
+        },
+        {
+         "key": "search",
+         "value": "payslip"
+        },
+        {
+         "key": "overdue",
+         "value": "false"
+        },
+        {
+         "key": "include_completed",
+         "value": "true"
+        },
+        {
+         "key": "due_from",
+         "value": "2026-08-01"
+        },
+        {
+         "key": "due_to",
+         "value": "2026-08-31"
+        },
+        {
+         "key": "sort_by",
+         "value": "due_at"
+        },
+        {
+         "key": "sort_dir",
+         "value": "asc"
+        },
+        {
+         "key": "page",
+         "value": "1"
+        },
+        {
+         "key": "limit",
+         "value": "20"
+        }
+       ]
+      },
+      "description": "Scoped automatically: an admin sees the company, an HOD sees the department they head (plus their own tasks), an employee sees only their own. Array filters accept either repeated params or a comma-separated list.\n\nsort_by: created_at | due_at | priority | status | updated_at."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"{{task_id}}\",\n            \"company_id\": \"{{company_id}}\",\n            \"title\": \"Fix the payslip export\",\n            \"description\": \"PDF renders blank for December\",\n            \"priority\": \"urgent\",\n            \"status\": \"open\",\n            \"category_id\": \"{{category_id}}\",\n            \"category_name\": \"Bug\",\n            \"category_color\": \"#E5484D\",\n            \"department_id\": \"{{department_id}}\",\n            \"department_name\": \"Finance Dept\",\n            \"assigned_to_employee_id\": \"{{employee_id}}\",\n            \"assigned_to_name\": \"Aisha Rahman\",\n            \"assigned_by_name\": \"Omar Farouk\",\n            \"due_at\": \"2026-08-25T13:00:00.000Z\",\n            \"due_timezone\": \"Asia/Dubai\",\n            \"is_overdue\": false,\n            \"comment_count\": 0\n        }\n    ],\n    \"pagination\": {\n        \"page\": 1,\n        \"limit\": 20,\n        \"total\": 1,\n        \"totalPages\": 1\n    },\n    \"meta\": {\n        \"scope\": \"hod\"\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Status summary",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/summary",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "summary"
+       ]
+      },
+      "description": "Counters for whatever the caller is allowed to see \u2014 the board header. `overdue` counts live tasks whose deadline has passed, not a status."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"total\": 12,\n        \"overdue\": 2,\n        \"by_status\": {\n            \"open\": 4,\n            \"in_progress\": 3,\n            \"submitted\": 2,\n            \"completed\": 3,\n            \"reopened\": 0,\n            \"cancelled\": 0\n        },\n        \"scope\": \"hod\"\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Task detail",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}"
+       ]
+      },
+      "description": "The task with its full transition history, remarks and watchers.\n\n`allowed_transitions` is what THIS caller may move it to right now \u2014 render the status dropdown from it and a rule change never needs a client release. An employee looking at a submitted task sees [] there: only a manager signs work off.\n\nA task the caller may not see returns 404, not 403 \u2014 telling someone a task exists but is none of their business leaks who is working on what."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": {\n        \"id\": \"{{task_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"title\": \"Fix the payslip export\",\n        \"description\": \"PDF renders blank for December\",\n        \"priority\": \"urgent\",\n        \"status\": \"submitted\",\n        \"category_id\": \"{{category_id}}\",\n        \"category_name\": \"Bug\",\n        \"category_color\": \"#E5484D\",\n        \"department_id\": \"{{department_id}}\",\n        \"department_name\": \"Finance Dept\",\n        \"assigned_to_employee_id\": \"{{employee_id}}\",\n        \"assigned_to_name\": \"Aisha Rahman\",\n        \"assigned_by_name\": \"Omar Farouk\",\n        \"due_at\": \"2026-08-25T13:00:00.000Z\",\n        \"due_timezone\": \"Asia/Dubai\",\n        \"is_overdue\": false,\n        \"comment_count\": 0,\n        \"status_label\": \"Submitted for Review\",\n        \"allowed_transitions\": [\n            \"completed\",\n            \"reopened\",\n            \"in_progress\",\n            \"cancelled\"\n        ],\n        \"can_edit\": true,\n        \"history\": [\n            {\n                \"from_status\": null,\n                \"to_status\": \"open\",\n                \"remark\": \"Task created\",\n                \"changed_by_name\": \"Omar Farouk\",\n                \"changed_by_role\": \"hod\",\n                \"was_overdue\": false,\n                \"created_at\": \"2026-08-20T09:00:00.000Z\"\n            },\n            {\n                \"from_status\": \"open\",\n                \"to_status\": \"in_progress\",\n                \"remark\": \"Reproduced\",\n                \"changed_by_name\": \"Aisha Rahman\",\n                \"changed_by_role\": \"2\",\n                \"was_overdue\": false,\n                \"created_at\": \"2026-08-20T10:15:00.000Z\"\n            }\n        ],\n        \"comments\": [],\n        \"watcher_employee_ids\": [\n            \"{{employee_id}}\"\n        ]\n    }\n}"
+      },
+      {
+       "name": "Not visible to this caller",
+       "status": "Error",
+       "code": 404,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"Task not found.\"\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Update",
+   "item": [
+    {
+     "name": "Edit the task (admin or HOD)",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}"
+       ]
+      },
+      "description": "The terms of the task: title, description, category, criticality, deadline, assignee.\n\nDeliberately NOT open to the assignee, even on their own task \u2014 if the person doing the work can move their own deadline, every on-time figure on the performance dashboard is self-reported.\n\nPassing assigned_to_employee_id reassigns: the frozen department_id follows the new assignee, they join the watcher list, and they get a 'reassigned to you' notification. Send due_at: null to clear a deadline.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"title\": \"Fix the payslip export (Dec + Jan)\",\n    \"priority\": \"high\",\n    \"due_at\": \"2026-08-27T17:00\",\n    \"assigned_to_employee_id\": \"{{employee_id}}\"\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task updated successfully\",\n    \"data\": {\n        \"id\": \"{{task_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"title\": \"Fix the payslip export\",\n        \"description\": \"PDF renders blank for December\",\n        \"priority\": \"urgent\",\n        \"status\": \"open\",\n        \"category_id\": \"{{category_id}}\",\n        \"category_name\": \"Bug\",\n        \"category_color\": \"#E5484D\",\n        \"department_id\": \"{{department_id}}\",\n        \"department_name\": \"Finance Dept\",\n        \"assigned_to_employee_id\": \"{{employee_id}}\",\n        \"assigned_to_name\": \"Aisha Rahman\",\n        \"assigned_by_name\": \"Omar Farouk\",\n        \"due_at\": \"2026-08-25T13:00:00.000Z\",\n        \"due_timezone\": \"Asia/Dubai\",\n        \"is_overdue\": false,\n        \"comment_count\": 0\n    }\n}"
+      },
+      {
+       "name": "Employee trying to edit",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"Only an admin or the head of this department can edit a task.\"\n}"
+      }
+     ]
+    },
+    {
+     "name": "Change status",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}/status",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}",
+        "status"
+       ]
+      },
+      "description": "The status machine. open \u2192 in_progress \u2192 submitted \u2192 completed, with reopened and cancelled off to the side.\n\nThe assignee may move their own work to in_progress, submitted or back to open. They may NOT mark it completed \u2014 that is the manager's sign-off \u2014 and may not cancel it. Admins and HODs may make any transition the machine allows.\n\nEvery call writes a task_status_history row in the same transaction, and freezes whether the deadline had already passed. That log is what the performance dashboard is built from.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"status\": \"submitted\",\n    \"remark\": \"Fixed and deployed to staging\"\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task moved to Submitted for Review\",\n    \"data\": {\n        \"id\": \"{{task_id}}\",\n        \"company_id\": \"{{company_id}}\",\n        \"title\": \"Fix the payslip export\",\n        \"description\": \"PDF renders blank for December\",\n        \"priority\": \"urgent\",\n        \"status\": \"submitted\",\n        \"category_id\": \"{{category_id}}\",\n        \"category_name\": \"Bug\",\n        \"category_color\": \"#E5484D\",\n        \"department_id\": \"{{department_id}}\",\n        \"department_name\": \"Finance Dept\",\n        \"assigned_to_employee_id\": \"{{employee_id}}\",\n        \"assigned_to_name\": \"Aisha Rahman\",\n        \"assigned_by_name\": \"Omar Farouk\",\n        \"due_at\": \"2026-08-25T13:00:00.000Z\",\n        \"due_timezone\": \"Asia/Dubai\",\n        \"is_overdue\": false,\n        \"comment_count\": 0\n    }\n}"
+      },
+      {
+       "name": "Employee marking their own work complete",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"Submit the task for review \\u2014 your head of department or an admin signs it off.\"\n}"
+      },
+      {
+       "name": "Illegal transition",
+       "status": "Error",
+       "code": 400,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"A Cancelled task cannot move to Completed.\"\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Remarks",
+   "item": [
+    {
+     "name": "List remarks",
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}/comments",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}",
+        "comments"
+       ]
+      },
+      "description": "Free-form remarks. Kept separate from the transition log so the history stays a clean state machine for the dashboard."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": \"{{comment_id}}\",\n            \"comment\": \"Waiting on finance to confirm the December numbers\",\n            \"employee_name\": \"Aisha Rahman\",\n            \"employee_code\": \"EMP1042\",\n            \"created_at\": \"2026-08-20T11:02:00.000Z\"\n        }\n    ]\n}"
+      }
+     ]
+    },
+    {
+     "name": "Add a remark",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}/comments",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}",
+        "comments"
+       ]
+      },
+      "description": "Anyone who can see the task can leave a remark \u2014 assignee, assigner, HOD or admin.",
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    \"comment\": \"Waiting on finance to confirm the December numbers\"\n}"
+      }
+     },
+     "response": [
+      {
+       "name": "Created",
+       "status": "OK",
+       "code": 201,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Remark added\",\n    \"data\": {\n        \"id\": \"{{comment_id}}\",\n        \"comment\": \"Waiting on finance to confirm the December numbers\"\n    }\n}"
+      }
+     ]
+    },
+    {
+     "name": "Delete a remark",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}/comments/{{comment_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}",
+        "comments",
+        "{{comment_id}}"
+       ]
+      },
+      "description": "Own remark, or an admin cleaning up. Soft delete \u2014 the thread keeps its shape."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Remark deleted\"\n}"
+      },
+      {
+       "name": "Someone else's remark",
+       "status": "Error",
+       "code": 403,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": false,\n    \"message\": \"You can only delete your own remarks.\"\n}"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Delete",
+   "item": [
+    {
+     "name": "Delete a task (admin or HOD)",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Authorization",
+        "value": "Bearer {{token}}"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/companies/{{company_id}}/tasks/{{task_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "companies",
+        "{{company_id}}",
+        "tasks",
+        "{{task_id}}"
+       ]
+      },
+      "description": "Soft delete. The history rows stay and stay joined to a row that still exists: the rollup filters deleted tasks out of new days, but days already reported keep their numbers."
+     },
+     "response": [
+      {
+       "name": "OK",
+       "status": "OK",
+       "code": 200,
+       "header": [
+        {
+         "key": "Content-Type",
+         "value": "application/json"
+        }
+       ],
+       "body": "{\n    \"success\": true,\n    \"message\": \"Task deleted successfully\"\n}"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

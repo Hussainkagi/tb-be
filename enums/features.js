@@ -58,6 +58,12 @@ const Feature = Object.freeze({
     TERMINATION:             "offboarding.termination",
     FINAL_SETTLEMENT:        "offboarding.settlement",
 
+    // ── Tasks ────────────────────────────────────────────────────────────────
+    TASK_MANAGEMENT:         "tasks.manage",
+    TASK_CATEGORIES:         "tasks.categories",
+    TASK_NOTIFICATIONS:      "notifications.task",
+    TASK_PERFORMANCE:        "reporting.task_performance",
+
     // ── Reporting ────────────────────────────────────────────────────────────
     DASHBOARD:               "reporting.dashboard",
     DASHBOARD_ALERTS:        "reporting.dashboard_alerts",
