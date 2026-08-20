@@ -1021,13 +1021,44 @@ const NotificationService = {
     // INBOX: Employee notification inbox (mobile app / web bell icon)
     // ─────────────────────────────────────────────────────────────────────────
 
-    async getEmployeeInbox(employee_id, { limit, offset } = {}) {
+    // Paged, newest first. The client asks for a big first page (50) and then
+    // pulls smaller ones (30) as the user taps "Show more" — so the response
+    // carries `pagination.has_more` and `next_offset`, and the caller never has
+    // to infer the end of the list from a short page. Inferring it is wrong on
+    // exactly the case that bites: a total that is a clean multiple of the page
+    // size leaves a "Show more" button that opens nothing.
+    //
+    // `unread_count` is returned on every page, not just the first. It is an
+    // indexed COUNT and the badge has to stay right after a mark-as-read that
+    // happened between pages.
+    async getEmployeeInbox(employee_id, { limit = 50, offset = 0 } = {}) {
         try {
-            const [inbox, unreadCount] = await Promise.all([
+            const [page, unreadCount] = await Promise.all([
                 NotificationRecipient.getInboxByEmployee(employee_id, { limit, offset }),
                 NotificationRecipient.getUnreadCount(employee_id),
             ]);
-            return { success: true, data: { inbox, unread_count: unreadCount } };
+
+            const { items, total } = page;
+            const nextOffset = offset + items.length;
+            const hasMore = nextOffset < total;
+
+            return {
+                success: true,
+                data: {
+                    // `inbox` is the original key and stays — existing clients
+                    // that read it keep working.
+                    inbox: items,
+                    unread_count: unreadCount,
+                    pagination: {
+                        limit,
+                        offset,
+                        returned: items.length,
+                        total,
+                        has_more: hasMore,
+                        next_offset: hasMore ? nextOffset : null,
+                    },
+                },
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

@@ -1,5 +1,18 @@
 const NotificationService = require("../service/notificationService");
 
+// Employee inbox paging. The mobile app opens with 50 and appends 30 per
+// "Show more"; the ceiling keeps any client from turning that into a full
+// table scan.
+const DEFAULT_INBOX_LIMIT = 50;
+const MAX_INBOX_LIMIT = 100;
+
+const clampInt = (value, min, max, fallback) => {
+    const n = parseInt(value, 10);
+    if (Number.isNaN(n)) return fallback;
+    return Math.min(Math.max(n, min), max);
+};
+
+
 const NotificationController = {
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -240,14 +253,19 @@ const NotificationController = {
     // ─────────────────────────────────────────────────────────────────────────
 
     // GET /notifications/inbox/:employee_id
+    // GET /notifications/inbox/:employee_id?limit=&offset=
+    //
+    // limit is clamped to 100. Without a ceiling the pagination is decorative —
+    // one client passing limit=100000 pulls the whole inbox and is exactly the
+    // load this endpoint is paged to avoid.
     async getInbox(req, res) {
         try {
             const { limit, offset } = req.query;
             const result = await NotificationService.getEmployeeInbox(
                 req.params.employee_id,
                 {
-                    limit: limit ? parseInt(limit, 10) : undefined,
-                    offset: offset ? parseInt(offset, 10) : undefined,
+                    limit: clampInt(limit, 1, MAX_INBOX_LIMIT, DEFAULT_INBOX_LIMIT),
+                    offset: clampInt(offset, 0, Number.MAX_SAFE_INTEGER, 0),
                 }
             );
             if (result.success) {

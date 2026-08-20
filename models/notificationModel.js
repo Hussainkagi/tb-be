@@ -432,7 +432,12 @@ const NotificationRecipient = {
     },
 
     // Employee notification inbox (mobile app / web bell icon)
-    async getInboxByEmployee(employee_id, { limit = 30, offset = 0 } = {}) {
+    //
+    // Returns one page plus the total behind it. COUNT(*) OVER() rides along on
+    // the same scan, so "how many more are there" costs nothing extra — which
+    // is what lets the client render a real "Show more" instead of guessing
+    // from a full page. Same approach as the admin inbox.
+    async getInboxByEmployee(employee_id, { limit = 50, offset = 0 } = {}) {
         const result = await db.query(
             `SELECT
                 nr.id,
@@ -444,7 +449,8 @@ const NotificationRecipient = {
                 n.deep_link,
                 n.notification_type,
                 n.entity_type,
-                n.entity_id
+                n.entity_id,
+                COUNT(*) OVER() AS total_count
              FROM notification_recipients nr
              JOIN notifications n ON nr.notification_id = n.id
              WHERE nr.employee_id = $1
@@ -453,7 +459,15 @@ const NotificationRecipient = {
              LIMIT $2 OFFSET $3`,
             [employee_id, limit, offset]
         );
-        return result.rows;
+
+        const total = result.rows.length > 0
+            ? parseInt(result.rows[0].total_count, 10)
+            : 0;
+
+        // total_count is a pagination artefact — it does not belong on an item.
+        const items = result.rows.map(({ total_count, ...row }) => row);
+
+        return { items, total };
     },
 
     // Unread count for the bell-icon badge
