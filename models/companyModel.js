@@ -12,7 +12,10 @@ const Company = {
             timezone = "UTC",
             currency = "USD",
             logo_url = null,
-            plan = "trial",
+            // No plan_id means the company resolves through the fallback, which
+            // is `free` — so that is the honest default label. The signup path
+            // overrides both with the trial plan (see userCompanyService).
+            plan = "free",
             plan_id = null,
             plan_expires_at = null,
             country_code = null,

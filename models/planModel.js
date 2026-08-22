@@ -66,6 +66,27 @@ const PlanModel = {
         return result.rows[0];
     },
 
+    /**
+     * The plan a brand-new company starts on.
+     *
+     * Deliberately NOT findFallbackPlan(). The fallback is the floor every
+     * expired or unassigned company resolves to; the signup plan is the
+     * 45-day full-feature trial. They were the same row until
+     * 43_free_plan_and_full_trial.sql split them, which is why new companies
+     * used to see only the free feature set.
+     *
+     * Falls back to the fallback plan if no plan is flagged — a signup must
+     * never fail because nobody ticked a box in the panel.
+     */
+    async findSignupPlan() {
+        const result = await db.query(
+            `SELECT * FROM plans
+             WHERE is_signup_default = TRUE AND deleted_at IS NULL
+             LIMIT 1`
+        );
+        return result.rows[0] || (await PlanModel.findFallbackPlan());
+    },
+
     async createPlan(data) {
         const {
             code, name, description = null, tagline = null,

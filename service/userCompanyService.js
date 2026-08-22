@@ -104,13 +104,19 @@ const UserCompanyService = {
                 first_name, last_name, email, phone,
             });
 
-            // 5. Create company, on the fallback (Trial) plan.
+            // 5. Create company on the signup plan — the 45-day full-feature trial.
+            //
+            // NOT findFallbackPlan(). The fallback is `free`, the floor an
+            // expired or unassigned company resolves to; a new signup gets
+            // `trial`, which grants every feature for 45 days and then lapses
+            // to that floor. Those were one row until
+            // 43_free_plan_and_full_trial.sql, which is why new companies
+            // used to start with only the free feature set.
             //
             // The plan row is resolved here rather than defaulted in SQL so the
-            // trial clock starts from the plan's own duration_days — change the
-            // trial from 14 to 30 days in the panel and new signups follow,
-            // with no migration.
-            const trialPlan = await PlanModel.findFallbackPlan();
+            // trial clock starts from the plan's own duration_days — change 45
+            // to 60 in the panel and new signups follow, with no migration.
+            const trialPlan = await PlanModel.findSignupPlan();
             const planExpiresAt = trialPlan?.duration_days
                 ? new Date(Date.now() + trialPlan.duration_days * 24 * 60 * 60 * 1000)
                 : null;
