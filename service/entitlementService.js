@@ -332,6 +332,14 @@ const EntitlementService = {
 
         return plans
             .filter((p) => offering.has(p.id))
+            // The signup plan is excluded even though it grants everything.
+            // Since 43_free_plan_and_full_trial.sql the 45-day trial offers
+            // every feature at tier 0, so it would sort to the front of every
+            // upgrade prompt — telling a company whose trial just lapsed to
+            // "upgrade to Trial". It is not purchasable and they have already
+            // had it; the honest answer is the cheapest PAID plan that carries
+            // the feature.
+            .filter((p) => p.is_signup_default !== true)
             .sort((a, b) => a.tier - b.tier)
             .map((p) => ({ code: p.code, name: p.name, tier: p.tier }));
     },
