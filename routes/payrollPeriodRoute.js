@@ -36,6 +36,11 @@ router.patch("/:id/lock", verifyToken, validateTenant, isAdmin, PayrollPeriodCon
 // ─────────────────────────────────────────────
 // DELETE
 // ─────────────────────────────────────────────
+// GET /:id/deletion-preview — what a delete would remove, and whether it is
+// allowed. Same admin guard as the delete itself: the counts describe payroll
+// scale, so this is not for managers to browse.
+router.get("/:id/deletion-preview", verifyToken, validateTenant, isAdmin, PayrollPeriodController.deletionPreview);
+
 router.delete("/:id", verifyToken, validateTenant, isAdmin, PayrollPeriodController.delete);
 
 module.exports = router;

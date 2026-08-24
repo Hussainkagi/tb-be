@@ -220,19 +220,94 @@ function allocateCents(exactValues, targetCents) {
 
 // ============================================================
 // PER-DAY RATE
+//
+// The divisor is a property of the MONTH, never of the payroll period.
+//
+// This used to divide by the period's own length, which is correct only when
+// the period happens to be a whole month. On a 23–24 August run, a 2000/month
+// salary resolved to 1000/day on the calendar-day basis (2000 ÷ 2 days) and to
+// 2000/day on the working-day basis — one day of attendance paying a full
+// month's wages. The period decides how many days are PAYABLE; it must never
+// change what a day is WORTH.
+//
+// The rate is resolved per date rather than once per period, so a period
+// spanning a month boundary (25 Aug – 5 Sep) values each date against its own
+// month: 31 days for August, 30 for September. That is what payroll law
+// generally expects, and it makes the month-locked and off-cycle paths share
+// one formula instead of two.
 // ============================================================
-function resolvePerDaySalary(grossSalary, allDates, offDayCount, settings) {
-    switch (settings.per_day_basis) {
-        case "fixed_30":
-            return grossSalary / 30;
-        case "working_days": {
-            const workingDays = allDates.length - offDayCount;
-            return workingDays > 0 ? grossSalary / workingDays : 0;
-        }
-        case "calendar_days":
-        default:
-            return allDates.length > 0 ? grossSalary / allDates.length : 0;
+
+/** Days in the calendar month a date belongs to. 2026-02-14 → 28. */
+function daysInMonthOf(dateStr) {
+    const d = toUTCDate(dateStr);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+}
+
+/** First and last date strings of the month a date belongs to. */
+function monthBoundsOf(dateStr) {
+    const d = toUTCDate(dateStr);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const pad = (n) => String(n).padStart(2, "0");
+    return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(last)}` };
+}
+
+/**
+ * Working days in the month a date belongs to: every date that is not a week
+ * off per the shift pattern, and not a holiday.
+ *
+ * `holidaySet` only ever contains the holidays the caller loaded for the
+ * PERIOD. When the period covers the whole month — the normal case, and the
+ * only one the month-locked UI can produce — that set is complete and the
+ * count is exact. For a short off-cycle run the engine can only see the
+ * holidays inside it, so a holiday elsewhere in the month is not subtracted,
+ * making the divisor at most a day or two large and the daily rate marginally
+ * conservative. Loading the full month's holidays here would mean the pure
+ * engine reaching into the database, which is a trade not worth making for a
+ * rounding-level difference on an exceptional run.
+ */
+function workingDaysInMonthOf(dateStr, weekOffDays, holidaySet) {
+    const { start, end } = monthBoundsOf(dateStr);
+    let count = 0;
+    for (const date of getDateRange(start, end)) {
+        if (weekOffDays.has(dayOfWeek(date))) continue;
+        if (holidaySet.has(date)) continue;
+        count++;
     }
+    return count;
+}
+
+/**
+ * Build a date → per-day-rate resolver for this period.
+ *
+ * Rates are memoised per month, so a 31-day period costs one computation
+ * rather than 31.
+ */
+function buildPerDayResolver(grossSalary, weekOffDays, holidaySet, settings) {
+    const cache = new Map();
+
+    return (dateStr) => {
+        // fixed_30 never looks at the calendar at all — the Gulf convention is
+        // a flat 30th of salary regardless of month length. It was the only
+        // basis immune to the period-length bug.
+        if (settings.per_day_basis === "fixed_30") return grossSalary / 30;
+
+        const key = dateStr.slice(0, 7); // YYYY-MM
+        if (cache.has(key)) return cache.get(key);
+
+        let rate;
+        if (settings.per_day_basis === "working_days") {
+            const workingDays = workingDaysInMonthOf(dateStr, weekOffDays, holidaySet);
+            rate = workingDays > 0 ? grossSalary / workingDays : 0;
+        } else {
+            const days = daysInMonthOf(dateStr);
+            rate = days > 0 ? grossSalary / days : 0;
+        }
+
+        cache.set(key, rate);
+        return rate;
+    };
 }
 
 // ============================================================
@@ -381,16 +456,19 @@ function buildDailyBreakdown(input) {
     }
 
     // ── Money ────────────────────────────────────────────────
-    const perDaySalary = resolvePerDaySalary(grossSalary, allDates, offDayCount, settings);
+    const perDayFor = buildPerDayResolver(grossSalary, weekOffDays, holidaySet, settings);
+    const perDayByDate = allDates.map((d) => perDayFor(d));
     const overtimeRate = parseFloat(salaryStructure.overtime_rate_per_hour) || 0;
 
     // Allocate payable and deduction together, against the one target that
-    // matters — the money the period is worth. For the calendar-day basis that
-    // target IS gross, so `payable + deduction === gross` becomes exact rather
-    // than approximately true.
-    const exactPayable = allDates.map((d) => perDaySalary * classification[d].payFraction);
-    const exactDeduct = allDates.map((d) => perDaySalary * classification[d].deductFraction);
-    const targetCents = Math.round(perDaySalary * allDates.length * 100);
+    // matters — the money the period is worth. For a whole month on the
+    // calendar-day basis that target IS gross, so `payable + deduction ===
+    // gross` stays exact rather than approximately true. For a partial period
+    // the target is the sum of the daily rates, which is the correct smaller
+    // number: a two-day run is worth two days of salary, not a month of it.
+    const exactPayable = allDates.map((d, i) => perDayByDate[i] * classification[d].payFraction);
+    const exactDeduct = allDates.map((d, i) => perDayByDate[i] * classification[d].deductFraction);
+    const targetCents = Math.round(perDayByDate.reduce((a, b) => a + b, 0) * 100);
 
     const allocated = allocateCents([...exactPayable, ...exactDeduct], targetCents);
     const payableByDay = allocated.slice(0, allDates.length);
@@ -407,7 +485,7 @@ function buildDailyBreakdown(input) {
             date,
             day_of_week: DAY_NAMES[dayOfWeek(date)],
             day_type: cls.type,
-            per_day_salary: round4(perDaySalary),
+            per_day_salary: round4(perDayByDate[i]),
             pay_fraction: cls.payFraction,
             deduct_fraction: cls.deductFraction,
             payable_amount: payableAmount,
@@ -422,7 +500,15 @@ function buildDailyBreakdown(input) {
         };
     });
 
-    return { daily: dailyRows, summary: summarizeDailyRows(dailyRows, { grossSalary, basicSalary, perDaySalary }) };
+    // The headline rate. Every date in a month-locked period shares one rate,
+    // so this is exact; a cross-month period has no single "the" rate, and the
+    // daily rows carry the real per-date figures either way.
+    const headlinePerDay = perDayByDate.length ? perDayByDate[0] : 0;
+
+    return {
+        daily: dailyRows,
+        summary: summarizeDailyRows(dailyRows, { grossSalary, basicSalary, perDaySalary: headlinePerDay }),
+    };
 }
 
 // ── Attendance-driven classification for a working day ───────
@@ -595,6 +681,8 @@ module.exports = {
     buildDailyBreakdown,
     summarizeDailyRows,
     normalizeSettings,
+    daysInMonthOf,
+    monthBoundsOf,
     round2,
     round4,
 };

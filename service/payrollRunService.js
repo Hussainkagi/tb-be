@@ -248,8 +248,16 @@ const PayrollRunService = {
             branch_id = null,
             payroll_period_id = null,
             period_name,
+            // The month path. Preferred: the dates are then derived server-side
+            // from the calendar, so "run August" cannot become a 23–24 August
+            // run because the client computed the range itself.
+            month = null,
+            year = null,
             start_date,
             end_date,
+            // Only for a deliberate partial run (final settlement). Rejected
+            // by payrollPeriodService unless the range really is partial.
+            is_off_cycle = false,
             notes = null,
         } = data;
 
@@ -267,7 +275,9 @@ const PayrollRunService = {
                 }
             } else {
                 const created = await PayrollPeriodService.createPayrollPeriod({
-                    company_id, period_name, start_date, end_date,
+                    company_id, period_name,
+                    month, year,
+                    start_date, end_date, is_off_cycle,
                 });
                 if (!created.success) return created;
                 period = created.data;
@@ -1029,10 +1039,34 @@ const PayrollRunService = {
                 notes: reason,
             });
 
+            // Release the period.
+            //
+            // Every other transition moves the period along with the run —
+            // submit, approve, reject, pay, lock — but cancel did not, so the
+            // period was left stranded in `processing`. The run-start screen
+            // offers only open periods and blocks months that already have
+            // one, which made that month unreachable from both directions:
+            // the period could not be picked, and a new one could not be
+            // created for the same dates.
+            //
+            // Two guards. A locked period is final and must never reopen. And
+            // a company can run payroll per branch against one period, so this
+            // only reopens when no other live run still holds it.
+            const period = await PayrollPeriodModel.findById(run.payroll_period_id);
+            if (period && period.status !== "locked") {
+                const stillHeld = await PayrollRunModel.hasOtherLiveRun(run.payroll_period_id, run.id);
+                if (!stillHeld) {
+                    await PayrollPeriodModel.updateStatus(run.payroll_period_id, "open").catch(() => { });
+                }
+            }
+
+            const fresh = await PayrollRunModel.findById(run.id);
             return {
                 success: true,
                 message: "Payroll run cancelled",
-                data: await PayrollRunModel.findById(run.id),
+                // buildRunResponse, like every other mutation — the raw row has
+                // no progress block, and a caller that switches on shape breaks.
+                data: await this.buildRunResponse(fresh),
             };
         } catch (error) {
             return fail(error.message, { error });

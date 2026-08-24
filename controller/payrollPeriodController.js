@@ -4,7 +4,14 @@ const PayrollPeriodController = {
 
     async create(req, res) {
         try {
-            const result = await PayrollPeriodService.createPayrollPeriod(req.body);
+            // company_id comes from the route, not the body — the router is
+            // mounted under /companies/:company_id and the tenant guard has
+            // already validated it. payrollRunController does the same; making
+            // the client repeat it in the body invites the two disagreeing.
+            const result = await PayrollPeriodService.createPayrollPeriod({
+                ...req.body,
+                company_id: req.params.company_id,
+            });
             if (result.success) {
                 return res.status(201).json(result);
             } else {
@@ -142,6 +149,19 @@ const PayrollPeriodController = {
             } else {
                 return res.status(404).json(result);
             }
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    // GET /api/companies/:company_id/payroll-periods/:id/deletion-preview
+    // Powers the confirmation dialog: what would go, and may it go at all.
+    async deletionPreview(req, res) {
+        try {
+            const result = await PayrollPeriodService.getDeletionPreview(req.params.id);
+            return result.success
+                ? res.status(200).json(result)
+                : res.status(result.status || 400).json({ success: false, message: result.message });
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }

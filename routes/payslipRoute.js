@@ -17,6 +17,26 @@ router.post("/period/:payroll_period_id/generate", verifyToken, validateTenant, 
 // ─────────────────────────────────────────────
 // READ
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// EMPLOYEE SELF-SERVICE (mobile app)
+//
+// Mounted BEFORE /:id — "my" would otherwise be captured as a payslip id.
+//
+// isEmployee here means "any authenticated member of the company", which is
+// correct: the handler resolves the employee from the token, so the caller can
+// only ever reach their own payslips. Contrast /employee/:employee_id below,
+// where the id comes from the URL and therefore needs a real ownership check.
+// ─────────────────────────────────────────────
+
+// GET /api/companies/:company_id/payslips/my/available
+router.get("/my/available", verifyToken, validateTenant, isEmployee, PayslipController.getMineAvailable);
+
+// GET /api/companies/:company_id/payslips/my?year=2026&month=8
+router.get("/my", verifyToken, validateTenant, isEmployee, PayslipController.getMine);
+
+// GET /api/companies/:company_id/payslips/my/:id
+router.get("/my/:id", verifyToken, validateTenant, isEmployee, PayslipController.getMineById);
+
 router.get("/:id", verifyToken, validateTenant, isManager, PayslipController.getById);
 router.get("/number/:payslip_number", verifyToken, validateTenant, isEmployee, PayslipController.getByNumber);
 

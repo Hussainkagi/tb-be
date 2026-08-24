@@ -28,6 +28,85 @@ const footer = () => `
   </div>
 `;
 
+// ── App store links ───────────────────────────────────────────────────────────
+//
+// Overridable by env so a staging build can point at a test listing without a
+// code change, but defaulted so nothing breaks if the vars are absent.
+const PLAY_STORE_URL =
+  process.env.PLAY_STORE_URL ||
+  "https://play.google.com/store/apps/details?id=com.hussain.teambook";
+const APP_STORE_URL =
+  process.env.APP_STORE_URL ||
+  "https://apps.apple.com/us/app/ikration-teambook/id6758211016";
+
+/**
+ * "Get the mobile app" block for onboarding emails.
+ *
+ * Built from HTML and inline CSS rather than the official store badge images,
+ * deliberately. Both badge endpoints fail in email:
+ *
+ *   • Google's legacy badge URL (…/badges/static/images/badges/…png) now 404s.
+ *   • Apple's badge API serves image/svg+xml, and Gmail, Outlook and most
+ *     mobile clients strip SVG entirely.
+ *
+ * On top of that, remote images are blocked by default in many clients, so an
+ * image-based block shows a new user two empty rectangles in the one email
+ * they are guaranteed to open. Text buttons always render, always click
+ * through, and cannot rot when a CDN path changes.
+ *
+ * If the official badges are wanted later, upload the PNGs to Cloudinary
+ * (already a dependency) and swap the anchor contents for <img> tags — the
+ * table layout below is already the right shape for it.
+ *
+ * Laid out with a table, not flexbox: Outlook renders neither flex nor inline
+ * gaps reliably. bgcolor is set on the <td> as well as the style attribute,
+ * because Outlook ignores CSS background on anchors.
+ */
+const storeButton = (url, topLine, bottomLine) => `
+  <td style="padding:0 5px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td bgcolor="#1a1a2e" style="background:#1a1a2e; border-radius:6px;">
+          <a href="${url}" target="_blank"
+             style="display:block; padding:9px 20px; text-decoration:none;
+                    color:#ffffff; font-family:Arial, sans-serif; text-align:left;">
+            <span style="display:block; font-size:9px; line-height:11px;
+                         letter-spacing:0.5px; color:#c9c9d4; text-transform:uppercase;">
+              ${topLine}
+            </span>
+            <span style="display:block; font-size:15px; line-height:19px;
+                         font-weight:bold; color:#ffffff;">
+              ${bottomLine}
+            </span>
+          </a>
+        </td>
+      </tr>
+    </table>
+  </td>
+`;
+
+const appDownloadBlock = ({
+  heading = "Get the TeamBook mobile app",
+  subtext = "Check in, apply for leave and track your tasks from your phone.",
+} = {}) => `
+  <div style="margin: 28px 0 8px; padding: 20px; background:#ffffff;
+              border:1px solid #e5e5e5; border-radius:8px; text-align:center;">
+    <p style="color:#1a1a2e; font-size:15px; font-weight:bold; margin:0 0 4px;">
+      ${heading}
+    </p>
+    <p style="color:#666; font-size:13px; margin:0 0 16px;">
+      ${subtext}
+    </p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+           style="margin:0 auto;">
+      <tr>
+        ${storeButton(APP_STORE_URL, "Download on the", "App Store")}
+        ${storeButton(PLAY_STORE_URL, "Get it on", "Google Play")}
+      </tr>
+    </table>
+  </div>
+`;
+
 const button = (label, url) => `
   <a href="${url}"
      style="display:inline-block; background:#1a1a2e; color:#fff;
@@ -88,6 +167,9 @@ const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_lin
     <div style="text-align:center; margin: 24px 0;">
       ${button("Set My Password", invite_link)}
     </div>
+    ${appDownloadBlock({
+      subtext: "Once your password is set, sign in on your phone to check in, apply for leave and track your tasks.",
+    })}
     <p style="color:#888; font-size:13px; text-align:center;">
       This link expires in <strong>${expires_hours} hours</strong>.
       If you did not expect this invitation, please ignore this email.
@@ -157,6 +239,10 @@ const welcomeTemplate = ({ first_name, company_name, username, login_url }) => `
         Go to Login
       </a>
     </div>
+
+    ${appDownloadBlock({
+      subtext: "Your team checks in, applies for leave and tracks tasks from the app. Share these links when you invite them.",
+    })}
   </div>
  
   <div style="background: #f0f0f0; padding: 16px 32px; text-align: center;">
@@ -375,6 +461,7 @@ const policyUpdateTemplate = ({
 `;
 
 module.exports = {
+  appDownloadBlock,
   registrationOtpTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
