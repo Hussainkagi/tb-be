@@ -61,6 +61,25 @@ const PayrollRun = {
     },
 
     /** The live (non-cancelled) run for a period+branch, if one exists. */
+    /**
+     * Is any run other than `excludeRunId` still holding this period?
+     *
+     * Branch-agnostic, unlike findActiveByPeriod: a company can run payroll
+     * per branch against the same period, so cancelling one branch's run must
+     * not reopen a period another branch is still working in.
+     */
+    async hasOtherLiveRun(payroll_period_id, excludeRunId = null) {
+        const result = await db.query(
+            `SELECT 1 FROM payroll_runs
+              WHERE payroll_period_id = $1
+                AND status <> 'cancelled'
+                AND ($2::uuid IS NULL OR id <> $2::uuid)
+              LIMIT 1`,
+            [payroll_period_id, excludeRunId]
+        );
+        return result.rowCount > 0;
+    },
+
     async findActiveByPeriod(payroll_period_id, branch_id = null) {
         const result = await db.query(
             `SELECT ${RUN_SELECT} ${RUN_JOINS}

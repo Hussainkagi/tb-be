@@ -1,5 +1,25 @@
 const db = require("../config/database");
 
+/**
+ * Dates as plain YYYY-MM-DD strings, and the month/year already split out.
+ *
+ * node-pg turns a DATE column into a JS Date at midnight in the SERVER's
+ * timezone. Serialised to JSON it becomes a full ISO timestamp, and a browser
+ * in a negative-offset zone renders 2026-08-01 as 31 July — a period that
+ * silently starts a day early, in the module where a day is money.
+ *
+ * employeeModel already does this for joining_date and friends; same reasoning.
+ * The `pp.` prefix is required, so queries without an alias use DATE_AS_TEXT_NP.
+ */
+const DATE_AS_TEXT = `
+    to_char(pp.start_date, 'YYYY-MM-DD')   AS start_date,
+    to_char(pp.end_date,   'YYYY-MM-DD')   AS end_date,
+    EXTRACT(YEAR  FROM pp.start_date)::int AS period_year,
+    EXTRACT(MONTH FROM pp.start_date)::int AS period_month
+`;
+
+const DATE_AS_TEXT_NP = DATE_AS_TEXT.replace(/pp\./g, "");
+
 const PayrollPeriod = {
 
     async create(data) {
@@ -9,22 +29,26 @@ const PayrollPeriod = {
             start_date,
             end_date,
             status = "open",
+            // Set by the service when a caller explicitly asks for a partial
+            // range. Without persisting it, a two-day period in the table
+            // cannot be told apart from an accidental one.
+            is_off_cycle = false,
         } = data;
 
         const result = await db.query(
             `INSERT INTO payroll_periods (
                 company_id,
                 period_name, start_date, end_date,
-                status
+                status, is_off_cycle
             ) VALUES (
                 $1,
                 $2, $3, $4,
-                $5
-            ) RETURNING *`,
+                $5, $6
+            ) RETURNING *, ${DATE_AS_TEXT_NP}`,
             [
                 company_id,
                 period_name, start_date, end_date,
-                status,
+                status, is_off_cycle,
             ]
         );
         return result.rows[0];
@@ -32,13 +56,7 @@ const PayrollPeriod = {
 
     async findById(id) {
         const result = await db.query(
-            `SELECT
-                pp.*,
-                u.first_name || ' ' || u.last_name AS processed_by_name
-             FROM payroll_periods pp
-             LEFT JOIN users u
-                ON pp.processed_by = u.id
-             WHERE pp.id = $1`,
+            `SELECT pp.*, ${DATE_AS_TEXT} FROM payroll_periods pp WHERE pp.id = $1`,
             [id]
         );
         return result.rows[0];
@@ -76,6 +94,7 @@ const PayrollPeriod = {
         const result = await db.query(
             `SELECT
                 pp.*,
+                ${DATE_AS_TEXT},
                 u.first_name || ' ' || u.last_name AS processed_by_name
              FROM payroll_periods pp
              LEFT JOIN users u
@@ -89,8 +108,8 @@ const PayrollPeriod = {
 
     async getAllByStatus(company_id, status) {
         const result = await db.query(
-            `SELECT * FROM payroll_periods
-             WHERE company_id = $1 AND status = $2
+            `SELECT pp.*, ${DATE_AS_TEXT} FROM payroll_periods pp
+             WHERE pp.company_id = $1 AND pp.status = $2
              ORDER BY start_date DESC`,
             [company_id, status]
         );
@@ -129,7 +148,7 @@ const PayrollPeriod = {
         values.push(id);
         const query = `UPDATE payroll_periods SET ${updates.join(", ")}
                        WHERE id = $${paramCount}
-                       RETURNING *`;
+                       RETURNING *, ${DATE_AS_TEXT_NP}`;
 
         const result = await db.query(query, values);
         return result.rows[0];
@@ -139,7 +158,7 @@ const PayrollPeriod = {
         const result = await db.query(
             `UPDATE payroll_periods SET status = $1
              WHERE id = $2
-             RETURNING *`,
+             RETURNING *, ${DATE_AS_TEXT_NP}`,
             [status, id]
         );
         return result.rows[0];
@@ -166,6 +185,69 @@ const PayrollPeriod = {
             [id]
         );
         return result.rows[0];
+    },
+
+    /**
+     * What, if anything, stands in the way of deleting this period.
+     *
+     * The FK from payrolls is ON DELETE RESTRICT, so a period with any
+     * generated payroll cannot be removed by the plain delete below — Postgres
+     * throws and the constraint text ends up in front of an admin. This
+     * answers the question up front, in terms the service can turn into a
+     * sentence.
+     */
+    async getDeletionBlockers(id) {
+        const result = await db.query(
+            `SELECT
+                (SELECT COUNT(*)::int FROM payrolls
+                  WHERE payroll_period_id = $1)                                  AS total_payrolls,
+                (SELECT COUNT(*)::int FROM payrolls
+                  WHERE payroll_period_id = $1 AND payroll_status = 'paid')      AS paid_payrolls,
+                (SELECT COUNT(*)::int FROM payslips ps
+                   JOIN payrolls p ON p.id = ps.payroll_id
+                  WHERE p.payroll_period_id = $1)                                AS payslips,
+                (SELECT COUNT(*)::int FROM payroll_runs
+                  WHERE payroll_period_id = $1)                                  AS runs`,
+            [id]
+        );
+        return result.rows[0];
+    },
+
+    /**
+     * Delete the period and everything generated under it, in one transaction.
+     *
+     * Only two statements are needed: payroll_adjustments, payslips and
+     * payroll_daily_lines all cascade from payrolls, and payroll_runs (with
+     * their events) cascade from the period. Payrolls themselves are RESTRICT,
+     * which is why they have to go first and explicitly.
+     *
+     * The caller is responsible for refusing when money has moved — see
+     * payrollPeriodService.deletePayrollPeriod.
+     */
+    async deleteWithPayrolls(id) {
+        const client = await db.getClient();
+        try {
+            await client.query("BEGIN");
+
+            const payrolls = await client.query(
+                `DELETE FROM payrolls WHERE payroll_period_id = $1 RETURNING id`, [id]
+            );
+            const period = await client.query(
+                `DELETE FROM payroll_periods WHERE id = $1 RETURNING *`, [id]
+            );
+
+            await client.query("COMMIT");
+
+            return {
+                period: period.rows[0] || null,
+                deleted_payrolls: payrolls.rowCount,
+            };
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+        } finally {
+            client.release();
+        }
     },
 
     async delete(id) {

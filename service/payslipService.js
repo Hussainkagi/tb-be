@@ -3,6 +3,8 @@ const PayrollModel = require("../models/payrollModel");
 const PayrollAdjustmentModel = require("../models/payrollAdjustmentModel");
 
 const PayrollPeriodModel = require("../models/payrollPeriodModel");
+const EmployeeModel = require("../models/employeeModel");
+const { Role } = require("../enums/roles");
 const { sendEmail } = require("../utils/mailer");
 const { payslipTemplate } = require("../utils/emailTemplates");
 const NotificationService = require("./notificationService");
@@ -481,14 +483,27 @@ const PayslipService = {
     // ----------------------------------------------------------
     // Get payslip by payslip number (e.g. from printed slip QR)
     // ----------------------------------------------------------
-    async getPayslipByNumber(payslip_number) {
+    async getPayslipByNumber(payslip_number, { user, company_id } = {}) {
         try {
             const payslip = await PayslipModel.findByPayslipNumber(payslip_number);
-            if (!payslip) {
-                return { success: false, message: "Payslip not found" };
+            if (!payslip) return { success: false, status: 404, message: "Payslip not found" };
+
+            // Same reasoning as getPayslipsByEmployee: the identifier comes
+            // from the URL, so it cannot be trusted to describe the caller.
+            if (user) {
+                const role = parseInt(user.role, 10);
+                const isPrivileged = role === Role.ADMIN || role === Role.MANAGER || user.is_super_admin === true;
+
+                if (!isPrivileged) {
+                    const full = await PayslipModel.findById(payslip.id);
+                    const self = await EmployeeModel.findByUserAndCompany(user.user_id, company_id);
+                    if (!self || !full || full.employee_id !== self.id) {
+                        return { success: false, status: 404, message: "Payslip not found" };
+                    }
+                }
             }
-            const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payslip.payroll_id);
-            return { success: true, data: shapePayslip(payslip, adjustments) };
+
+            return { success: true, data: payslip };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
@@ -497,10 +512,174 @@ const PayslipService = {
     // ----------------------------------------------------------
     // Get all payslips for an employee (payslip history)
     // ----------------------------------------------------------
-    async getPayslipsByEmployee(employee_id) {
+    /**
+     * Payslips for an employee named in the URL.
+     *
+     * Salary is the most sensitive record in the system, and this route is
+     * mounted for every authenticated member of the company — so the id in the
+     * path has to be checked against who is asking. Without this, changing one
+     * uuid in the URL reads a colleague's pay.
+     *
+     * Managers and admins may look at anyone in their company; everyone else
+     * may look only at themselves. Employees should use /payslips/my, which
+     * needs no id at all.
+     */
+    async getPayslipsByEmployee(employee_id, { user, company_id } = {}) {
         try {
+            if (user) {
+                const role = parseInt(user.role, 10);
+                const isPrivileged = role === Role.ADMIN || role === Role.MANAGER || user.is_super_admin === true;
+
+                if (!isPrivileged) {
+                    const self = await EmployeeModel.findByUserAndCompany(user.user_id, company_id);
+                    if (!self || self.id !== employee_id) {
+                        return { success: false, status: 404, message: "Payslips not found." };
+                    }
+                }
+            }
+
             const result = await PayslipModel.getAllByEmployee(employee_id);
             return { success: true, data: result };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    // ============================================================
+    // EMPLOYEE SELF-SERVICE (mobile app)
+    //
+    // The employee is resolved from the TOKEN, never from a path parameter.
+    // /payslips/employee/:employee_id takes the id from the URL and is mounted
+    // for any authenticated user, so on its own it would let anyone read
+    // anyone's salary by editing a uuid. These endpoints exist so the mobile
+    // app never has to send an employee id for its own data, and so the answer
+    // to "whose payslip is this" is the token rather than the request.
+    // ============================================================
+
+    /**
+     * Resolve the caller's employee record in this company.
+     * A login with no employee profile has no payslips by definition — that is
+     * a 404 for this resource, not an auth failure.
+     */
+    async _resolveSelf(user, company_id) {
+        if (!user?.user_id) return { success: false, status: 401, message: "Unauthorized." };
+
+        const employee = await EmployeeModel.findByUserAndCompany(user.user_id, company_id);
+        if (!employee) {
+            return {
+                success: false,
+                status: 404,
+                message: "No employee profile found for your account in this company.",
+            };
+        }
+        return { success: true, employee };
+    },
+
+    /**
+     * The caller's own payslips, newest first.
+     *
+     * Only PAID payrolls are returned by default. A draft or pending-approval
+     * figure is an internal working number that can still change; showing it
+     * turns a later correction into an argument.
+     */
+    async getMyPayslips({ company_id, user, year = null, month = null }) {
+        try {
+            const self = await PayslipService._resolveSelf(user, company_id);
+            if (!self.success) return self;
+
+            if (month && (parseInt(month, 10) < 1 || parseInt(month, 10) > 12)) {
+                return { success: false, message: "month must be a number between 1 and 12" };
+            }
+
+            const payslips = await PayslipModel.getSelfPayslips(self.employee.id, {
+                company_id, year, month, paid_only: true,
+            });
+
+            return {
+                success: true,
+                data: {
+                    employee: {
+                        id: self.employee.id,
+                        employee_code: self.employee.employee_code,
+                        name: `${self.employee.first_name} ${self.employee.last_name}`.trim(),
+                    },
+                    filters: { year: year ? parseInt(year, 10) : null, month: month ? parseInt(month, 10) : null },
+                    count: payslips.length,
+                    payslips,
+                },
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    /**
+     * One of the caller's own payslips, with the full breakdown.
+     *
+     * Ownership is checked against the resolved employee — a payslip id that
+     * belongs to someone else returns 404 rather than 403, because confirming
+     * that a given payslip exists is itself a small leak.
+     */
+    async getMyPayslipById({ company_id, user, payslip_id }) {
+        try {
+            const self = await PayslipService._resolveSelf(user, company_id);
+            if (!self.success) return self;
+
+            const payslip = await PayslipModel.findById(payslip_id);
+            if (!payslip || payslip.employee_id !== self.employee.id) {
+                return { success: false, status: 404, message: "Payslip not found." };
+            }
+            if (payslip.payroll_status !== "paid") {
+                return {
+                    success: false,
+                    status: 404,
+                    message: "This payslip is not available yet — it is released once the payroll is paid.",
+                };
+            }
+
+            const adjustments = await PayrollAdjustmentModel.getAllByPayroll(payslip.payroll_id);
+
+            return { success: true, data: { ...payslip, adjustments } };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    /**
+     * Which months the employee actually has a paid payslip for — so the app
+     * can render a year picker without probing month by month.
+     */
+    async getMyPayslipYears({ company_id, user }) {
+        try {
+            const self = await PayslipService._resolveSelf(user, company_id);
+            if (!self.success) return self;
+
+            const all = await PayslipModel.getSelfPayslips(self.employee.id, { company_id, paid_only: true });
+
+            const byYear = {};
+            for (const p of all) {
+                if (!p.period_year) continue;
+                byYear[p.period_year] = byYear[p.period_year] || [];
+                byYear[p.period_year].push({
+                    month: p.period_month,
+                    payslip_id: p.id,
+                    period_name: p.period_name,
+                    net_salary: p.net_salary,
+                });
+            }
+
+            return {
+                success: true,
+                data: {
+                    years: Object.keys(byYear)
+                        .map(Number)
+                        .sort((a, b) => b - a)
+                        .map((year) => ({
+                            year,
+                            months: byYear[year].sort((a, b) => b.month - a.month),
+                        })),
+                },
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

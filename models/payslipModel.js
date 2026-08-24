@@ -211,6 +211,65 @@ const Payslip = {
         return result.rows;
     },
 
+    /**
+     * The employee's own payslips, for the mobile app.
+     *
+     * Differs from getAllByEmployee in three ways that matter:
+     *
+     *   1. Company-scoped. One person can hold employee records in several
+     *      companies; a payslip from one must never surface in another.
+     *   2. Filterable by month/year against the PERIOD's dates, which is how
+     *      an employee thinks about a payslip ("show me August").
+     *   3. paid_only by default. A payroll sitting in draft or pending
+     *      approval is an internal working figure — showing it to the employee
+     *      invites "you said 2,140 last week" when a correction lands.
+     */
+    async getSelfPayslips(employee_id, { company_id, year = null, month = null, paid_only = true } = {}) {
+        const values = [employee_id, company_id];
+        const where = [
+            "p.employee_id = $1",
+            "p.company_id = $2",
+            "e.deleted_at IS NULL",
+        ];
+
+        if (paid_only) where.push("p.payroll_status = 'paid'");
+
+        if (year) {
+            values.push(parseInt(year, 10));
+            where.push(`EXTRACT(YEAR FROM pp.start_date) = $${values.length}`);
+        }
+        if (month) {
+            values.push(parseInt(month, 10));
+            where.push(`EXTRACT(MONTH FROM pp.start_date) = $${values.length}`);
+        }
+
+        const result = await db.query(
+            `SELECT
+                ps.id, ps.payslip_number, ps.pdf_url, ps.generated_at,
+                p.id                AS payroll_id,
+                p.net_salary, p.gross_salary, p.actual_salary,
+                p.deduction_amount, p.bonus_amount, p.overtime_amount, p.tax_amount,
+                p.payroll_status, p.paid_at,
+                p.payable_days, p.total_present_days, p.total_absent_days,
+                pp.id               AS payroll_period_id,
+                pp.period_name, pp.start_date AS period_start_date, pp.end_date AS period_end_date,
+                pp.is_off_cycle,
+                EXTRACT(YEAR  FROM pp.start_date)::int AS period_year,
+                EXTRACT(MONTH FROM pp.start_date)::int AS period_month,
+                c.currency          AS currency,
+                c.company_name      AS company_name
+             FROM payslips ps
+             JOIN payrolls p         ON ps.payroll_id = p.id
+             JOIN employees e        ON p.employee_id = e.id
+             LEFT JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+             LEFT JOIN companies c   ON p.company_id = c.id
+             WHERE ${where.join(" AND ")}
+             ORDER BY pp.start_date DESC NULLS LAST, ps.generated_at DESC`,
+            values
+        );
+        return result.rows;
+    },
+
     async getAllByPeriod(payroll_period_id) {
         const result = await db.query(
             `SELECT

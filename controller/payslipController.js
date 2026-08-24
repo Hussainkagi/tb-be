@@ -57,7 +57,9 @@ const PayslipController = {
 
     async getByNumber(req, res) {
         try {
-            const result = await PayslipService.getPayslipByNumber(req.params.payslip_number);
+            const result = await PayslipService.getPayslipByNumber(req.params.payslip_number, {
+                user: req.user, company_id: req.params.company_id,
+            });
             if (result.success) {
                 return res.status(200).json(result);
             } else {
@@ -70,7 +72,9 @@ const PayslipController = {
 
     async getByEmployee(req, res) {
         try {
-            const result = await PayslipService.getPayslipsByEmployee(req.params.employee_id);
+            const result = await PayslipService.getPayslipsByEmployee(req.params.employee_id, {
+                user: req.user, company_id: req.params.company_id,
+            });
             if (result.success) {
                 return res.status(200).json(result);
             } else {
@@ -115,6 +119,59 @@ const PayslipController = {
             } else {
                 return res.status(404).json(result);
             }
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    // ============================================================
+    // EMPLOYEE SELF-SERVICE (mobile app)
+    // The employee comes from the token — never from the URL.
+    // ============================================================
+
+    // GET /api/companies/:company_id/payslips/my?year=2026&month=8
+    async getMine(req, res) {
+        try {
+            const result = await PayslipService.getMyPayslips({
+                company_id: req.params.company_id,
+                user: req.user,
+                year: req.query.year || null,
+                month: req.query.month || null,
+            });
+            return result.success
+                ? res.status(200).json(result)
+                : res.status(result.status || 400).json({ success: false, message: result.message });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    // GET /api/companies/:company_id/payslips/my/available
+    async getMineAvailable(req, res) {
+        try {
+            const result = await PayslipService.getMyPayslipYears({
+                company_id: req.params.company_id,
+                user: req.user,
+            });
+            return result.success
+                ? res.status(200).json(result)
+                : res.status(result.status || 400).json({ success: false, message: result.message });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    // GET /api/companies/:company_id/payslips/my/:id
+    async getMineById(req, res) {
+        try {
+            const result = await PayslipService.getMyPayslipById({
+                company_id: req.params.company_id,
+                user: req.user,
+                payslip_id: req.params.id,
+            });
+            return result.success
+                ? res.status(200).json(result)
+                : res.status(result.status || 404).json({ success: false, message: result.message });
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }
