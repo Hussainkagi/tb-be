@@ -460,6 +460,75 @@ const policyUpdateTemplate = ({
 </div>
 `;
 
+// ── 7. BACKUP & RESTORE ─────────────────────────────────────────────────────
+const backupReadyEmail = ({
+  company_name,
+  sections = [],
+  is_scheduled = false,
+  generated_at,
+  isPreRestoreSafety = false,
+  isRestoreComplete = false,
+  summary = null,
+}) => {
+  const dateStr = (generated_at instanceof Date ? generated_at : new Date()).toLocaleString();
+
+  const heading = isRestoreComplete
+    ? "Data restore complete"
+    : isPreRestoreSafety
+    ? "Safety backup before your restore"
+    : "Your data backup is ready";
+
+  const intro = isRestoreComplete
+    ? `The data restore you started for <strong>${company_name}</strong> has finished successfully.`
+    : isPreRestoreSafety
+    ? `Before restoring data into <strong>${company_name}</strong>, we generated a full backup of everything as it stood just now — attached here, in case anything needs to be reversed.`
+    : is_scheduled
+    ? `This month's scheduled data backup for <strong>${company_name}</strong> is attached to this email.`
+    : `The data backup you requested for <strong>${company_name}</strong> is attached to this email.`;
+
+  const summaryRows = isRestoreComplete && summary
+    ? Object.entries(summary)
+        .map(([key, count]) => `<tr><td style="padding:4px 8px; color:#333;">${key}</td><td style="padding:4px 8px; color:#333; text-align:right;">${count}</td></tr>`)
+        .join("")
+    : "";
+
+  return `
+<div style="${baseStyle}">
+  ${header(company_name)}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">${heading}</h2>
+    <p style="color:#333;">${intro}</p>
+    ${!isRestoreComplete ? `
+    <p style="color:#333;">Sections included:</p>
+    <ul style="color:#333; padding-left: 20px;">
+      ${sections.map((s) => `<li>${s}</li>`).join("")}
+    </ul>
+    ` : `
+    <table style="width:100%; border-collapse:collapse; margin: 12px 0;">
+      <tr><th style="text-align:left; padding:4px 8px; color:#1a1a2e;">Section</th><th style="text-align:right; padding:4px 8px; color:#1a1a2e;">Rows restored</th></tr>
+      ${summaryRows}
+    </table>
+    `}
+    <p style="color:#888; font-size:13px;">Generated ${dateStr}. Keep this file somewhere safe — it contains bank details and salary information.</p>
+  </div>
+  ${footer()}
+</div>
+`;
+};
+
+const backupFailedEmail = ({ company_name, error_message }) => `
+<div style="${baseStyle}">
+  ${header(company_name)}
+  <div style="padding: 32px;">
+    <h2 style="color:#b91c1c; margin-top:0;">We couldn't complete this backup</h2>
+    <p style="color:#333;">Something went wrong while preparing a data backup/restore for <strong>${company_name}</strong>:</p>
+    <p style="color:#333; background:#fef2f2; border-radius:6px; padding:12px 16px;">${error_message}</p>
+    <p style="color:#333;">No changes were made to your data. Please try again, or contact support if this keeps happening.</p>
+  </div>
+  ${footer()}
+</div>
+`;
+
 module.exports = {
   appDownloadBlock,
   registrationOtpTemplate,
@@ -467,5 +536,7 @@ module.exports = {
   passwordResetTemplate,
   welcomeTemplate,
   payslipTemplate,
-  policyUpdateTemplate
+  policyUpdateTemplate,
+  backupReadyEmail,
+  backupFailedEmail,
 };

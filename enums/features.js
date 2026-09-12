@@ -74,6 +74,7 @@ const Feature = Object.freeze({
     // ── Data & Storage ───────────────────────────────────────────────────────
     IMAGE_STORAGE:           "data.image_storage",
     SELF_SERVICE_EXPORT:     "data.self_service_export",
+    BACKUP_RESTORE:          "data.backup_restore",
     EXTENDED_RETENTION:      "data.extended_retention",
 
     // ── Support & SLA (advertised, not enforced in code) ──────────────────────

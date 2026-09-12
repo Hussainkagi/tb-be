@@ -10,8 +10,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * @param {string}   options.subject  - Email subject
  * @param {string}   options.html     - HTML body
  * @param {string}  [options.text]    - Optional plain-text fallback
+ * @param {Array<{filename: string, content: Buffer|string}>} [options.attachments]
  */
-const sendEmail = async ({ to, subject, html, text = "" }) => {
+const sendEmail = async ({ to, subject, html, text = "", attachments }) => {
     try {
         const { data, error } = await resend.emails.send({
             from: `${process.env.MAIL_FROM_NAME || "HRMS Platform"} <${process.env.MAIL_FROM_ADDRESS}>`,
@@ -19,6 +20,7 @@ const sendEmail = async ({ to, subject, html, text = "" }) => {
             subject,
             html,
             text: text || stripHtml(html),
+            ...(attachments && attachments.length ? { attachments } : {}),
         });
 
         if (error) {

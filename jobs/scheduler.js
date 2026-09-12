@@ -103,6 +103,7 @@ const registerAllJobs = () => {
 
     require("./attendanceReminderJob");        // daily sweep + per-minute dispatch flush
     require("./birthdayNotificationJob");
+    require("./backupExportJob");
     require("./Task/taskDeadlineJob");
     require("./Task/taskPerformanceRollupJob");
 
