@@ -37,6 +37,9 @@ router.get("/my", verifyToken, validateTenant, isEmployee, PayslipController.get
 // GET /api/companies/:company_id/payslips/my/:id
 router.get("/my/:id", verifyToken, validateTenant, isEmployee, PayslipController.getMineById);
 
+// GET /api/companies/:company_id/payslips/my/:id/pdf — on-demand PDF download
+router.get("/my/:id/pdf", verifyToken, validateTenant, isEmployee, PayslipController.downloadMyPayslipPdf);
+
 router.get("/:id", verifyToken, validateTenant, isManager, PayslipController.getById);
 router.get("/number/:payslip_number", verifyToken, validateTenant, isEmployee, PayslipController.getByNumber);
 

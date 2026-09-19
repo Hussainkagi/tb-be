@@ -1,4 +1,6 @@
 const PayslipService = require("../service/payslipService");
+const CompanyModel = require("../models/companyModel");
+const { buildPayslipPdf } = require("../utils/payslipPdf");
 
 const PayslipController = {
 
@@ -174,6 +176,41 @@ const PayslipController = {
                 : res.status(result.status || 404).json({ success: false, message: result.message });
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
+    /**
+     * GET /api/companies/:company_id/payslips/my/:id/pdf
+     *
+     * Streams a PDF built on demand — there is no stored file anywhere in this
+     * system (see utils/payslipPdf.js for why), so this generates one fresh
+     * from the same authorized, fully-joined record getMineById already
+     * proves ownership of and returns.
+     */
+    async downloadMyPayslipPdf(req, res) {
+        try {
+            const result = await PayslipService.getMyPayslipById({
+                company_id: req.params.company_id,
+                user: req.user,
+                payslip_id: req.params.id,
+            });
+
+            if (!result.success) {
+                return res.status(result.status || 404).json({ success: false, message: result.message });
+            }
+
+            const company = await CompanyModel.findById(req.params.company_id);
+            const filename = `payslip-${result.data.payslip_number || req.params.id}.pdf`.replace(/[^a-zA-Z0-9._-]/g, "-");
+
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+            buildPayslipPdf(result.data, company).pipe(res);
+        } catch (error) {
+            if (!res.headersSent) {
+                return res.status(500).json({ success: false, message: "Server error", error: error.message });
+            }
+            res.end();
         }
     },
 };
