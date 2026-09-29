@@ -57,6 +57,50 @@ function toMinutes(value, timezone) {
     return h * 60 + m;
 }
 
+// Check-in is allowed from this many minutes before shift start...
+const EARLY_CHECKIN_BUFFER_MINUTES = 30;
+// ...through this many minutes after shift end. Deliberately generous and
+// one-sided: a very late check-in is still someone starting a real (if
+// short) day, but check-OUT is never subject to this window at all —
+// overtime is a legitimate, expected reason to still be clocked in well
+// past shift end, and blocking it would silently break overtime pay.
+const LATE_CHECKIN_BUFFER_MINUTES = 60;
+
+/**
+ * Whether `now` falls within the shift's check-in window, evaluated in the
+ * shift's own timezone. Handles a shift that crosses midnight
+ * (is_night_shift) by extending the end boundary into the next day, and
+ * also checking the previous day's window for a moment just after midnight.
+ *
+ * Returns true (never blocks) when the shift has no timing configured.
+ */
+function isWithinCheckInWindow(now, shift, timezone) {
+    if (!shift.start_time || !shift.end_time) return true;
+
+    const nowMinutes = toMinutes(now, timezone);
+    const startMinutes = toMinutes(shift.start_time);
+    let endMinutes = toMinutes(shift.end_time);
+
+    if (shift.is_night_shift && endMinutes <= startMinutes) {
+        endMinutes += 24 * 60;
+    }
+
+    const windowStart = startMinutes - EARLY_CHECKIN_BUFFER_MINUTES;
+    const windowEnd = endMinutes + LATE_CHECKIN_BUFFER_MINUTES;
+
+    if (nowMinutes >= windowStart && nowMinutes <= windowEnd) return true;
+
+    // A night shift's window can span midnight (e.g. 22:00–06:00) — a check
+    // at 00:30 is "nowMinutes = 30", which is before windowStart unless also
+    // tested a day ahead.
+    if (shift.is_night_shift) {
+        const nowMinutesNextDay = nowMinutes + 24 * 60;
+        if (nowMinutesNextDay >= windowStart && nowMinutesNextDay <= windowEnd) return true;
+    }
+
+    return false;
+}
+
 /**
  * Returns "before-time" | "on-time" | "late" based on shift timing.
  */
@@ -169,6 +213,15 @@ const AttendanceService = {
                 return {
                     success: false,
                     message: `Today is a company off day (${weekday.charAt(0).toUpperCase() + weekday.slice(1)}). Check-in is not allowed.`
+                };
+            }
+
+            // 4b. Shift time window — check-in only, never check-out (see
+            // isWithinCheckInWindow's own comment for why).
+            if (!isWithinCheckInWindow(now, shift, timezone)) {
+                return {
+                    success: false,
+                    message: `Check-in is only allowed around your shift hours (${shift.start_time.slice(0, 5)} – ${shift.end_time.slice(0, 5)}).`,
                 };
             }
 

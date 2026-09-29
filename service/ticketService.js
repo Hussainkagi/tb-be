@@ -82,7 +82,7 @@ const TicketService = {
     try {
       await sendEmail({
         to: SUPPORT_NOTIFY_EMAIL,
-        subject: `New support ticket — ${company?.company_name ?? "Unknown company"}: ${ticket.subject}`,
+        subject: `[${ticket.ticket_number}] New support ticket — ${company?.company_name ?? "Unknown company"}: ${ticket.subject}`,
         html: ticketCreatedEmail({
           company_name: company?.company_name ?? "Unknown company",
           ticket,
@@ -183,7 +183,7 @@ const TicketService = {
         for (const to of admins) {
           await sendEmail({
             to,
-            subject: `Your ticket "${updated.subject}" is now ${TicketStatusLabel[new_status]}`,
+            subject: `[${updated.ticket_number}] Your ticket "${updated.subject}" is now ${TicketStatusLabel[new_status]}`,
             html,
           });
         }

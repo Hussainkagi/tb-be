@@ -546,6 +546,7 @@ const ticketCreatedEmail = ({ company_name, ticket, portal_url }) => `
       <strong>${company_name}</strong> raised a ticket:
     </p>
     <table style="width:100%; margin: 12px 0; font-size: 13px;">
+      <tr><td style="color:#888; padding:4px 0; width:110px;">Reference</td><td style="color:#333; font-weight:bold; font-family:monospace;">${ticket.ticket_number}</td></tr>
       <tr><td style="color:#888; padding:4px 0; width:110px;">Subject</td><td style="color:#333; font-weight:bold;">${ticket.subject}</td></tr>
       <tr><td style="color:#888; padding:4px 0;">Priority</td><td>
         <span style="display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:bold; text-transform:uppercase; color:#fff; background:${PRIORITY_COLOR[ticket.priority] || "#6b7280"};">
@@ -568,7 +569,10 @@ const ticketStatusUpdatedEmail = ({ company_name, ticket, new_status_label, port
   ${header(company_name)}
   <div style="padding: 32px;">
     <h2 style="color:#1a1a2e; margin-top:0;">Your ticket status changed</h2>
-    <p style="color:#333;">Your ticket <strong>"${ticket.subject}"</strong> is now:</p>
+    <p style="color:#333;">
+      Ticket <strong style="font-family:monospace;">${ticket.ticket_number}</strong>
+      <strong>"${ticket.subject}"</strong> is now:
+    </p>
     <div style="text-align:center; margin: 20px 0;">
       <span style="display:inline-block; padding:6px 18px; border-radius:999px; font-size:14px; font-weight:bold; color:#1a1a2e; background:#f0f0f0;">
         ${new_status_label}
