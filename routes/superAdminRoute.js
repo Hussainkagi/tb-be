@@ -4,6 +4,7 @@ const router = express.Router();
 const SuperAdminController = require("../controller/superAdminController");
 const PlanController = require("../controller/planController");
 const PolicyController = require("../controller/policyController");
+const TicketAdminController = require("../controller/ticketAdminController");
 const verifyToken = require("../middleware/verifyToken");
 const { requireSuperAdmin } = require("../middleware/isSuperAdmin");
 const {
@@ -182,5 +183,14 @@ router.get("/companies/:company_id/activity-stats", SuperAdminController.company
 // ─────────────────────────────────────────────
 // ?page&limit&action&company_id
 router.get("/audit-logs", SuperAdminController.listAuditLogs);
+
+// ─────────────────────────────────────────────
+// SUPPORT TICKETS — cross-tenant, raised from a company's Settings → Support
+// ─────────────────────────────────────────────
+// ?page&limit&status&priority&company_id&search
+router.get("/tickets", TicketAdminController.list);
+router.get("/tickets/:id", TicketAdminController.getById);
+router.patch("/tickets/:id/status", TicketAdminController.updateStatus);
+router.post("/tickets/:id/messages", TicketAdminController.reply);
 
 module.exports = router;

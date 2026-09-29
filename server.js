@@ -121,6 +121,9 @@ app.use("/api/companies/:company_id/billing", BillingRoutes);
 const BackupRoutes = require("./routes/backupRoute");
 app.use("/api/companies/:company_id/backup", BackupRoutes);
 
+const TicketRoutes = require("./routes/ticketRoute");
+app.use("/api/companies/:company_id/tickets", TicketRoutes);
+
 const UserCompanyRoutes = require("./routes/userCompanyRoute");
 app.use("/api/user-companies", UserCompanyRoutes);
 
