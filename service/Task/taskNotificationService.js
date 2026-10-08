@@ -83,6 +83,29 @@ const TaskNotificationService = {
     },
 
     // ─────────────────────────────────────────────────────────────────────
+    // A task has been taken away from someone (the other half of a
+    // reassignment) — targets the PREVIOUS assignee specifically, since by
+    // the time this fires `task.assigned_to_employee_id` is already the new
+    // person.
+    // ─────────────────────────────────────────────────────────────────────
+    async notifyUnassigned({ task, previous_assignee_employee_id, reassigned_by_name }) {
+        if (!previous_assignee_employee_id) return { success: false, message: "No previous assignee" };
+        return dispatch({
+            company_id: task.company_id,
+            branch_id: task.branch_id || null,
+            notification_type: "task_status_update",
+            template_code: "task_unassigned",
+            template_variables: {
+                ...baseVariables(task),
+                reassigned_by_name: reassigned_by_name || "Your manager",
+            },
+            entity_type: "tasks",
+            entity_id: task.id,
+            audience: { type: "specific_employee", employee_id: previous_assignee_employee_id },
+        });
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
     // The status moved
     //
     // Who hears about it depends on who moved it. The assignee does not need

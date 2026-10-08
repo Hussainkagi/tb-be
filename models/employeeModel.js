@@ -260,6 +260,9 @@ const Employee = {
         if ("is_remote_job" in data && typeof data.is_remote_job !== "boolean") {
             data.is_remote_job = Boolean(data.is_remote_job);
         }
+        if ("can_assign_tasks" in data && typeof data.can_assign_tasks !== "boolean") {
+            data.can_assign_tasks = Boolean(data.can_assign_tasks);
+        }
 
         const updates = [];
         const values = [];

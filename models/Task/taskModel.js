@@ -313,6 +313,44 @@ const TaskModel = {
     },
 
     /**
+     * Sets (or replaces) the task's voice note. A separate method, not routed
+     * through UPDATABLE_FIELDS/update() — these columns are system-computed
+     * from an upload + duration check (taskService), never a raw value a
+     * caller should be able to PUT directly.
+     */
+    async setVoiceNote(id, { url, public_id, duration_seconds, format }, client = db) {
+        const result = await client.query(
+            `UPDATE tasks
+                SET voice_note_url = $1,
+                    voice_note_public_id = $2,
+                    voice_note_duration_seconds = $3,
+                    voice_note_format = $4,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE id = $5 AND deleted_at IS NULL
+              RETURNING *`,
+            [url, public_id, duration_seconds, format, id]
+        );
+        return result.rows[0] || null;
+    },
+
+    /**
+     * Stamps a task as having used its one allowed reassignment. Not routed
+     * through UPDATABLE_FIELDS/update() — see setVoiceNote's comment, same
+     * reasoning: a system-set fact, never a value a caller should PUT.
+     */
+    async markReassigned(id, client = db) {
+        const result = await client.query(
+            `UPDATE tasks
+                SET reassigned_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE id = $1 AND deleted_at IS NULL
+              RETURNING *`,
+            [id]
+        );
+        return result.rows[0] || null;
+    },
+
+    /**
      * Move a task to a new status and stamp the matching lifecycle column.
      *
      * The stamps are set here, never by the caller — that is what keeps

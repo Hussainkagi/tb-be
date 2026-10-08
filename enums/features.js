@@ -63,6 +63,9 @@ const Feature = Object.freeze({
     TASK_CATEGORIES:         "tasks.categories",
     TASK_NOTIFICATIONS:      "notifications.task",
     TASK_PERFORMANCE:        "reporting.task_performance",
+    // Numeric, but not one of the countable Limit.* keys below — a static
+    // per-plan cap, not a COUNT(*). See taskService.js's voice-note upload.
+    TASK_VOICE_NOTE_MAX_SECONDS: "tasks.voice_note_max_seconds",
 
     // ── Reporting ────────────────────────────────────────────────────────────
     DASHBOARD:               "reporting.dashboard",

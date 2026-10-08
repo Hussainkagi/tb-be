@@ -56,6 +56,12 @@ const resolveActor = async (user, company_id) => {
 
     const isAdmin = role === Role.ADMIN || user.is_super_admin === true;
     const isHod = !isAdmin && headedDepartmentIds.length > 0;
+    // employees.can_assign_tasks — an admin-granted override letting a
+    // specific employee assign work to anyone in the company, independent of
+    // role or department headship. Checked only in canAssignTo (assignment),
+    // never in canEdit/canDelete/canChangeStatus — the flag widens who a
+    // person may hand work TO, not what they may do to a task afterward.
+    const canAssignAny = !isAdmin && employee?.can_assign_tasks === true;
 
     return {
         success: true,
@@ -69,6 +75,7 @@ const resolveActor = async (user, company_id) => {
             headed_department_ids: headedDepartmentIds,
             is_admin: isAdmin,
             is_hod: isHod,
+            can_assign_any: canAssignAny,
             scope: isAdmin ? ActorScope.ADMIN : isHod ? ActorScope.HOD : ActorScope.EMPLOYEE,
         },
     };
@@ -124,7 +131,7 @@ const canAssignTo = (actor, targetEmployee) => {
         return { allowed: false, status: 400, message: "Cannot assign a task to an inactive employee." };
     }
 
-    if (actor.is_admin) return { allowed: true };
+    if (actor.is_admin || actor.can_assign_any) return { allowed: true };
 
     if (actor.is_hod) {
         if (!targetEmployee.department_id) {
@@ -194,6 +201,15 @@ const canEdit = (actor, task) => {
         return { allowed: true };
     }
 
+    // A can_assign_any employee is not an admin or HOD, but they DID just
+    // assign this specific task — they must still be able to edit the terms
+    // of their own assignment (e.g. attach a voice note right after
+    // creating it). Narrower than "edit anything": only tasks they
+    // personally assigned, never someone else's.
+    if (actor.can_assign_any && task.assigned_by_employee_id === actor.employee_id) {
+        return { allowed: true };
+    }
+
     return {
         allowed: false,
         status: 403,
@@ -218,6 +234,10 @@ const canChangeStatus = (actor, task) => {
     if (actor.is_admin) return { allowed: true, as_manager: true };
 
     if (actor.is_hod && task.department_id && actor.headed_department_ids.includes(task.department_id)) {
+        return { allowed: true, as_manager: true };
+    }
+
+    if (actor.can_assign_any && task.assigned_by_employee_id === actor.employee_id) {
         return { allowed: true, as_manager: true };
     }
 

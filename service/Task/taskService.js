@@ -13,6 +13,9 @@ const Department = require("../../models/departmentModel");
 
 const TaskAccessService = require("./taskAccessService");
 const TaskNotificationService = require("./taskNotificationService");
+const EntitlementService = require("../entitlementService");
+const { Feature } = require("../../enums/features");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../../utils/cloudinaryHelper");
 
 const {
     TaskStatus,
@@ -76,7 +79,7 @@ const TaskService = {
             if (!resolved.success) return { success: false, message: resolved.message };
             const { actor } = resolved;
 
-            if (!actor.is_admin && !actor.is_hod) {
+            if (!actor.is_admin && !actor.is_hod && !actor.can_assign_any) {
                 return {
                     success: false,
                     status: 403,
@@ -288,7 +291,7 @@ const TaskService = {
                     total: result.total,
                     totalPages: Math.ceil(result.total / result.limit),
                 },
-                meta: { scope: actor.scope },
+                meta: { scope: actor.scope, can_assign_any: actor.can_assign_any },
             };
         } catch (error) {
             return { success: false, message: error.message, error };
@@ -321,6 +324,7 @@ const TaskService = {
                     overdue,
                     by_status: byStatus,
                     scope: actor.scope,
+                    can_assign_any: actor.can_assign_any,
                 },
             };
         } catch (error) {
@@ -382,9 +386,18 @@ const TaskService = {
                 patch.category_id = data.category_id || null;
             }
 
-            // ── Reassignment ───────────────────────────────────────────────
+            // ── Reassignment — allowed exactly once per task ────────────────
             let reassignedTo = null;
+            const previousAssigneeId = task.assigned_to_employee_id;
             if (data.assigned_to_employee_id && data.assigned_to_employee_id !== task.assigned_to_employee_id) {
+                if (task.reassigned_at) {
+                    return {
+                        success: false,
+                        status: 409,
+                        message:
+                            "This task has already been reassigned once. Create a new task for the new assignee and close this one instead.",
+                    };
+                }
                 const assignee = await Employee.findById(data.assigned_to_employee_id);
                 const assignPermission = TaskAccessService.canAssignTo(actor, assignee);
                 if (!assignPermission.allowed) {
@@ -415,6 +428,7 @@ const TaskService = {
             }
 
             await TaskModel.update(task_id, patch);
+            if (reassignedTo) await TaskModel.markReassigned(task_id);
             const updated = await TaskModel.findById(task_id, company_id);
 
             if (reassignedTo) {
@@ -430,9 +444,88 @@ const TaskService = {
                 }).catch((err) =>
                     console.error("[Notification] task_reassigned failed:", err.message)
                 );
+
+                // The person who no longer has this task needs to hear it from
+                // us, not discover it when it silently vanishes from their board.
+                if (previousAssigneeId) {
+                    TaskNotificationService.notifyUnassigned({
+                        task: updated,
+                        previous_assignee_employee_id: previousAssigneeId,
+                        reassigned_by_name: fullName(actor.employee),
+                    }).catch((err) =>
+                        console.error("[Notification] task_unassigned failed:", err.message)
+                    );
+                }
             }
 
             return { success: true, message: "Task updated successfully", data: updated };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    /**
+     * Attach (or replace) a task's voice note.
+     *
+     * The plan's max length is read live from entitlements and checked
+     * against Cloudinary's OWN reported duration, not whatever the client
+     * claims — a client can lie about a recording's length, Cloudinary's
+     * media probe cannot. A recording that comes back over the cap is
+     * deleted from Cloudinary immediately rather than left orphaned.
+     */
+    async attachVoiceNote({ company_id, user, task_id, audioBuffer, actor: cachedActor = null }) {
+        try {
+            if (!audioBuffer) {
+                return { success: false, message: "voice_note file is required" };
+            }
+
+            const resolved = await TaskAccessService.ensureActor(user, company_id, cachedActor);
+            if (!resolved.success) return { success: false, message: resolved.message };
+            const { actor } = resolved;
+
+            const task = await TaskModel.findById(task_id, company_id);
+            const permission = TaskAccessService.canEdit(actor, task);
+            if (!permission.allowed) {
+                return { success: false, status: permission.status, message: permission.message };
+            }
+
+            const snapshot = await EntitlementService.getSnapshot(company_id);
+            const maxSeconds = snapshot?.features?.[Feature.TASK_VOICE_NOTE_MAX_SECONDS] ?? 0;
+
+            const upload = await uploadToCloudinary(audioBuffer, {
+                folder: `tasks/voice-notes/${task_id}`,
+                resourceType: "video", // Cloudinary's umbrella type for audio too
+            });
+
+            const duration = Math.ceil(upload.duration ?? 0);
+            if (maxSeconds !== null && duration > maxSeconds) {
+                await deleteFromCloudinary(upload.publicId, "video").catch((err) =>
+                    console.error("[Tasks] Failed to clean up over-limit voice note:", err.message)
+                );
+                return {
+                    success: false,
+                    status: 403,
+                    message: `Voice notes on your plan are limited to ${maxSeconds} seconds — this recording is ${duration}s.`,
+                };
+            }
+
+            // A replacement — delete whatever was there before, only after the
+            // new upload has already succeeded and passed the duration check,
+            // so a failed re-record never leaves the task with no voice note.
+            if (task.voice_note_public_id) {
+                await deleteFromCloudinary(task.voice_note_public_id, "video").catch((err) =>
+                    console.error("[Tasks] Failed to delete replaced voice note:", err.message)
+                );
+            }
+
+            const updated = await TaskModel.setVoiceNote(task_id, {
+                url: upload.secureUrl,
+                public_id: upload.publicId,
+                duration_seconds: duration,
+                format: upload.format,
+            });
+
+            return { success: true, message: "Voice note attached", data: updated };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

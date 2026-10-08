@@ -24,7 +24,10 @@ cloudinary.config({
  * @param {string}               [options.resourceType="image"] - "image" | "video" | "raw" | "auto".
  * @param {object}               [options.transformation] - Optional Cloudinary transformation options.
  *
- * @returns {Promise<{ url: string, secureUrl: string, publicId: string, format: string }>}
+ * @returns {Promise<{ url: string, secureUrl: string, publicId: string, format: string, duration: number|undefined }>}
+ *   `duration` (seconds) is only present for "video" resource_type uploads —
+ *   Cloudinary's umbrella type for anything with a time dimension, audio
+ *   included (there is no distinct "audio" resource_type).
  */
 async function uploadToCloudinary(fileInput, options = {}) {
     const {
@@ -49,6 +52,7 @@ async function uploadToCloudinary(fileInput, options = {}) {
                 secureUrl: result.secure_url,
                 publicId: result.public_id,
                 format: result.format,
+                duration: result.duration,
             });
         };
 

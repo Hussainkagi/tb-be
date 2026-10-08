@@ -1,5 +1,6 @@
 
 const EmployeeService = require("../service/employeeService");
+const { Role } = require("../enums/roles");
 
 const EmployeeController = {
 
@@ -84,7 +85,15 @@ const EmployeeController = {
 
     async update(req, res) {
         try {
-            const result = await EmployeeService.updateEmployee(req.params.id, req.body);
+            const data = { ...req.body };
+            // Granting the task-assignment bypass is an admin-level decision —
+            // this route also accepts Managers, who must not be able to hand
+            // it to anyone (including themselves) via this field.
+            const isAdmin = parseInt(req.user?.role, 10) === Role.ADMIN || req.user?.is_super_admin === true;
+            if ("can_assign_tasks" in data && !isAdmin) {
+                delete data.can_assign_tasks;
+            }
+            const result = await EmployeeService.updateEmployee(req.params.id, data);
             if (result.success) {
                 return res.status(200).json(result);
             } else {

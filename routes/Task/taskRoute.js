@@ -1,11 +1,27 @@
 const express = require("express");
 const router = express.Router({ mergeParams: true });
+const multer = require("multer");
 
 const TaskController = require("../../controller/Task/taskController");
 const verifyToken = require("../../middleware/verifyToken");
 const { isEmployee } = require("../../middleware/authorizeRoles");
 const validateTenant = require("../../middleware/validateTenant");
 const loadTaskActor = require("../../middleware/Task/loadTaskActor");
+
+// Memory storage so req.file.buffer is available for Cloudinary — same shape
+// as routes/ticketRoute.js's image upload. The plan's actual second cap (15 /
+// 30 / 40s) is enforced in taskService off the recording's real duration, not
+// here — multer only knows bytes. 10MB comfortably covers 40s even uncompressed.
+const uploadVoiceNote = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    fileFilter(_req, file, cb) {
+        if (!file.mimetype.startsWith("audio/")) {
+            return cb(new Error("voice_note must be an audio file"));
+        }
+        cb(null, true);
+    },
+});
 
 /**
  * Tasks — /api/companies/:company_id/tasks
@@ -32,6 +48,21 @@ const loadTaskActor = require("../../middleware/Task/loadTaskActor");
 
 // POST /api/companies/:company_id/tasks
 router.post("/", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.create);
+
+// POST /api/companies/:company_id/tasks/:id/voice-note
+// A separate step on purpose: it keeps task creation's JSON body contract
+// (watcher_employee_ids and friends) untouched for every caller that never
+// records audio, and lets the task exist before the (possibly slower)
+// upload+duration-check round trip.
+router.post(
+    "/:id/voice-note",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    loadTaskActor,
+    uploadVoiceNote.single("voice_note"),
+    TaskController.attachVoiceNote
+);
 
 // ─────────────────────────────────────────────
 // READ — named routes must come before /:id
@@ -88,5 +119,13 @@ router.delete(
 
 // DELETE /api/companies/:company_id/tasks/:id
 router.delete("/:id", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.delete);
+
+// Multer error handler — must be defined after the routes that use it.
+router.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError || err.message === "voice_note must be an audio file") {
+        return res.status(400).json({ success: false, message: err.message });
+    }
+    next(err);
+});
 
 module.exports = router;

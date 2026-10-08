@@ -42,6 +42,25 @@ const TaskController = {
         }
     },
 
+    // POST /api/companies/:company_id/tasks/:id/voice-note
+    async attachVoiceNote(req, res) {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ success: false, message: "voice_note file is required" });
+            }
+            const result = await TaskService.attachVoiceNote({
+                company_id: req.params.company_id,
+                user: req.user,
+                actor: req.taskActor,
+                task_id: req.params.id,
+                audioBuffer: req.file.buffer,
+            });
+            return result.success ? res.status(200).json(result) : fail(res, result);
+        } catch (error) {
+            return serverError(res, error);
+        }
+    },
+
     // --------------------------------------------------------
     // READ
     // --------------------------------------------------------
