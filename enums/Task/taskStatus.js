@@ -22,9 +22,9 @@ const TaskStatus = Object.freeze({
 });
 
 const TaskStatusLabel = Object.freeze({
-    [TaskStatus.OPEN]:        "Open",
+    [TaskStatus.OPEN]:        "To Do",
     [TaskStatus.IN_PROGRESS]: "In Progress",
-    [TaskStatus.SUBMITTED]:   "Submitted for Review",
+    [TaskStatus.SUBMITTED]:   "In Review",
     [TaskStatus.COMPLETED]:   "Completed",
     [TaskStatus.REOPENED]:    "Reopened",
     [TaskStatus.CANCELLED]:   "Cancelled",
@@ -45,32 +45,90 @@ const LIVE_STATUSES = Object.freeze([
     TaskStatus.REOPENED,
 ]);
 
-/** from → [allowed to] */
-const ALLOWED_TRANSITIONS = Object.freeze({
-    [TaskStatus.OPEN]:        [TaskStatus.IN_PROGRESS, TaskStatus.SUBMITTED, TaskStatus.CANCELLED],
-    [TaskStatus.IN_PROGRESS]: [TaskStatus.SUBMITTED, TaskStatus.COMPLETED, TaskStatus.OPEN, TaskStatus.CANCELLED],
-    [TaskStatus.SUBMITTED]:   [TaskStatus.COMPLETED, TaskStatus.REOPENED, TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
-    [TaskStatus.REOPENED]:    [TaskStatus.IN_PROGRESS, TaskStatus.SUBMITTED, TaskStatus.COMPLETED, TaskStatus.CANCELLED],
-    [TaskStatus.COMPLETED]:   [TaskStatus.REOPENED],
-    [TaskStatus.CANCELLED]:   [],
+/**
+ * The roles a person can hold ON A TASK — not in the company.
+ *
+ * Every button in the workflow spec ("Task Workflow – Roles, Buttons &
+ * Notifications") is granted to one of these. One person can hold several at
+ * once (an admin who assigned the task is its tasker AND an admin; someone who
+ * assigned work to themselves is taskee AND tasker), and gets the union.
+ *
+ *   taskee   the person it is assigned to — does the work
+ *   tasker   the person who assigned it — reviews it
+ *   watcher  added to follow it (the assignee's HOD is added automatically)
+ *   admin    the company admin — may only cancel
+ */
+const TaskRole = Object.freeze({
+    TASKEE:  "taskee",
+    TASKER:  "tasker",
+    WATCHER: "watcher",
+    ADMIN:   "admin",
+});
+
+const TaskRoleLabel = Object.freeze({
+    [TaskRole.TASKEE]:  "Taskee",
+    [TaskRole.TASKER]:  "Tasker",
+    [TaskRole.WATCHER]: "Watcher",
+    [TaskRole.ADMIN]:   "Admin",
 });
 
 /**
- * What an EMPLOYEE may do to their own task.
+ * from → to → the task roles that may make that move. This IS the button
+ * table in the spec; a move that is not listed here does not exist.
  *
- * The deliberate omission is 'completed' — an employee moves work to
- * `submitted` and the assigner signs it off. Self-completion would make
- * every on-time/late number in the performance dashboard self-reported,
- * which is the fastest way to make the dashboard worthless.
+ *   Start Work          To Do       → In Progress   taskee
+ *   Move to To Do       In Progress → To Do         taskee
+ *   Submit for Review   In Progress → In Review     taskee
+ *   Approve & Complete  In Review   → Completed     tasker, watcher
+ *   Send Back (Reopen)  In Review   → Reopened      tasker
+ *   Pick Back Up        Reopened    → In Progress   taskee
+ *   Cancel Task         any live    → Cancelled     tasker, admin
  *
- * They also cannot cancel: cancelling is an assignment decision.
- * Admins and HODs are not restricted beyond ALLOWED_TRANSITIONS.
+ * Only the taskee moves work forward, and nobody can complete their own work
+ * unless they are also its tasker or a watcher on it — so every on-time number
+ * on the performance dashboard has a second person behind it.
  */
-const EMPLOYEE_ALLOWED_TARGETS = Object.freeze([
-    TaskStatus.IN_PROGRESS,
-    TaskStatus.SUBMITTED,
-    TaskStatus.OPEN,
-]);
+const CANCELLERS = Object.freeze([TaskRole.TASKER, TaskRole.ADMIN]);
+
+const TRANSITION_ROLES = Object.freeze({
+    [TaskStatus.OPEN]: {
+        [TaskStatus.IN_PROGRESS]: [TaskRole.TASKEE],
+        [TaskStatus.CANCELLED]:   CANCELLERS,
+    },
+    [TaskStatus.IN_PROGRESS]: {
+        [TaskStatus.OPEN]:      [TaskRole.TASKEE],
+        [TaskStatus.SUBMITTED]: [TaskRole.TASKEE],
+        [TaskStatus.CANCELLED]: CANCELLERS,
+    },
+    [TaskStatus.SUBMITTED]: {
+        [TaskStatus.COMPLETED]: [TaskRole.TASKER, TaskRole.WATCHER],
+        [TaskStatus.REOPENED]:  [TaskRole.TASKER],
+        [TaskStatus.CANCELLED]: CANCELLERS,
+    },
+    [TaskStatus.REOPENED]: {
+        [TaskStatus.IN_PROGRESS]: [TaskRole.TASKEE],
+        [TaskStatus.CANCELLED]:   CANCELLERS,
+    },
+    [TaskStatus.COMPLETED]: {},
+    [TaskStatus.CANCELLED]: {},
+});
+
+/** from → [allowed to], regardless of who is asking. Derived from TRANSITION_ROLES. */
+const ALLOWED_TRANSITIONS = Object.freeze(
+    Object.fromEntries(
+        Object.entries(TRANSITION_ROLES).map(([from, targets]) => [from, Object.keys(targets)])
+    )
+);
+
+/**
+ * The role, out of those this person holds, that permits from → to — or
+ * null. The role returned is the one recorded in the history, so it is the
+ * first match in the order the spec's table lists them.
+ */
+const roleForTransition = (from, to, roles = []) => {
+    const permitted = TRANSITION_ROLES[from]?.[to] || [];
+    return permitted.find((role) => roles.includes(role)) || null;
+};
 
 const isValidStatus = (status) => Object.values(TaskStatus).includes(status);
 
@@ -85,8 +143,11 @@ module.exports = {
     TaskStatusLabel,
     TERMINAL_STATUSES,
     LIVE_STATUSES,
+    TaskRole,
+    TaskRoleLabel,
+    TRANSITION_ROLES,
     ALLOWED_TRANSITIONS,
-    EMPLOYEE_ALLOWED_TARGETS,
+    roleForTransition,
     isValidStatus,
     isTerminal,
     canTransition,

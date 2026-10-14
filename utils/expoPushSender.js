@@ -16,7 +16,12 @@ const expoPushSender = {
             title,
             body,
             data,
-            sound: "default",
+            // The app's own sound (my-app/assets/sounds/notifications.mp3).
+            // iOS plays it by file name; Android plays whatever the channel
+            // was created with, so the push names that channel too. Both are
+            // defined in my-app/utils/notification.ts.
+            sound: "notifications.mp3",
+            channelId: "teambook-alerts",
             priority: "high",
         }]);
 

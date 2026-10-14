@@ -206,7 +206,8 @@ const TaskController = {
                 user: req.user,
                 actor: req.taskActor,
                 task_id: req.params.id,
-                comment: req.body.comment,
+                comment: req.body?.comment,
+                imageBuffer: req.file?.buffer ?? null,
             });
             return result.success ? res.status(201).json(result) : fail(res, result);
         } catch (error) {
@@ -240,6 +241,44 @@ const TaskController = {
                 comment_id: req.params.comment_id,
             });
             return result.success ? res.status(200).json(result) : fail(res, result);
+        } catch (error) {
+            return serverError(res, error);
+        }
+    },
+
+    // --------------------------------------------------------
+    // VOICE NOTE CHAIN
+    // --------------------------------------------------------
+
+    // GET /api/companies/:company_id/tasks/:id/voice-notes
+    async getVoiceNotes(req, res) {
+        try {
+            const result = await TaskService.getVoiceNotes({
+                company_id: req.params.company_id,
+                user: req.user,
+                actor: req.taskActor,
+                task_id: req.params.id,
+            });
+            return result.success ? res.status(200).json(result) : fail(res, result);
+        } catch (error) {
+            return serverError(res, error);
+        }
+    },
+
+    // POST /api/companies/:company_id/tasks/:id/voice-notes
+    async addVoiceNote(req, res) {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ success: false, message: "voice_note file is required" });
+            }
+            const result = await TaskService.addVoiceNote({
+                company_id: req.params.company_id,
+                user: req.user,
+                actor: req.taskActor,
+                task_id: req.params.id,
+                audioBuffer: req.file.buffer,
+            });
+            return result.success ? res.status(201).json(result) : fail(res, result);
         } catch (error) {
             return serverError(res, error);
         }

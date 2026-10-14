@@ -22,6 +22,11 @@ const TASK_SELECT = `
         ae.email                                        AS assigned_to_email,
         be.first_name || ' ' || be.last_name            AS assigned_by_name,
         be.employee_code                                AS assigned_by_code,
+        -- The tasker when it was an admin with no employee profile — the
+        -- assigned_by_* columns are NULL for them.
+        cu.first_name || ' ' || cu.last_name            AS created_by_name,
+        ARRAY(SELECT tw.employee_id FROM task_watchers tw
+               WHERE tw.task_id = t.id)                 AS watcher_employee_ids,
         (t.due_at IS NOT NULL
          AND t.due_at < NOW()
          AND t.status NOT IN ('completed', 'cancelled')) AS is_overdue,
@@ -33,6 +38,7 @@ const TASK_SELECT = `
     LEFT JOIN companies      co ON co.id = t.company_id
     LEFT JOIN employees      ae ON ae.id = t.assigned_to_employee_id
     LEFT JOIN employees      be ON be.id = t.assigned_by_employee_id
+    LEFT JOIN users          cu ON cu.id = t.created_by_user_id
 `;
 
 // Columns an admin/HOD is allowed to edit after creation. Everything else —
@@ -151,10 +157,15 @@ const TaskModel = {
 
         // ── Access scope ────────────────────────────────────────────────
         if (scope.employee_id) {
-            // Employees see what is theirs — assigned to them, or raised by them.
+            // Employees see what is theirs — assigned to them, raised by them,
+            // or a task they were added to as a watcher.
             values.push(scope.employee_id);
             const p = `$${values.length}`;
-            where.push(`(t.assigned_to_employee_id = ${p} OR t.assigned_by_employee_id = ${p})`);
+            where.push(
+                `(t.assigned_to_employee_id = ${p}
+                  OR t.assigned_by_employee_id = ${p}
+                  OR EXISTS (SELECT 1 FROM task_watchers w WHERE w.task_id = t.id AND w.employee_id = ${p}))`
+            );
         } else if (Array.isArray(scope.department_ids) && scope.department_ids.length) {
             // HODs see their departments, plus anything they raised themselves
             // (an HOD can be handed a task by the admin like anyone else).
@@ -166,7 +177,8 @@ const TaskModel = {
                 where.push(
                     `(t.department_id = ANY(${deptParam})
                       OR t.assigned_to_employee_id = ${selfParam}
-                      OR t.assigned_by_employee_id = ${selfParam})`
+                      OR t.assigned_by_employee_id = ${selfParam}
+                      OR EXISTS (SELECT 1 FROM task_watchers w WHERE w.task_id = t.id AND w.employee_id = ${selfParam}))`
                 );
             } else {
                 where.push(`t.department_id = ANY(${deptParam})`);
