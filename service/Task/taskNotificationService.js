@@ -62,6 +62,25 @@ const baseVariables = (task) => ({
     due_clause: dueClause(task),
 });
 
+/**
+ * Who hears about an event: the people involved in the task, minus the
+ * person who did it. Admins are not added here — an admin hears about a task
+ * only when they are on it (as its tasker, or a watcher).
+ */
+const othersThan = (employee_ids, actor_employee_id) =>
+    [...new Set(employee_ids.filter(Boolean))].filter((id) => id !== actor_employee_id);
+
+/** "Fix the export blank on Dec…" — enough of a remark for a push body. */
+const preview = (text, max = 120) => {
+    const flat = String(text || "").replace(/\s+/g, " ").trim();
+    return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+};
+
+const durationDisplay = (seconds) => {
+    const total = Math.max(0, Math.round(Number(seconds) || 0));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+};
+
 const TaskNotificationService = {
     // ─────────────────────────────────────────────────────────────────────
     // A task has been given to someone
@@ -79,6 +98,99 @@ const TaskNotificationService = {
             entity_type: "tasks",
             entity_id: task.id,
             audience: { type: "specific_employee", employee_id: task.assigned_to_employee_id },
+        });
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
+    // The watchers' copy of an assignment. The taskee gets notifyAssigned;
+    // the tasker made the assignment and is not told about it.
+    // ─────────────────────────────────────────────────────────────────────
+    async notifyWatchersAssigned({ task, assigned_by_name, actor_employee_id, watcher_employee_ids = [] }) {
+        const recipients = othersThan(watcher_employee_ids, actor_employee_id)
+            .filter((id) => id !== task.assigned_to_employee_id && id !== task.assigned_by_employee_id);
+
+        if (!recipients.length) return { success: true, delivered_channels: [], skipped: true };
+
+        return dispatch({
+            company_id: task.company_id,
+            branch_id: task.branch_id || null,
+            notification_type: "task_assigned",
+            template_code: "task_assigned_watcher",
+            template_variables: {
+                ...baseVariables(task),
+                assigned_by_name: assigned_by_name || "Your manager",
+                assignee_name: task.assigned_to_name || "a colleague",
+            },
+            entity_type: "tasks",
+            entity_id: task.id,
+            audience: { type: "specific_employees", employee_ids: recipients },
+        });
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Cancelled — everyone on the task hears it, with the reason.
+    // ─────────────────────────────────────────────────────────────────────
+    async notifyCancelled({ task, actor_name, actor_role_label, actor_employee_id, reason, recipient_employee_ids = [] }) {
+        const recipients = othersThan(recipient_employee_ids, actor_employee_id);
+        if (!recipients.length) return { success: true, delivered_channels: [], skipped: true };
+
+        return dispatch({
+            company_id: task.company_id,
+            branch_id: task.branch_id || null,
+            notification_type: "task_status_update",
+            template_code: "task_cancelled",
+            template_variables: {
+                ...baseVariables(task),
+                actor_name: actor_name || "Someone",
+                actor_role_label: actor_role_label || "Admin",
+                cancel_reason: preview(reason, 200),
+            },
+            entity_type: "tasks",
+            entity_id: task.id,
+            audience: { type: "specific_employees", employee_ids: recipients },
+        });
+    },
+
+    // ─────────────────────────────────────────────────────────────────────
+    // A new remark or voice note on a live task.
+    // ─────────────────────────────────────────────────────────────────────
+    async notifyRemark({ task, actor_name, actor_employee_id, comment, recipient_employee_ids = [] }) {
+        const recipients = othersThan(recipient_employee_ids, actor_employee_id);
+        if (!recipients.length) return { success: true, delivered_channels: [], skipped: true };
+
+        return dispatch({
+            company_id: task.company_id,
+            branch_id: task.branch_id || null,
+            notification_type: "task_status_update",
+            template_code: "task_remark_added",
+            template_variables: {
+                ...baseVariables(task),
+                actor_name: actor_name || "Someone",
+                remark_preview: preview(comment),
+            },
+            entity_type: "tasks",
+            entity_id: task.id,
+            audience: { type: "specific_employees", employee_ids: recipients },
+        });
+    },
+
+    async notifyVoiceNote({ task, actor_name, actor_employee_id, duration_seconds, recipient_employee_ids = [] }) {
+        const recipients = othersThan(recipient_employee_ids, actor_employee_id);
+        if (!recipients.length) return { success: true, delivered_channels: [], skipped: true };
+
+        return dispatch({
+            company_id: task.company_id,
+            branch_id: task.branch_id || null,
+            notification_type: "task_status_update",
+            template_code: "task_voice_note_added",
+            template_variables: {
+                ...baseVariables(task),
+                actor_name: actor_name || "Someone",
+                duration_display: durationDisplay(duration_seconds),
+            },
+            entity_type: "tasks",
+            entity_id: task.id,
+            audience: { type: "specific_employees", employee_ids: recipients },
         });
     },
 
@@ -113,8 +225,7 @@ const TaskNotificationService = {
     // watchers (assigner + HOD) do not need one for their own action.
     // ─────────────────────────────────────────────────────────────────────
     async notifyStatusChange({ task, previous_status, actor_name, actor_employee_id, remark, recipient_employee_ids = [] }) {
-        const recipients = [...new Set(recipient_employee_ids.filter(Boolean))]
-            .filter((id) => id !== actor_employee_id);
+        const recipients = othersThan(recipient_employee_ids, actor_employee_id);
 
         if (!recipients.length) return { success: true, delivered_channels: [], skipped: true };
 

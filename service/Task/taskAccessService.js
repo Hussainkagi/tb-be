@@ -1,6 +1,15 @@
 const Employee = require("../../models/employeeModel");
 const Department = require("../../models/departmentModel");
 const { Role } = require("../../enums/roles");
+const {
+    TaskStatus,
+    TaskStatusLabel,
+    TaskRole,
+    TaskRoleLabel,
+    ALLOWED_TRANSITIONS,
+    roleForTransition,
+    isTerminal,
+} = require("../../enums/Task/taskStatus");
 
 /**
  * Who may do what to a task.
@@ -17,8 +26,12 @@ const { Role } = require("../../enums/roles");
  *   ADMIN     any task in their company
  *   HOD       tasks whose department_id is a department they head, plus their
  *             own tasks like anyone else
- *   EMPLOYEE  tasks assigned to them or raised by them — read, move status,
- *             comment. Never edit the terms of the task itself.
+ *   EMPLOYEE  tasks assigned to them, raised by them, or that they watch —
+ *             read and comment. Never edit the terms of the task itself.
+ *
+ * Moving a task's status is a different question, answered per task rather
+ * than per company role: see taskRolesOf below and TRANSITION_ROLES in
+ * enums/Task/taskStatus.js.
  */
 
 const ActorScope = Object.freeze({
@@ -59,7 +72,7 @@ const resolveActor = async (user, company_id) => {
     // employees.can_assign_tasks — an admin-granted override letting a
     // specific employee assign work to anyone in the company, independent of
     // role or department headship. Checked only in canAssignTo (assignment),
-    // never in canEdit/canDelete/canChangeStatus — the flag widens who a
+    // never in canEdit/canDelete/the status machine — the flag widens who a
     // person may hand work TO, not what they may do to a task afterward.
     const canAssignAny = !isAdmin && employee?.can_assign_tasks === true;
 
@@ -173,7 +186,8 @@ const canView = (actor, task) => {
     if (
         actor.employee_id &&
         (task.assigned_to_employee_id === actor.employee_id ||
-            task.assigned_by_employee_id === actor.employee_id)
+            task.assigned_by_employee_id === actor.employee_id ||
+            (task.watcher_employee_ids || []).includes(actor.employee_id))
     ) {
         return { allowed: true };
     }
@@ -221,39 +235,145 @@ const canEdit = (actor, task) => {
 const canDelete = (actor, task) => canEdit(actor, task);
 
 /**
- * Can this actor move the task's status?
+ * What this actor IS on this task — taskee, tasker, watcher, admin — as a
+ * list, because one person can be several (an admin who assigned the task is
+ * both its tasker and an admin). The workflow's buttons are granted per role,
+ * and a person gets the union.
  *
- * Broader than canEdit: the assignee is the whole point of the module. WHICH
- * statuses they may move it to is a separate question, answered by
- * EMPLOYEE_ALLOWED_TARGETS in enums/Task/taskStatus.js.
+ * The tasker is whoever assigned it; for an admin with no employee profile
+ * that is recorded only as created_by_user_id. A tasker or taskee is never
+ * also listed as a watcher, even though the tasker sits in task_watchers to
+ * receive notifications.
+ *
+ * Expects the task as TaskModel.findById returns it (with watcher_employee_ids).
  */
-const canChangeStatus = (actor, task) => {
+const taskRolesOf = (actor, task) => {
+    if (!task) return [];
+    const roles = [];
+
+    const isTaskee = Boolean(actor.employee_id) && task.assigned_to_employee_id === actor.employee_id;
+    const isTasker = task.assigned_by_employee_id
+        ? Boolean(actor.employee_id) && task.assigned_by_employee_id === actor.employee_id
+        : Boolean(task.created_by_user_id) && task.created_by_user_id === actor.user_id;
+
+    if (isTaskee) roles.push(TaskRole.TASKEE);
+    if (isTasker) roles.push(TaskRole.TASKER);
+    if (
+        !isTaskee && !isTasker &&
+        actor.employee_id &&
+        (task.watcher_employee_ids || []).includes(actor.employee_id)
+    ) {
+        roles.push(TaskRole.WATCHER);
+    }
+    if (actor.is_admin) roles.push(TaskRole.ADMIN);
+
+    return roles;
+};
+
+/**
+ * The role a message's author holds on the task, for the chat's labels.
+ * Same precedence as taskRolesOf; an admin with no employee profile is
+ * recognised by user id.
+ */
+const authorRoleOn = (task, { employee_id = null, user_id = null } = {}) => {
+    if (!task) return null;
+    if (employee_id && task.assigned_to_employee_id === employee_id) return TaskRole.TASKEE;
+    if (employee_id && task.assigned_by_employee_id === employee_id) return TaskRole.TASKER;
+    if (!task.assigned_by_employee_id && user_id && task.created_by_user_id === user_id) return TaskRole.TASKER;
+    if (employee_id && (task.watcher_employee_ids || []).includes(employee_id)) return TaskRole.WATCHER;
+    return TaskRole.ADMIN;
+};
+
+/** The statuses this actor may move this task to right now. Empty = no buttons. */
+const allowedTransitionsFor = (actor, task) => {
+    if (!canView(actor, task).allowed) return [];
+    const roles = taskRolesOf(actor, task);
+    return (ALLOWED_TRANSITIONS[task.status] || []).filter((to) => roleForTransition(task.status, to, roles));
+};
+
+/**
+ * May this actor move this task to `to`? On success, `role` is the task role
+ * the move is made in — it goes into the history next to their name.
+ *
+ * Assumes the transition itself is legal (canTransition); this answers only
+ * "is it legal for THIS person".
+ */
+const canTransitionTo = (actor, task, to) => {
     const view = canView(actor, task);
     if (!view.allowed) return view;
 
-    if (actor.is_admin) return { allowed: true, as_manager: true };
+    const role = roleForTransition(task.status, to, taskRolesOf(actor, task));
+    if (role) return { allowed: true, role };
 
-    if (actor.is_hod && task.department_id && actor.headed_department_ids.includes(task.department_id)) {
-        return { allowed: true, as_manager: true };
-    }
-
-    if (actor.can_assign_any && task.assigned_by_employee_id === actor.employee_id) {
-        return { allowed: true, as_manager: true };
-    }
-
-    if (task.assigned_to_employee_id === actor.employee_id) {
-        return { allowed: true, as_manager: false };
-    }
-
+    // Say who CAN, in the spec's words, so the refusal explains the workflow.
+    const messages = {
+        [TaskStatus.IN_PROGRESS]: "Only the person this task is assigned to can start or pick it back up.",
+        [TaskStatus.OPEN]: "Only the person this task is assigned to can move it back to To Do.",
+        [TaskStatus.SUBMITTED]: "Only the person this task is assigned to can submit it for review.",
+        [TaskStatus.COMPLETED]: "Only the tasker who assigned this task, or a watcher on it, can approve and complete it.",
+        [TaskStatus.REOPENED]: "Only the tasker who assigned this task can send it back.",
+        [TaskStatus.CANCELLED]: "Only the tasker who assigned this task, or an admin, can cancel it.",
+    };
     return {
         allowed: false,
         status: 403,
-        message: "Only the assignee, their head of department or an admin can update this task.",
+        message: messages[to] || `You cannot move this task to ${TaskStatusLabel[to] || to}.`,
     };
 };
 
-/** Anyone who can see the task can leave a remark on it. */
-const canComment = (actor, task) => canView(actor, task);
+/** A cancelled task is read-only: remarks, voice notes and buttons all lock. */
+const LOCKED_MESSAGE = "This task has been cancelled and is now read-only.";
+
+/**
+ * The conversation (messages, photos, voice notes) closes once the task is
+ * finished either way — Completed or Cancelled. Past messages stay readable.
+ */
+const isChatLocked = (task) => isTerminal(task.status);
+
+const chatLockedMessage = (task) =>
+    task.status === TaskStatus.COMPLETED
+        ? "This task is completed — its conversation is closed."
+        : LOCKED_MESSAGE;
+
+/**
+ * Anyone who can see the task can leave a remark on it — while it is live
+ * (not Completed, not Cancelled).
+ * Past remarks stay readable (getComments only needs canView).
+ */
+const canComment = (actor, task) => {
+    const view = canView(actor, task);
+    if (!view.allowed) return view;
+    if (isChatLocked(task)) {
+        return { allowed: false, status: 409, message: chatLockedMessage(task) };
+    }
+    return { allowed: true };
+};
+
+/**
+ * Voice notes are a Tasker ⇄ Taskee conversation: only those two record.
+ * Everyone who can see the task can listen.
+ */
+const canRecordVoiceNote = (actor, task) => {
+    const view = canView(actor, task);
+    if (!view.allowed) return view;
+    if (isChatLocked(task)) {
+        return { allowed: false, status: 409, message: chatLockedMessage(task) };
+    }
+
+    const roles = taskRolesOf(actor, task);
+    const role = [TaskRole.TASKER, TaskRole.TASKEE].find((r) => roles.includes(r));
+    if (!role) {
+        return {
+            allowed: false,
+            status: 403,
+            message: "Only the tasker and the taskee can record voice notes on this task.",
+        };
+    }
+    return { allowed: true, role };
+};
+
+/** "Tasker", "Admin"… — the capacity a person acted in, for messages and history. */
+const taskRoleLabel = (role) => TaskRoleLabel[role] || role || "";
 
 /** What the acting capacity is called in task_status_history.changed_by_role. */
 const actingRoleOf = (actor) => (actor.is_admin ? String(Role.ADMIN) : actor.is_hod ? "hod" : String(actor.role));
@@ -267,7 +387,14 @@ module.exports = {
     canView,
     canEdit,
     canDelete,
-    canChangeStatus,
+    taskRolesOf,
+    authorRoleOn,
+    allowedTransitionsFor,
+    canTransitionTo,
     canComment,
+    canRecordVoiceNote,
+    isChatLocked,
+    chatLockedMessage,
+    taskRoleLabel,
     actingRoleOf,
 };

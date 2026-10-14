@@ -22,17 +22,21 @@ const TaskStatusHistory = {
             remark = null,
             changed_by_employee_id = null,
             changed_by_role = null,
+            changed_by_user_id = null,
+            changed_by_task_role = null,
             was_overdue = false,
         } = data;
 
         const result = await client.query(
             `INSERT INTO task_status_history (
                 task_id, company_id, from_status, to_status, remark,
-                changed_by_employee_id, changed_by_role, was_overdue
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+                changed_by_employee_id, changed_by_role,
+                changed_by_user_id, changed_by_task_role, was_overdue
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
             [
                 task_id, company_id, from_status, to_status, remark,
-                changed_by_employee_id, changed_by_role, was_overdue,
+                changed_by_employee_id, changed_by_role,
+                changed_by_user_id, changed_by_task_role, was_overdue,
             ]
         );
         return result.rows[0];
@@ -41,10 +45,13 @@ const TaskStatusHistory = {
     async findByTask(task_id) {
         const result = await db.query(
             `SELECT h.*,
-                    e.first_name || ' ' || e.last_name AS changed_by_name,
+                    -- An admin with no employee profile is named from users.
+                    COALESCE(e.first_name || ' ' || e.last_name,
+                             u.first_name || ' ' || u.last_name) AS changed_by_name,
                     e.employee_code                    AS changed_by_code
                FROM task_status_history h
                LEFT JOIN employees e ON e.id = h.changed_by_employee_id
+               LEFT JOIN users     u ON u.id = h.changed_by_user_id
               WHERE h.task_id = $1
               ORDER BY h.created_at ASC`,
             [task_id]
@@ -86,16 +93,31 @@ const TaskStatusHistory = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TaskComment — remarks that carry no state change
+// TaskComment — the task's conversation: text, a photo, or both. Carries no
+// state change.
 // ─────────────────────────────────────────────────────────────────────────────
 const TaskComment = {
     async create(data, client = db) {
-        const { task_id, company_id, employee_id, comment } = data;
+        const {
+            task_id,
+            company_id,
+            employee_id = null,
+            author_user_id = null,
+            comment = null,
+            attachment_url = null,
+            attachment_public_id = null,
+            attachment_type = null,
+        } = data;
 
         const result = await client.query(
-            `INSERT INTO task_comments (task_id, company_id, employee_id, comment)
-             VALUES ($1, $2, $3, $4) RETURNING *`,
-            [task_id, company_id, employee_id, comment]
+            `INSERT INTO task_comments (
+                task_id, company_id, employee_id, author_user_id, comment,
+                attachment_url, attachment_public_id, attachment_type
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [
+                task_id, company_id, employee_id, author_user_id, comment,
+                attachment_url, attachment_public_id, attachment_type,
+            ]
         );
         return result.rows[0];
     },
@@ -103,10 +125,12 @@ const TaskComment = {
     async findByTask(task_id) {
         const result = await db.query(
             `SELECT c.*,
-                    e.first_name || ' ' || e.last_name AS employee_name,
+                    COALESCE(e.first_name || ' ' || e.last_name,
+                             u.first_name || ' ' || u.last_name) AS employee_name,
                     e.employee_code                    AS employee_code
                FROM task_comments c
                LEFT JOIN employees e ON e.id = c.employee_id
+               LEFT JOIN users     u ON u.id = c.author_user_id
               WHERE c.task_id = $1 AND c.deleted_at IS NULL
               ORDER BY c.created_at ASC`,
             [task_id]
@@ -182,4 +206,63 @@ const TaskWatcher = {
     },
 };
 
-module.exports = { TaskStatusHistory, TaskComment, TaskWatcher };
+// ─────────────────────────────────────────────────────────────────────────────
+// TaskVoiceNote — the Tasker ⇄ Taskee voice note chain. Append-only from the
+// API's point of view; the cap is enforced in taskService against countByTask.
+// ─────────────────────────────────────────────────────────────────────────────
+const TaskVoiceNote = {
+    async create(data, client = db) {
+        const {
+            task_id,
+            company_id,
+            sender_employee_id = null,
+            sender_user_id = null,
+            sender_task_role,
+            url,
+            public_id = null,
+            duration_seconds = null,
+            format = null,
+        } = data;
+
+        const result = await client.query(
+            `INSERT INTO task_voice_notes (
+                task_id, company_id, sender_employee_id, sender_user_id,
+                sender_task_role, url, public_id, duration_seconds, format
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+            [
+                task_id, company_id, sender_employee_id, sender_user_id,
+                sender_task_role, url, public_id, duration_seconds, format,
+            ]
+        );
+        return result.rows[0];
+    },
+
+    /** The chain, oldest first — it reads like a chat thread. */
+    async findByTask(task_id) {
+        const result = await db.query(
+            `SELECT v.id, v.task_id, v.sender_employee_id, v.sender_user_id, v.sender_task_role,
+                    v.url, v.duration_seconds, v.format, v.created_at,
+                    COALESCE(e.first_name || ' ' || e.last_name,
+                             u.first_name || ' ' || u.last_name) AS sender_name
+               FROM task_voice_notes v
+               LEFT JOIN employees e ON e.id = v.sender_employee_id
+               LEFT JOIN users     u ON u.id = v.sender_user_id
+              WHERE v.task_id = $1 AND v.deleted_at IS NULL
+              ORDER BY v.created_at ASC`,
+            [task_id]
+        );
+        return result.rows;
+    },
+
+    async countByTask(task_id, client = db) {
+        const result = await client.query(
+            `SELECT COUNT(*)::int AS count
+               FROM task_voice_notes
+              WHERE task_id = $1 AND deleted_at IS NULL`,
+            [task_id]
+        );
+        return result.rows[0].count;
+    },
+};
+
+module.exports = { TaskStatusHistory, TaskComment, TaskWatcher, TaskVoiceNote };

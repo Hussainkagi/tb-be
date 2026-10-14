@@ -66,6 +66,9 @@ const Feature = Object.freeze({
     // Numeric, but not one of the countable Limit.* keys below — a static
     // per-plan cap, not a COUNT(*). See taskService.js's voice-note upload.
     TASK_VOICE_NOTE_MAX_SECONDS: "tasks.voice_note_max_seconds",
+    // Same kind of static per-plan number: how many voice notes one task's
+    // Tasker ⇄ Taskee chain may hold. Clamped to 15 in taskService.
+    TASK_VOICE_NOTE_CHAIN_LIMIT: "tasks.voice_note_chain_limit",
 
     // ── Reporting ────────────────────────────────────────────────────────────
     DASHBOARD:               "reporting.dashboard",

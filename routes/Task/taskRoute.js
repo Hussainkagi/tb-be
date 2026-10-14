@@ -23,6 +23,18 @@ const uploadVoiceNote = multer({
     },
 });
 
+// A photo in the task conversation. 8MB covers a full-resolution phone shot.
+const uploadChatImage = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+    fileFilter(_req, file, cb) {
+        if (!file.mimetype.startsWith("image/")) {
+            return cb(new Error("image must be an image file"));
+        }
+        cb(null, true);
+    },
+});
+
 /**
  * Tasks — /api/companies/:company_id/tasks
  *
@@ -89,8 +101,9 @@ router.get("/:id", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskC
 router.put("/:id", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.update);
 
 // PATCH /api/companies/:company_id/tasks/:id/status
-// Progress. The assignee moves their own work; only a manager signs it off
-// as completed (EMPLOYEE_ALLOWED_TARGETS in enums/Task/taskStatus.js).
+// Who may make which move depends on what the caller is ON THIS TASK —
+// taskee, tasker, watcher or admin (TRANSITION_ROLES in
+// enums/Task/taskStatus.js). Cancelling requires a remark: the reason.
 router.patch("/:id/status", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.changeStatus);
 
 // ─────────────────────────────────────────────
@@ -101,7 +114,17 @@ router.patch("/:id/status", verifyToken, validateTenant, isEmployee, loadTaskAct
 router.get("/:id/comments", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.getComments);
 
 // POST /api/companies/:company_id/tasks/:id/comments
-router.post("/:id/comments", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.addComment);
+// JSON { comment } for text, or multipart with "comment" and/or an "image"
+// file for a photo message. multer leaves JSON requests untouched.
+router.post(
+    "/:id/comments",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    loadTaskActor,
+    uploadChatImage.single("image"),
+    TaskController.addComment
+);
 
 // DELETE /api/companies/:company_id/tasks/:id/comments/:comment_id
 router.delete(
@@ -114,6 +137,24 @@ router.delete(
 );
 
 // ─────────────────────────────────────────────
+// VOICE NOTE CHAIN — Tasker ⇄ Taskee, capped per task
+// ─────────────────────────────────────────────
+
+// GET  /api/companies/:company_id/tasks/:id/voice-notes
+router.get("/:id/voice-notes", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.getVoiceNotes);
+
+// POST /api/companies/:company_id/tasks/:id/voice-notes   (multipart, field "voice_note")
+router.post(
+    "/:id/voice-notes",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    loadTaskActor,
+    uploadVoiceNote.single("voice_note"),
+    TaskController.addVoiceNote
+);
+
+// ─────────────────────────────────────────────
 // DELETE — soft; admin or HOD
 // ─────────────────────────────────────────────
 
@@ -122,7 +163,11 @@ router.delete("/:id", verifyToken, validateTenant, isEmployee, loadTaskActor, Ta
 
 // Multer error handler — must be defined after the routes that use it.
 router.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError || err.message === "voice_note must be an audio file") {
+    if (
+        err instanceof multer.MulterError ||
+        err.message === "voice_note must be an audio file" ||
+        err.message === "image must be an image file"
+    ) {
         return res.status(400).json({ success: false, message: err.message });
     }
     next(err);
