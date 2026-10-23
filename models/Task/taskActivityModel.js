@@ -93,8 +93,8 @@ const TaskStatusHistory = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TaskComment — the task's conversation: text, a photo, or both. Carries no
-// state change.
+// TaskComment — the task's conversation: text and/or one attachment (a photo
+// or a document). Carries no state change.
 // ─────────────────────────────────────────────────────────────────────────────
 const TaskComment = {
     async create(data, client = db) {
@@ -107,35 +107,62 @@ const TaskComment = {
             attachment_url = null,
             attachment_public_id = null,
             attachment_type = null,
+            attachment_name = null,
+            attachment_size = null,
+            attachment_mime = null,
         } = data;
 
         const result = await client.query(
             `INSERT INTO task_comments (
                 task_id, company_id, employee_id, author_user_id, comment,
-                attachment_url, attachment_public_id, attachment_type
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+                attachment_url, attachment_public_id, attachment_type,
+                attachment_name, attachment_size, attachment_mime
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
             [
                 task_id, company_id, employee_id, author_user_id, comment,
                 attachment_url, attachment_public_id, attachment_type,
+                attachment_name, attachment_size, attachment_mime,
             ]
         );
         return result.rows[0];
     },
 
+    /**
+     * The whole thread, deleted messages included — as placeholders. A
+     * deleted row keeps its author, time and who deleted it, but its text and
+     * attachment never leave the server.
+     */
     async findByTask(task_id) {
         const result = await db.query(
             `SELECT c.*,
                     COALESCE(e.first_name || ' ' || e.last_name,
                              u.first_name || ' ' || u.last_name) AS employee_name,
-                    e.employee_code                    AS employee_code
+                    e.employee_code                    AS employee_code,
+                    NULLIF(TRIM(COALESCE(du.first_name, '') || ' ' || COALESCE(du.last_name, '')), '')
+                                                       AS deleted_by_name
                FROM task_comments c
-               LEFT JOIN employees e ON e.id = c.employee_id
-               LEFT JOIN users     u ON u.id = c.author_user_id
-              WHERE c.task_id = $1 AND c.deleted_at IS NULL
+               LEFT JOIN employees e  ON e.id  = c.employee_id
+               LEFT JOIN users     u  ON u.id  = c.author_user_id
+               LEFT JOIN users     du ON du.id = c.deleted_by_user_id
+              WHERE c.task_id = $1
               ORDER BY c.created_at ASC`,
             [task_id]
         );
-        return result.rows;
+        return result.rows.map((row) =>
+            row.deleted_at
+                ? {
+                      ...row,
+                      is_deleted: true,
+                      comment: null,
+                      attachment_url: null,
+                      attachment_public_id: null,
+                      attachment_type: null,
+                      attachment_name: null,
+                      attachment_size: null,
+                      attachment_mime: null,
+                  }
+                : { ...row, is_deleted: false }
+        );
     },
 
     async findById(id) {
@@ -146,13 +173,15 @@ const TaskComment = {
         return result.rows[0] || null;
     },
 
-    async softDelete(id) {
+    async softDelete(id, deleted_by_user_id = null) {
         const result = await db.query(
             `UPDATE task_comments
-                SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                SET deleted_at = CURRENT_TIMESTAMP,
+                    deleted_by_user_id = $2,
+                    updated_at = CURRENT_TIMESTAMP
               WHERE id = $1 AND deleted_at IS NULL
-              RETURNING *`,
-            [id]
+              RETURNING id, task_id, deleted_at, deleted_by_user_id`,
+            [id, deleted_by_user_id]
         );
         return result.rows[0] || null;
     },

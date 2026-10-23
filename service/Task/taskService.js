@@ -90,6 +90,26 @@ const annotateComment = (task, actor) => (c) => ({
         : Boolean(c.author_user_id) && c.author_user_id === actor.user_id,
 });
 
+/**
+ * A shared document's display name, size and type. multer reads the
+ * multipart filename as latin1, so a name in Arabic or Urdu arrives garbled
+ * unless it is re-read as UTF-8. `safeName` is what Cloudinary stores it as.
+ */
+function chatDocumentMeta(file) {
+    const name = Buffer.from(file.originalname || "file", "latin1").toString("utf8").slice(0, 255);
+    const dot = name.lastIndexOf(".");
+    const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+    const stem = (dot > 0 ? name.slice(0, dot) : name)
+        .replace(/[^\w.-]+/g, "_")
+        .slice(0, 80) || "file";
+    return {
+        name,
+        size: file.size ?? file.buffer?.length ?? null,
+        mime: file.mimetype || null,
+        safeName: extension ? `${stem}.${extension}` : stem,
+    };
+}
+
 const annotateVoiceNote = (actor) => (v) => ({
     ...v,
     is_mine: v.sender_employee_id
@@ -734,18 +754,22 @@ const TaskService = {
     // ─────────────────────────────────────────────────────────────────────
 
     /**
-     * A message in the task's conversation: text, a photo, or both. Anyone
-     * who can see a live task may post (the spec's Remarks rule).
+     * A message in the task's conversation: text and/or one attachment — a
+     * photo or a document (PDF, Word, Excel; the route checks the type).
+     * Anyone who can see a live task may post (the spec's Remarks rule).
      */
-    async addComment({ company_id, user, task_id, comment, imageBuffer = null, actor: cachedActor = null }) {
+    async addComment({ company_id, user, task_id, comment, imageBuffer = null, document = null, actor: cachedActor = null }) {
         try {
             const resolved = await TaskAccessService.ensureActor(user, company_id, cachedActor);
             if (!resolved.success) return { success: false, message: resolved.message };
             const { actor } = resolved;
 
             const text = comment === null || comment === undefined ? "" : String(comment).trim();
-            if (!text && !imageBuffer) {
-                return { success: false, message: "A message or a photo is required." };
+            if (!text && !imageBuffer && !document) {
+                return { success: false, message: "A message, a photo or a file is required." };
+            }
+            if (imageBuffer && document) {
+                return { success: false, message: "Send one attachment per message." };
             }
 
             const task = await TaskModel.findById(task_id, company_id);
@@ -754,11 +778,21 @@ const TaskService = {
                 return { success: false, status: permission.status, message: permission.message };
             }
 
-            let image = null;
+            let upload = null;
+            let file = null;
             if (imageBuffer) {
-                image = await uploadToCloudinary(imageBuffer, {
+                upload = await uploadToCloudinary(imageBuffer, {
                     folder: `tasks/chat/${task_id}`,
                     resourceType: "image",
+                });
+            } else if (document) {
+                file = chatDocumentMeta(document);
+                // "raw" keeps the file byte-for-byte; the extension has to be
+                // part of a raw public_id or the URL loses it.
+                upload = await uploadToCloudinary(document.buffer, {
+                    folder: `tasks/chat/${task_id}`,
+                    resourceType: "raw",
+                    publicId: `${Date.now()}_${file.safeName}`,
                 });
             }
 
@@ -768,9 +802,12 @@ const TaskService = {
                 employee_id: actor.employee_id,
                 author_user_id: actor.user_id,
                 comment: text || null,
-                attachment_url: image?.secureUrl ?? null,
-                attachment_public_id: image?.publicId ?? null,
-                attachment_type: image ? "image" : null,
+                attachment_url: upload?.secureUrl ?? null,
+                attachment_public_id: upload?.publicId ?? null,
+                attachment_type: imageBuffer ? "image" : document ? "document" : null,
+                attachment_name: file?.name ?? null,
+                attachment_size: file?.size ?? null,
+                attachment_mime: file?.mime ?? null,
             });
 
             audienceFor(task)
@@ -779,7 +816,9 @@ const TaskService = {
                         task,
                         actor_name: await actorName(actor),
                         actor_employee_id: actor.employee_id,
-                        comment: created.comment || "📷 Sent a photo",
+                        comment:
+                            created.comment ||
+                            (document ? `📎 Sent a file: ${file.name}` : "📷 Sent a photo"),
                         recipient_employee_ids: recipients,
                     })
                 )
@@ -814,7 +853,10 @@ const TaskService = {
         }
     },
 
-    /** Own remark, or an admin cleaning up. Soft delete — the thread keeps its shape. */
+    /**
+     * Own remark, or an admin cleaning up. Soft delete that records who did
+     * it: the thread shows a "Message deleted by …" placeholder in its place.
+     */
     async deleteComment({ company_id, user, task_id, comment_id, actor: cachedActor = null }) {
         try {
             const resolved = await TaskAccessService.ensureActor(user, company_id, cachedActor);
@@ -839,7 +881,7 @@ const TaskService = {
                 return { success: false, status: 403, message: "You can only delete your own remarks." };
             }
 
-            return { success: true, message: "Remark deleted", data: await TaskComment.softDelete(comment_id) };
+            return { success: true, message: "Remark deleted", data: await TaskComment.softDelete(comment_id, actor.user_id) };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

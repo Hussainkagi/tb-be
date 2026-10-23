@@ -23,15 +23,23 @@ const uploadVoiceNote = multer({
     },
 });
 
-// A photo in the task conversation. 8MB covers a full-resolution phone shot.
-const uploadChatImage = multer({
+// What the task conversation accepts as a document. Checked by extension:
+// phones often send office files as application/octet-stream.
+const CHAT_DOCUMENT_EXTENSIONS = new Set(["pdf", "doc", "docx", "xls", "xlsx", "csv"]);
+const CHAT_DOCUMENT_ERROR = "file must be a PDF, Word or Excel document";
+const CHAT_IMAGE_ERROR = "image must be an image file";
+
+// One attachment per message: a photo in "image", or a document in "file".
+// 10MB covers a full-resolution phone shot and nearly any office document.
+const uploadChatAttachment = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
     fileFilter(_req, file, cb) {
-        if (!file.mimetype.startsWith("image/")) {
-            return cb(new Error("image must be an image file"));
+        if (file.fieldname === "image") {
+            return file.mimetype.startsWith("image/") ? cb(null, true) : cb(new Error(CHAT_IMAGE_ERROR));
         }
-        cb(null, true);
+        const extension = (file.originalname.split(".").pop() || "").toLowerCase();
+        return CHAT_DOCUMENT_EXTENSIONS.has(extension) ? cb(null, true) : cb(new Error(CHAT_DOCUMENT_ERROR));
     },
 });
 
@@ -114,15 +122,19 @@ router.patch("/:id/status", verifyToken, validateTenant, isEmployee, loadTaskAct
 router.get("/:id/comments", verifyToken, validateTenant, isEmployee, loadTaskActor, TaskController.getComments);
 
 // POST /api/companies/:company_id/tasks/:id/comments
-// JSON { comment } for text, or multipart with "comment" and/or an "image"
-// file for a photo message. multer leaves JSON requests untouched.
+// JSON { comment } for text, or multipart with "comment" and/or one
+// attachment: an "image" (photo) or a "file" (PDF, Word, Excel). multer
+// leaves JSON requests untouched.
 router.post(
     "/:id/comments",
     verifyToken,
     validateTenant,
     isEmployee,
     loadTaskActor,
-    uploadChatImage.single("image"),
+    uploadChatAttachment.fields([
+        { name: "image", maxCount: 1 },
+        { name: "file", maxCount: 1 },
+    ]),
     TaskController.addComment
 );
 
@@ -166,8 +178,12 @@ router.use((err, req, res, next) => {
     if (
         err instanceof multer.MulterError ||
         err.message === "voice_note must be an audio file" ||
-        err.message === "image must be an image file"
+        err.message === CHAT_IMAGE_ERROR ||
+        err.message === CHAT_DOCUMENT_ERROR
     ) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ success: false, message: "File is too large. The limit is 10 MB." });
+        }
         return res.status(400).json({ success: false, message: err.message });
     }
     next(err);
