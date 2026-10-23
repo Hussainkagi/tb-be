@@ -207,7 +207,8 @@ const TaskController = {
                 actor: req.taskActor,
                 task_id: req.params.id,
                 comment: req.body?.comment,
-                imageBuffer: req.file?.buffer ?? null,
+                imageBuffer: req.files?.image?.[0]?.buffer ?? null,
+                document: req.files?.file?.[0] ?? null,
             });
             return result.success ? res.status(201).json(result) : fail(res, result);
         } catch (error) {
