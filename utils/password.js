@@ -27,13 +27,8 @@ const hashPassword = async (password) => {
  * @returns {Promise<Boolean>} - True if passwords match
  */
 const comparePassword = async (password, hashedPassword) => {
+  // Never log the password or its hash: logs are read by more people than the database.
   try {
-    console.log('=== PASSWORD DEBUG ===');
-    console.log('Plain password:', password);
-    console.log('Hash from DB:', hashedPassword);
-    console.log('Hash type:', typeof hashedPassword);
-    console.log('Hash length:', hashedPassword?.length);
-
     const isMatch = await bcrypt.compare(password, hashedPassword);
     return isMatch;
   } catch (error) {
@@ -44,7 +39,7 @@ const comparePassword = async (password, hashedPassword) => {
 
 /**
  * Validate password strength
- * @param {String} password - Password to validate
+ * @param {String} password - Password to validatecd 
  * @returns {Object} - Validation result with isValid and errors
  */
 const validatePasswordStrength = (password) => {

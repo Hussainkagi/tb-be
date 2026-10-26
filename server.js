@@ -76,6 +76,11 @@ app.get("/health", (req, res) => {
 
 // Blocks every state-changing request made against a company that a Super Admin
 // has disabled. Must be mounted BEFORE the route table so it covers all modules.
+// Internal API for other Ikration apps on this server (see middleware/internalOnly.js).
+// Mounted outside /api so the tenant, activity-log and entitlement middlewares don't apply.
+const InternalRoutes = require("./routes/internalRoute");
+app.use("/internal", InternalRoutes);
+
 const { enforceCompanyActive } = require("./middleware/enforceCompanyActive");
 app.use("/api", enforceCompanyActive);
 
