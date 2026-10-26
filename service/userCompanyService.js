@@ -638,44 +638,84 @@ async bulkInviteEmployees(rows, company_id) {
         }
     },
 
+    // ── CREDENTIAL CHECK ──────────────────────────────────────────────────────
+    // Shared by login and the internal verify-login used by other Ikration apps
+    // (TrackyDesk), so both apply the same inactive / not-set / lockout rules.
+    // On success the failed-attempt counter is reset; no token is issued here.
+    async checkCredentials(username, password) {
+        const uc = await UserCompanyModel.findByUsername(username);
+
+        if (!uc) {
+            return { success: false, code: "INVALID", message: "Invalid username or password" };
+        }
+
+        // Check user + company membership active
+        if (!uc.user_is_active || !uc.is_active) {
+            return { success: false, code: "INACTIVE", message: "Account is inactive. Contact your administrator." };
+        }
+
+        // Check password has been set (employee might not have accepted invite yet)
+        if (!uc.password_hash) {
+            return { success: false, code: "PASSWORD_NOT_SET", message: "Password not set. Please check your invite email." };
+        }
+
+        // Check account lock
+        if (uc.locked_at) {
+            return { success: false, code: "LOCKED", message: "Account locked due to too many failed attempts. Reset your password." };
+        }
+
+        // Verify password
+        const isMatch = await comparePassword(password, uc.password_hash);
+
+        if (!isMatch) {
+            const updated = await UserCompanyModel.incrementFailedLogins(uc.id);
+            if (updated.failed_login_attempts >= MAX_FAILED_ATTEMPTS) {
+                await UserCompanyModel.lockAccount(uc.id);
+                return { success: false, code: "LOCKED", message: "Account locked due to too many failed attempts. Reset your password." };
+            }
+            return { success: false, code: "INVALID", message: "Invalid username or password" };
+        }
+
+        await UserCompanyModel.resetFailedLogins(uc.id);
+        return { success: true, uc };
+    },
+
+    // ── VERIFY LOGIN (internal, for other Ikration apps) ─────────────────────
+    // Same checks as login, but returns who the person is instead of tokens,
+    // and leaves their stored refresh token alone.
+    async verifyLogin(username, password) {
+        try {
+            const check = await this.checkCredentials(username, password);
+            if (!check.success) return { success: false, code: check.code, message: check.message };
+            const uc = check.uc;
+            return {
+                success: true,
+                data: {
+                    membership_id: uc.id,
+                    user_id: uc.user_id,
+                    username: uc.username,
+                    email: uc.email,
+                    first_name: uc.first_name,
+                    last_name: uc.last_name,
+                    role: Number(uc.role),
+                    company_id: uc.company_id,
+                    company_name: uc.company_name,
+                    company_is_active: uc.company_is_active,
+                },
+            };
+        } catch (error) {
+            return { success: false, code: "ERROR", message: error.message };
+        }
+    },
+
     // ── LOGIN ─────────────────────────────────────────────────────────────────
     async login(username, password) {
         try {
-            const uc = await UserCompanyModel.findByUsername(username);
+            const check = await this.checkCredentials(username, password);
+            if (!check.success) return { success: false, message: check.message };
+            const uc = check.uc;
 
-            if (!uc) {
-                return { success: false, message: "Invalid username or password" };
-            }
-
-            // Check user + company membership active
-            if (!uc.user_is_active || !uc.is_active) {
-                return { success: false, message: "Account is inactive. Contact your administrator." };
-            }
-
-            // Check password has been set (employee might not have accepted invite yet)
-            if (!uc.password_hash) {
-                return { success: false, message: "Password not set. Please check your invite email." };
-            }
-
-            // Check account lock
-            if (uc.locked_at) {
-                return { success: false, message: "Account locked due to too many failed attempts. Reset your password." };
-            }
-
-            // Verify password
-            const isMatch = await comparePassword(password, uc.password_hash);
-
-            if (!isMatch) {
-                const updated = await UserCompanyModel.incrementFailedLogins(uc.id);
-                if (updated.failed_login_attempts >= MAX_FAILED_ATTEMPTS) {
-                    await UserCompanyModel.lockAccount(uc.id);
-                    return { success: false, message: "Account locked due to too many failed attempts. Reset your password." };
-                }
-                return { success: false, message: "Invalid username or password" };
-            }
-
-            // Success — reset failed attempts, issue tokens
-            await UserCompanyModel.resetFailedLogins(uc.id);
+            // Success — issue tokens
 
             const isSuperAdmin = uc.is_super_admin === true;
 
