@@ -16,7 +16,7 @@ const TaskAccessService = require("./taskAccessService");
 const TaskNotificationService = require("./taskNotificationService");
 const EntitlementService = require("../entitlementService");
 const { Feature } = require("../../enums/features");
-const { uploadToCloudinary, deleteFromCloudinary } = require("../../utils/cloudinaryHelper");
+const { uploadToCloudinary, deleteFromCloudinary, privateDownloadUrl } = require("../../utils/cloudinaryHelper");
 
 const {
     TaskStatus,
@@ -848,6 +848,50 @@ const TaskService = {
 
             const comments = await TaskComment.findByTask(task_id);
             return { success: true, data: comments.map(annotateComment(task, resolved.actor)) };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    /**
+     * Where to fetch a chat attachment from, for anyone who can see the task.
+     * The controller streams it to the client as a download; the stored URL
+     * itself can't be used for documents (Cloudinary refuses public PDFs).
+     */
+    async getCommentFile({ company_id, user, task_id, comment_id, actor: cachedActor = null }) {
+        try {
+            const resolved = await TaskAccessService.ensureActor(user, company_id, cachedActor);
+            if (!resolved.success) return { success: false, message: resolved.message };
+
+            const task = await TaskModel.findById(task_id, company_id);
+            const permission = TaskAccessService.canView(resolved.actor, task);
+            if (!permission.allowed) {
+                return { success: false, status: permission.status, message: permission.message };
+            }
+
+            // findById skips deleted rows, so a deleted message's file is gone too.
+            const existing = await TaskComment.findById(comment_id);
+            if (
+                !existing ||
+                existing.task_id !== task_id ||
+                existing.company_id !== company_id ||
+                !existing.attachment_public_id
+            ) {
+                return { success: false, status: 404, message: "File not found." };
+            }
+
+            const isDocument = existing.attachment_type === "document";
+            return {
+                success: true,
+                data: {
+                    url: privateDownloadUrl(existing.attachment_public_id, {
+                        resourceType: isDocument ? "raw" : "image",
+                        format: isDocument ? "" : "jpg",
+                    }),
+                    name: existing.attachment_name || (isDocument ? "document" : "photo.jpg"),
+                    mime: existing.attachment_mime || (isDocument ? "application/octet-stream" : "image/jpeg"),
+                },
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

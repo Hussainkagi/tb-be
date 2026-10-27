@@ -1,3 +1,4 @@
+const { Readable } = require("stream");
 const TaskService = require("../../service/Task/taskService");
 
 /**
@@ -226,6 +227,41 @@ const TaskController = {
                 task_id: req.params.id,
             });
             return result.success ? res.status(200).json(result) : fail(res, result);
+        } catch (error) {
+            return serverError(res, error);
+        }
+    },
+
+    // GET /api/companies/:company_id/tasks/:id/comments/:comment_id/file
+    // Streams the attachment as a download under the name it was shared with.
+    async downloadCommentFile(req, res) {
+        try {
+            const result = await TaskService.getCommentFile({
+                company_id: req.params.company_id,
+                user: req.user,
+                actor: req.taskActor,
+                task_id: req.params.id,
+                comment_id: req.params.comment_id,
+            });
+            if (!result.success) return fail(res, result);
+
+            const upstream = await fetch(result.data.url);
+            if (!upstream.ok || !upstream.body) {
+                return res.status(502).json({ success: false, message: "Could not fetch the file. Please try again." });
+            }
+
+            const { name, mime } = result.data;
+            const asciiName = name.replace(/[^\x20-\x7E]+/g, "_").replace(/["\\]/g, "");
+            res.setHeader("Content-Type", mime);
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`
+            );
+            const length = upstream.headers.get("content-length");
+            if (length) res.setHeader("Content-Length", length);
+            res.setHeader("Cache-Control", "private, no-store");
+
+            Readable.fromWeb(upstream.body).pipe(res);
         } catch (error) {
             return serverError(res, error);
         }
