@@ -117,8 +117,30 @@ async function deleteFromCloudinary(publicId, resourceType = "image") {
     return cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
 }
 
+/**
+ * A short-lived, signed URL that downloads a stored file through Cloudinary's
+ * API. Unlike the public delivery URL it ignores the account's delivery
+ * restrictions — free accounts refuse to deliver PDFs publicly (HTTP 401).
+ * Meant to be fetched server-side, never handed to a client.
+ *
+ * @param {string} publicId
+ * @param {object} [options]
+ * @param {string} [options.resourceType="image"] - "image" | "video" | "raw".
+ * @param {string} [options.format=""] - Leave empty for raw files; their
+ *                                       extension is part of the public_id.
+ * @returns {string}
+ */
+function privateDownloadUrl(publicId, { resourceType = "image", format = "" } = {}) {
+    return cloudinary.utils.private_download_url(publicId, format, {
+        resource_type: resourceType,
+        type: "upload",
+        expires_at: Math.floor(Date.now() / 1000) + 60,
+    });
+}
+
 module.exports = {
     uploadToCloudinary,
+    privateDownloadUrl,
     uploadCheckInSelfie,
     uploadCheckOutSelfie,
     deleteFromCloudinary,

@@ -138,6 +138,18 @@ router.post(
     TaskController.addComment
 );
 
+// GET /api/companies/:company_id/tasks/:id/comments/:comment_id/file
+// Downloads a message's photo or document. Documents can't be opened from
+// their stored Cloudinary URL, so the apps always download through here.
+router.get(
+    "/:id/comments/:comment_id/file",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    loadTaskActor,
+    TaskController.downloadCommentFile
+);
+
 // DELETE /api/companies/:company_id/tasks/:id/comments/:comment_id
 router.delete(
     "/:id/comments/:comment_id",
