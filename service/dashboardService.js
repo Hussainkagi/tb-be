@@ -394,7 +394,15 @@ function shapeCheckIn(row) {
             name: `${row.first_name} ${row.last_name}`,
             is_remote_job: row.is_remote_job,
         },
-        branch: { id: row.branch_id, name: row.branch_name },
+        // The office's geofence, so the map can show where the check-in
+        // landed relative to it. Null when the branch has no location set.
+        branch: {
+            id: row.branch_id,
+            name: row.branch_name,
+            latitude: row.branch_latitude === null ? null : Number(row.branch_latitude),
+            longitude: row.branch_longitude === null ? null : Number(row.branch_longitude),
+            radius_m: row.branch_radius === null ? null : Number(row.branch_radius),
+        },
         department_name: row.department_name,
         shift: { name: row.shift_name, start_time: row.shift_start_time },
         status: row.status,
@@ -402,8 +410,8 @@ function shapeCheckIn(row) {
         total_hours: row.total_hours === null ? null : num(row.total_hours),
         check_in: {
             at: row.check_in,
-            latitude: row.check_in_latitude,
-            longitude: row.check_in_longitude,
+            latitude: row.check_in_latitude === null ? null : Number(row.check_in_latitude),
+            longitude: row.check_in_longitude === null ? null : Number(row.check_in_longitude),
             address: row.check_in_address,
             selfie_url: row.check_in_selfie_url,
         },
