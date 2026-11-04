@@ -509,8 +509,9 @@ const AttendanceService = {
     },
 
     /**
-     * The signed-in employee's current month, one entry per day, plus the
-     * counts shown on the mobile home screen.
+     * The signed-in employee's month (YYYY-MM, default current), one entry per
+     * day, plus the counts shown on the mobile home screen. Counts stop at
+     * today, so a past month is counted whole.
      *
      * Days are classified by the payroll engine so this can never disagree
      * with a payslip. That matters because approved leave and holidays have no
@@ -521,7 +522,7 @@ const AttendanceService = {
      * The employee comes from the token, never from the request, so this can
      * only ever return the caller's own attendance.
      */
-    async getMyCalendar(user_id, company_id) {
+    async getMyCalendar(user_id, company_id, month = null) {
         try {
             const employee = await EmployeeModel.findByUserAndCompany(user_id, company_id);
             if (!employee) {
@@ -531,7 +532,7 @@ const AttendanceService = {
             const shiftRow = employee.shift_id ? await ShiftModel.findById(employee.shift_id) : null;
             const timezone = shiftRow?.timezone ?? "UTC";
             const today = getTodayInTimezone(timezone);
-            const { start: start_date, end: end_date } = monthBoundsOf(today);
+            const { start: start_date, end: end_date } = monthBoundsOf(month ? `${month}-01` : today);
 
             const [attendanceRows, holidayRows, leaveRows] = await Promise.all([
                 AttendanceModel.findCalendarDays(employee.id, start_date, end_date),
@@ -618,7 +619,9 @@ const AttendanceService = {
             return {
                 success: true,
                 data: {
-                    month: today.slice(0, 7),
+                    month: start_date.slice(0, 7),
+                    // Earliest month worth showing. Null when no joining date is on file.
+                    min_month: employee.joining_date?.slice(0, 7) ?? null,
                     today,
                     timezone,
                     days,
