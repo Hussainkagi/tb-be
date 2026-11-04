@@ -157,6 +157,20 @@ const Attendance = {
         return result.rows;
     },
 
+    // attendance_date is read as text: pg would otherwise build a local-midnight
+    // Date, and the calendar keys days on the exact YYYY-MM-DD string.
+    async findCalendarDays(employee_id, from_date, to_date) {
+        const result = await db.query(
+            `SELECT attendance_date::text, check_in, check_out, total_hours,
+                    status, attendance_status
+             FROM attendance
+             WHERE employee_id = $1
+               AND attendance_date BETWEEN $2 AND $3`,
+            [employee_id, from_date, to_date]
+        );
+        return result.rows;
+    },
+
     async findByBranch(branch_id, { startDate, endDate } = {}) {
         const values = [branch_id];
         let dateFilter = '';

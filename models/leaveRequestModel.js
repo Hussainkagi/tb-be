@@ -382,6 +382,27 @@ const LeaveRequestModel = {
         return result.rows;
     },
 
+    // One employee's approved leave overlapping a range, for their calendar.
+    async getApprovedForCalendar(employee_id, from_date, to_date) {
+        const result = await db.query(
+            `SELECT lr.from_date::text,
+                    lr.to_date::text,
+                    lr.is_half_day,
+                    lr.reason,
+                    lt.leave_name,
+                    lt.is_paid
+             FROM leave_requests lr
+             JOIN leave_types lt ON lt.id = lr.leave_type_id
+             WHERE lr.employee_id = $1
+               AND lr.from_date  <= $3
+               AND lr.to_date    >= $2
+               AND lr.deleted_at IS NULL
+               AND lr.status      = 'approved'`,
+            [employee_id, from_date, to_date]
+        );
+        return result.rows;
+    },
+
     // Check if employee has an overlapping pending/approved leave
     async getOverlapping(employee_id, from_date, to_date, exclude_id = null) {
         const params = [employee_id, from_date, to_date];
