@@ -155,6 +155,27 @@ const Holiday = {
         return result.rows;
     },
 
+    // Same scope as getByDateRange, with the dates as plain YYYY-MM-DD text.
+    async getCalendarDays(company_id, branch_id, from_date, to_date) {
+        const result = await db.query(
+            `SELECT holiday_name,
+                    holiday_start_date::text,
+                    holiday_end_date::text
+             FROM holidays
+             WHERE company_id = $1
+               AND deleted_at IS NULL
+               AND is_active  = TRUE
+               AND holiday_start_date <= $4
+               AND holiday_end_date   >= $3
+               AND (
+                     is_company_wide = TRUE
+                  OR branch_id       = $2
+                   )`,
+            [company_id, branch_id, from_date, to_date]
+        );
+        return result.rows;
+    },
+
     // --------------------------------------------------------
     // UPDATE
     // --------------------------------------------------------

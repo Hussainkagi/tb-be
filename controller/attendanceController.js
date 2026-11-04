@@ -101,6 +101,15 @@ const AttendanceController = {
         }
     },
 
+    async getMyCalendar(req, res) {
+        try {
+            const result = await AttendanceService.getMyCalendar(req.user.user_id, req.params.company_id);
+            return res.status(result.success ? 200 : 400).json(result);
+        } catch (error) {
+            return res.status(500).json({ success: false, message: "Server error", error: error.message });
+        }
+    },
+
     async getByBranch(req, res) {
         try {
             const { startDate, endDate } = req.query;

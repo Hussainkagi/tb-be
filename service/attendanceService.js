@@ -2,11 +2,30 @@ const AttendanceModel = require("../models/attendanceModel");
 const EmployeeModel = require("../models/employeeModel");
 const BranchModel = require("../models/branchModel");
 const ShiftModel = require("../models/shiftModel");
+const HolidayModel = require("../models/holidayModel");
+const LeaveRequestModel = require("../models/leaveRequestModel");
+const { DAY_TYPE, buildDailyBreakdown, buildShift, getDateRange, monthBoundsOf } = require("./payrollEngineService");
 const { uploadCheckInSelfie, uploadCheckOutSelfie } = require("../utils/cloudinaryHelper");
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Payroll day types collapsed to what the employee calendar distinguishes.
+// Paid/unpaid and half-day leave stay on the day's `leave` object.
+const CALENDAR_CODE = Object.freeze({
+    [DAY_TYPE.PRESENT]: "present",
+    [DAY_TYPE.HALF_DAY]: "half_day",
+    [DAY_TYPE.ABSENT]: "absent",
+    [DAY_TYPE.PAID_LEAVE]: "leave",
+    [DAY_TYPE.UNPAID_LEAVE]: "leave",
+    [DAY_TYPE.HALF_DAY_LEAVE]: "leave",
+    [DAY_TYPE.HALF_DAY_UNPAID_LEAVE]: "leave",
+    [DAY_TYPE.HOLIDAY]: "holiday",
+    [DAY_TYPE.WEEK_OFF]: "week_off",
+    [DAY_TYPE.COMP_OFF]: "comp_off",
+    [DAY_TYPE.NOT_EMPLOYED]: "not_employed",
+});
 
 /**
  * Haversine formula — returns distance in metres between two coordinates.
@@ -484,6 +503,134 @@ const AttendanceService = {
         try {
             const records = await AttendanceModel.findByEmployee(company_id, employee_id, filters);
             return { success: true, data: records };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
+    /**
+     * The signed-in employee's current month, one entry per day, plus the
+     * counts shown on the mobile home screen.
+     *
+     * Days are classified by the payroll engine so this can never disagree
+     * with a payslip. That matters because approved leave and holidays have no
+     * attendance row at all: they only exist in leave_requests and holidays.
+     * The sandwich rule is off here, as it is a pay rule and a week-off should
+     * still read as a week-off.
+     *
+     * The employee comes from the token, never from the request, so this can
+     * only ever return the caller's own attendance.
+     */
+    async getMyCalendar(user_id, company_id) {
+        try {
+            const employee = await EmployeeModel.findByUserAndCompany(user_id, company_id);
+            if (!employee) {
+                return { success: false, message: "Employee profile not found for this company" };
+            }
+
+            const shiftRow = employee.shift_id ? await ShiftModel.findById(employee.shift_id) : null;
+            const timezone = shiftRow?.timezone ?? "UTC";
+            const today = getTodayInTimezone(timezone);
+            const { start: start_date, end: end_date } = monthBoundsOf(today);
+
+            const [attendanceRows, holidayRows, leaveRows] = await Promise.all([
+                AttendanceModel.findCalendarDays(employee.id, start_date, end_date),
+                HolidayModel.getCalendarDays(company_id, employee.branch_id, start_date, end_date),
+                LeaveRequestModel.getApprovedForCalendar(employee.id, start_date, end_date),
+            ]);
+
+            const attendanceMap = Object.fromEntries(attendanceRows.map((r) => [r.attendance_date, r]));
+
+            const holidayByDate = {};
+            const holidaySet = new Set();
+            for (const h of holidayRows) {
+                for (const date of getDateRange(h.holiday_start_date, h.holiday_end_date)) {
+                    holidayByDate[date] = h.holiday_name;
+                    holidaySet.add(date);
+                }
+            }
+
+            const leaveByDate = {};
+            for (const leave of leaveRows) {
+                for (const date of getDateRange(leave.from_date, leave.to_date)) {
+                    leaveByDate[date] = leave;
+                }
+            }
+
+            const { daily } = buildDailyBreakdown({
+                period: { start_date, end_date },
+                shift: buildShift(shiftRow),
+                salaryStructure: {},
+                attendanceMap,
+                approvedLeaves: leaveRows,
+                holidaySet,
+                employee,
+                settings: { sandwich_enabled: false },
+            });
+
+            const summary = { present: 0, half_day: 0, absent: 0, leave: 0, holiday: 0, week_off: 0, comp_off: 0 };
+
+            const days = daily.map((line) => {
+                const { date } = line;
+                const attendance = attendanceMap[date] ?? null;
+                let code = CALENDAR_CODE[line.day_type] ?? "absent";
+                let note = line.remarks;
+
+                // Payroll only ever sees finished days. Today's shift has no
+                // hours until check-out, which it would call a half day.
+                if (date === today && code === "half_day" && attendance?.check_in && !attendance.check_out) {
+                    code = "present";
+                    note = null;
+                }
+
+                // Nothing has happened yet, so an unworked day is not an
+                // absence. Known leave, holidays and week-offs still show.
+                if (date > today && (code === "absent" || code === "present" || code === "half_day")) {
+                    code = "upcoming";
+                    note = null;
+                }
+
+                if (date <= today && code in summary) summary[code]++;
+
+                const leave = leaveByDate[date];
+                const isLeaveDay = code === "leave";
+
+                return {
+                    date,
+                    code,
+                    check_in: attendance?.check_in ?? null,
+                    check_out: attendance?.check_out ?? null,
+                    total_hours: attendance?.total_hours != null ? Number(attendance.total_hours) : null,
+                    attendance_status: attendance?.attendance_status ?? null,
+                    leave: isLeaveDay && leave
+                        ? {
+                            name: leave.leave_name,
+                            reason: leave.reason,
+                            is_half_day: leave.is_half_day,
+                            is_paid: leave.is_paid,
+                        }
+                        : null,
+                    holiday_name: code === "holiday" ? holidayByDate[date] ?? null : null,
+                    note: isLeaveDay ? null : note,
+                };
+            });
+
+            return {
+                success: true,
+                data: {
+                    month: today.slice(0, 7),
+                    today,
+                    timezone,
+                    days,
+                    summary: {
+                        ...summary,
+                        // Same meaning as the headcount report: a half day is
+                        // a day worked, and leave is still a scheduled day.
+                        worked_days: summary.present + summary.half_day,
+                        working_days: summary.present + summary.half_day + summary.absent + summary.leave,
+                    },
+                },
+            };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
