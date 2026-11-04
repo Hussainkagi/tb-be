@@ -76,8 +76,8 @@ router.get("/branch/:branch_id", verifyToken, validateTenant, isManager, Attenda
 // GET /api/companies/:company_id/attendance/employee/:employee_id?startDate=&endDate=
 router.get("/employee/:employee_id", verifyToken, validateTenant, isEmployee, AttendanceController.getByEmployee);
 
-// GET /api/companies/:company_id/attendance/me/calendar
-// The caller's own current month. The employee is resolved from the token.
+// GET /api/companies/:company_id/attendance/me/calendar?month=YYYY-MM
+// The caller's own month, current by default. The employee is resolved from the token.
 router.get("/me/calendar", verifyToken, validateTenant, isEmployee, requireFeature(Feature.ATTENDANCE_SELF_HISTORY), AttendanceController.getMyCalendar);
 
 // ─────────────────────────────────────────────

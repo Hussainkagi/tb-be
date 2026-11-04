@@ -103,7 +103,12 @@ const AttendanceController = {
 
     async getMyCalendar(req, res) {
         try {
-            const result = await AttendanceService.getMyCalendar(req.user.user_id, req.params.company_id);
+            const { month } = req.query;
+            if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+                return res.status(400).json({ success: false, message: "month must be in YYYY-MM format" });
+            }
+
+            const result = await AttendanceService.getMyCalendar(req.user.user_id, req.params.company_id, month || null);
             return res.status(result.success ? 200 : 400).json(result);
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
