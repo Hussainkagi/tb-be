@@ -6,6 +6,7 @@ const { hashPassword, comparePassword } = require("../utils/password");
 const { generateAccessToken, generateRefreshToken } = require("../utils/jwt");
 const EmployeeModel = require("../models/employeeModel");
 const DepartmentModel = require("../models/departmentModel");
+const { validateEmployeeAssignment } = require("../utils/employeeAssignment");
 
 const { sendEmail } = require("../utils/mailer");
 const {
@@ -295,6 +296,12 @@ const UserCompanyService = {
         if (role === String(Role.ADMIN)) {
             return { success: false, message: "Cannot invite a user as Admin. Use company registration." };
         }
+
+        // 1a. Branch, and the department and shift belonging to that branch
+        const assignmentError = await validateEmployeeAssignment({
+            company_id, branch_id, department_id, shift_id,
+        });
+        if (assignmentError) return { success: false, message: assignmentError };
 
         // 1b. Head-of-department pre-checks — fail before creating anything
         if (is_department_head) {

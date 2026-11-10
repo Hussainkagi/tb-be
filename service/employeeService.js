@@ -1,9 +1,9 @@
 const EmployeeModel = require("../models/employeeModel");
 const CompanyModel = require("../models/companyModel");
-const BranchModel = require("../models/branchModel");
 const DepartmentModel = require("../models/departmentModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const DepartmentService = require("./departmentService");
+const { validateEmployeeAssignment } = require("../utils/employeeAssignment");
 
 // Employment states a list may be filtered to. `all` is the default so that
 // adding the filter cannot change what an existing caller receives.
@@ -135,11 +135,18 @@ const EmployeeService = {
                 return { success: false, message: "Employee not found" };
             }
 
-            if (data.branch_id) {
-                const branch = await BranchModel.findById(data.branch_id);
-                if (!branch || branch.company_id !== employee.company_id) {
-                    return { success: false, message: "Branch not found or does not belong to this company" };
-                }
+            // Only checked when one of the three changes, so an employee whose
+            // records predate this check can still have other fields edited.
+            const changes = (field) => field in data && (data[field] || null) !== (employee[field] || null);
+            if (changes("branch_id") || changes("department_id") || changes("shift_id")) {
+                const pick = (field) => (field in data ? data[field] || null : employee[field]);
+                const error = await validateEmployeeAssignment({
+                    company_id: employee.company_id,
+                    branch_id: pick("branch_id"),
+                    department_id: pick("department_id"),
+                    shift_id: pick("shift_id"),
+                });
+                if (error) return { success: false, message: error };
             }
 
             // Moving out of a department they head — that department loses its head
