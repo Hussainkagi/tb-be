@@ -518,6 +518,17 @@ function classifyAttendanceDay(date, attendance, shift) {
     const halfDayThreshold = parseFloat(shift.half_day_hours) || 0;
 
     if (status === "checked-in" || status === "checked-out") {
+        // An admin approved this day as a half day (attendance requests).
+        if (attendance.is_half_day === true) {
+            return {
+                type: DAY_TYPE.HALF_DAY,
+                payFraction: 0.5,
+                deductFraction: 0.5,
+                totalHours: hours,
+                attendanceStatus: status,
+                remarks: "Approved as a half day",
+            };
+        }
         if (halfDayThreshold > 0 && hours < halfDayThreshold) {
             return {
                 type: DAY_TYPE.HALF_DAY,

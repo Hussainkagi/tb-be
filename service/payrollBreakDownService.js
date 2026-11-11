@@ -73,7 +73,7 @@ async function fetchSalaryStructure(employee_id, periodStart) {
 
 async function fetchAttendanceForPeriod(employee_id, startDate, endDate) {
     const result = await db.query(
-        `SELECT attendance_date::text, status, total_hours
+        `SELECT attendance_date::text, status, total_hours, is_half_day
          FROM attendance
          WHERE employee_id = $1
            AND attendance_date BETWEEN $2 AND $3`,

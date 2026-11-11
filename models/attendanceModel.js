@@ -166,7 +166,7 @@ const Attendance = {
     async findCalendarDays(employee_id, from_date, to_date) {
         const result = await db.query(
             `SELECT attendance_date::text, check_in, check_out, total_hours,
-                    status, attendance_status
+                    status, attendance_status, is_half_day
              FROM attendance
              WHERE employee_id = $1
                AND attendance_date BETWEEN $2 AND $3`,

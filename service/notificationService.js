@@ -896,6 +896,41 @@ const NotificationService = {
 
 
     // ─────────────────────────────────────────────────────────────────────────
+    // ATTENDANCE REQUEST: an employee asked to be marked in/out from elsewhere
+    // ─────────────────────────────────────────────────────────────────────────
+    async notifyAttendanceRequest({ company_id, branch_id, request_id, employee_name, employee_code, request_label, attendance_date, request_time }) {
+        return sendOnChannels({
+            company_id,
+            branch_id,
+            notification_type: "attendance_request",
+            template_code: "attendance_request_submitted",
+            template_variables: { employee_name, employee_code, request_label, attendance_date, request_time, request_id },
+            entity_type: "attendance_requests",
+            entity_id: request_id,
+            audience: { type: "role_based", role: String(Role.ADMIN) },
+        }, ADMIN_ALERT_CHANNELS);
+    },
+
+    // ATTENDANCE REQUEST: tell the employee what was decided
+    async notifyAttendanceRequestDecision({ company_id, employee_id, request_id, approved, request_label, attendance_date, half_day = false, review_note = null }) {
+        return sendOnChannels({
+            company_id,
+            notification_type: "attendance_request_status",
+            template_code: approved ? "attendance_request_approved" : "attendance_request_rejected",
+            template_variables: {
+                request_label,
+                attendance_date,
+                request_id,
+                half_day_clause: approved && half_day ? " as a half day" : "",
+                review_note: review_note ? `Note: ${review_note}` : "",
+            },
+            entity_type: "attendance_requests",
+            entity_id: request_id,
+            audience: { type: "specific_employee", employee_id },
+        }, ["push", "in_app"]);
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // HOLIDAY: Notify employees when a holiday is created
     // Scope: company-wide OR branch-specific depending on the holiday
     // ─────────────────────────────────────────────────────────────────────────

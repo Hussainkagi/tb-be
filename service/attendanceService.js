@@ -3,6 +3,7 @@ const EmployeeModel = require("../models/employeeModel");
 const BranchModel = require("../models/branchModel");
 const ShiftModel = require("../models/shiftModel");
 const BranchLocationModel = require("../models/branchLocationModel");
+const AttendanceRequestModel = require("../models/attendanceRequestModel");
 const { checkGeofence } = require("../utils/geofence");
 const HolidayModel = require("../models/holidayModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
@@ -287,6 +288,10 @@ const AttendanceService = {
                 });
             }
 
+            // Made it to an allowed place after all: a remote check-in request
+            // sent earlier today is no longer needed.
+            await AttendanceRequestModel.cancelPending(employee_id, attendanceDate, "check-in").catch(() => {});
+
             return {
                 success: true,
                 message: "Checked in successfully",
@@ -530,7 +535,7 @@ const AttendanceService = {
 
                 // Payroll only ever sees finished days. Today's shift has no
                 // hours until check-out, which it would call a half day.
-                if (date === today && code === "half_day" && attendance?.check_in && !attendance.check_out) {
+                if (date === today && code === "half_day" && attendance?.check_in && !attendance.check_out && !attendance.is_half_day) {
                     code = "present";
                     note = null;
                 }
@@ -719,3 +724,10 @@ const AttendanceService = {
 };
 
 module.exports = AttendanceService;
+// Shared with attendanceRequestService so an approved request is stamped
+// exactly as the check-in it stands for would have been.
+module.exports.timeHelpers = {
+    getTodayInTimezone,
+    calculateAttendanceStatus,
+    uploadSelfie: _uploadSelfie,
+};
