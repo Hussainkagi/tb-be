@@ -7,17 +7,18 @@ const EmployeeController = require("../controller/employeeController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { requireEmployeeAccess, requireUserAccess } = require("../middleware/employeeAccess");
 
 // All routes scoped under /api/companies/:company_id/employees
 
 
-router.get("/user-company/:user_id", verifyToken, validateTenant, isEmployee, EmployeeController.getByUserAndCompany),
+router.get("/user-company/:user_id", verifyToken, validateTenant, isEmployee, requireUserAccess("user_id"), EmployeeController.getByUserAndCompany),
 
     // ─────────────────────────────────────────────
     // ADMIN + MANAGER
     // ─────────────────────────────────────────────
     router.get("/", verifyToken, validateTenant, isManager, EmployeeController.getByCompany);
-router.get("/:id", verifyToken, validateTenant, isEmployee, EmployeeController.getById);
+router.get("/:id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("id"), EmployeeController.getById);
 router.put("/:id", verifyToken, validateTenant, isManager, EmployeeController.update);
 router.patch("/:id/status", verifyToken, validateTenant, isManager, EmployeeController.updateStatus);
 router.patch("/:id/deactivate", verifyToken, validateTenant, isAdmin, EmployeeController.deactivate);

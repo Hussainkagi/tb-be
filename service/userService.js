@@ -2,6 +2,18 @@ const UserModel = require("../models/userModel");
 const { hashPassword, comparePassword } = require("../utils/password");
 const crypto = require("crypto");
 
+// The only fields a user may change on their own record. Everything else
+// (email = sign-in identity, is_super_admin, is_active, refresh_token, ...)
+// is set by the system, never from a request body.
+const USER_EDITABLE_FIELDS = ["first_name", "last_name", "phone"];
+
+/** A user row as it may leave the API: the refresh token is a credential. */
+const publicUser = (row) => {
+    if (!row) return row;
+    const { refresh_token, ...rest } = row;
+    return rest;
+};
+
 const MAX_FAILED_ATTEMPTS = 5;
 
 const UserService = {
@@ -145,7 +157,7 @@ const UserService = {
             }
             return {
                 success: true,
-                data: result,
+                data: Array.isArray(result) ? result.map(publicUser) : publicUser(result),
             };
         } catch (error) {
             return {
@@ -161,7 +173,7 @@ const UserService = {
             const result = await UserModel.getAll();
             return {
                 success: true,
-                data: result,
+                data: Array.isArray(result) ? result.map(publicUser) : publicUser(result),
             };
         } catch (error) {
             return {
@@ -174,11 +186,14 @@ const UserService = {
 
     async updateUser(id, data) {
         try {
-            // Prevent password_hash from being updated directly via this method
-            delete data.password_hash;
-            delete data.password;
+            const updates = Object.fromEntries(
+                Object.entries(data ?? {}).filter(([key]) => USER_EDITABLE_FIELDS.includes(key))
+            );
+            if (Object.keys(updates).length === 0) {
+                return { success: false, message: `Nothing to update. Editable fields: ${USER_EDITABLE_FIELDS.join(", ")}` };
+            }
 
-            const result = await UserModel.update(id, data);
+            const result = await UserModel.update(id, updates);
             if (!result) {
                 return {
                     success: false,
@@ -188,7 +203,7 @@ const UserService = {
             return {
                 success: true,
                 message: "User updated successfully",
-                data: result,
+                data: publicUser(result),
             };
         } catch (error) {
             return {

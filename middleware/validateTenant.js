@@ -1,40 +1,43 @@
-/**
- * Validates that the authenticated user belongs to the tenant
- * specified in the route param (:tenantId) or request body.
- *
- * Admins can bypass tenant isolation if needed (cross-tenant support).
- *
- * Must be used AFTER verifyToken middleware.
- *
- * Usage:
- *   router.get("/tenants/:tenantId/employees", verifyToken, validateTenant, handler)
- */
-const { Role } = require("../enums/roles");
+const { readSuperAdminFlag } = require("./isSuperAdmin");
 
-const validateTenant = (req, res, next) => {
+/**
+ * Company-scope guard for every /companies/:company_id/... route.
+ *
+ * The caller's token is issued for one company (company_id in the JWT). A
+ * request for any other company is refused, whatever the caller's role, so an
+ * admin of one company can never read or change another's data.
+ *
+ * A platform Super Admin passes, but only after the flag is re-read from the
+ * database, so revoking it takes effect immediately.
+ *
+ * Routes without a :company_id are not company-scoped and pass through.
+ * Must be used AFTER verifyToken, on a router created with mergeParams: true
+ * (or one whose own path declares :company_id).
+ */
+const validateTenant = async (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized.",
-        });
+        return res.status(401).json({ success: false, message: "Unauthorized." });
     }
 
-    const requestedTenantId = req.params.tenantId || req.body?.tenantId;
-    const userTenantId = req.user.tenantId;
+    const requested = req.params.company_id;
+    if (!requested) return next();
 
-    // Super Admin can access any tenant
-    if (req.user.role === Role.ADMIN && !requestedTenantId) {
+    if (req.user.company_id && String(req.user.company_id) === String(requested)) {
         return next();
     }
 
-    if (String(userTenantId) !== String(requestedTenantId)) {
-        return res.status(403).json({
-            success: false,
-            message: "Access forbidden. Tenant mismatch.",
-        });
+    if (req.user.is_super_admin === true) {
+        try {
+            if (await readSuperAdminFlag(req.user.user_id)) return next();
+        } catch {
+            // Fall through to the refusal: an unverifiable flag is no flag.
+        }
     }
 
-    next();
+    return res.status(403).json({
+        success: false,
+        message: "Access forbidden. This company does not belong to you.",
+    });
 };
 
 module.exports = validateTenant;

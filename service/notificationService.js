@@ -1083,9 +1083,9 @@ const NotificationService = {
         }
     },
 
-    async markAsRead(recipient_id) {
+    async markAsRead(recipient_id, employee_id) {
         try {
-            const result = await NotificationRecipient.markAsRead(recipient_id);
+            const result = await NotificationRecipient.markAsRead(recipient_id, employee_id);
             if (!result) return { success: false, message: "Notification not found" };
             return { success: true, message: "Notification marked as read", data: result };
         } catch (error) {

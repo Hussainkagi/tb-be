@@ -136,18 +136,22 @@ const Attendance = {
             dateFilter = `AND a.attendance_date <= $3`;
         }
 
+        // Only what the history and check-in screens show. Selfie URLs,
+        // coordinates, addresses, admin remarks and the employee's contact
+        // details stay on the server; managers see those in the reports.
         const result = await db.query(
             `SELECT
-            a.*,
-            e.first_name,
-            e.last_name,
-            e.employee_code,
-            e.email,
-            d.department_name,
+            a.id,
+            a.employee_id,
+            a.attendance_date,
+            a.check_in,
+            a.check_out,
+            a.total_hours,
+            a.attendance_status,
+            a.status,
             s.shift_name
          FROM attendance a
          LEFT JOIN employees e ON a.employee_id = e.id
-         LEFT JOIN departments d ON e.department_id = d.id
          LEFT JOIN shifts s ON e.shift_id = s.id
          WHERE a.company_id = $1
            AND a.employee_id = $2 ${dateFilter}

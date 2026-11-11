@@ -1,4 +1,5 @@
 const AttendanceReportService = require("../service/attendanceReportService");
+const { ownEmployee, isManagerOrAbove, isVerifiedSuperAdmin } = require("../middleware/employeeAccess");
 
 // ---------------------------------------------------------------------------
 // Helper — validate date range query params
@@ -59,7 +60,16 @@ const AttendanceReportController = {
      */
     async getHeadcount(req, res) {
         try {
-            const { startDate, endDate, timezone, employeeId, branchId, departmentId } = req.query;
+            const { startDate, endDate, timezone, branchId, departmentId } = req.query;
+            let { employeeId } = req.query;
+
+            // This report is open to employees for their own numbers. Without
+            // this an employee could pass anyone's id, or none for everyone's.
+            if (!isManagerOrAbove(req) && !(await isVerifiedSuperAdmin(req))) {
+                const own = await ownEmployee(req);
+                if (!own) return res.status(404).json({ success: false, message: "Employee profile not found for this company" });
+                employeeId = own.id;
+            }
 
             const err = validateDateRange(startDate, endDate);
             if (err) return res.status(400).json({ success: false, message: err });

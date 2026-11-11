@@ -56,9 +56,12 @@ const Branch = {
 
     async findAllByCompany(company_id) {
         const result = await db.query(
-            `SELECT * FROM branches
-             WHERE company_id = $1 AND deleted_at IS NULL
-             ORDER BY is_head_office DESC, branch_name ASC`,
+            `SELECT b.*,
+                    (SELECT COUNT(*)::int FROM branch_locations l
+                      WHERE l.branch_id = b.id AND l.deleted_at IS NULL) AS location_count
+             FROM branches b
+             WHERE b.company_id = $1 AND b.deleted_at IS NULL
+             ORDER BY b.is_head_office DESC, b.branch_name ASC`,
             [company_id]
         );
         return result.rows;
@@ -67,7 +70,7 @@ const Branch = {
     // Used by attendance service — fetch branch geofence data
     async findGeofence(id) {
         const result = await db.query(
-            `SELECT id, branch_name, latitude, longitude, attendance_radius
+            `SELECT id, company_id, branch_name, latitude, longitude, attendance_radius
              FROM branches
              WHERE id = $1 AND is_active = true AND deleted_at IS NULL`,
             [id]

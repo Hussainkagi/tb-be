@@ -1,34 +1,28 @@
-const { Role } = require("../enums/roles");
+const { readSuperAdminFlag } = require("./isSuperAdmin");
 
 /**
- * Allows access if:
- *  - The requesting user is an Admin or Manager, OR
- *  - The requesting user is accessing their own resource (req.user.id === req.params.id)
+ * Allows a user to read or change only their own user record
+ * (req.params.id === the token's user_id). A verified platform Super Admin
+ * may act on any user.
  *
- * Useful for routes like GET /employees/:id where employees can view only their own profile.
+ * Users are global, not per company, so a company admin is NOT allowed here:
+ * their reach is their own company's employees, through the employee routes.
  *
- * Must be used AFTER verifyToken middleware.
- *
- * Usage:
- *   router.get("/employees/:id", verifyToken, isSelfOrAdmin, handler)
+ * Must be used AFTER verifyToken.
  */
-const isSelfOrAdmin = (req, res, next) => {
+const isSelfOrAdmin = async (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please authenticate first.",
-        });
+        return res.status(401).json({ success: false, message: "Unauthorized. Please authenticate first." });
     }
 
-    const { role, id } = req.user;
-    const resourceId = req.params.id;
+    if (String(req.user.user_id) === String(req.params.id)) return next();
 
-    const isPrivileged = parseInt(role, 10) === Role.ADMIN ||
-        parseInt(role, 10) === Role.MANAGER || parseInt(role, 10) === Role.EMPLOYEE;
-    const isSelf = String(id) === String(resourceId);
-
-    if (isPrivileged || isSelf) {
-        return next();
+    if (req.user.is_super_admin === true) {
+        try {
+            if (await readSuperAdminFlag(req.user.user_id)) return next();
+        } catch {
+            // Treated as not a super admin.
+        }
     }
 
     return res.status(403).json({

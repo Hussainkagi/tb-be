@@ -535,12 +535,14 @@ const NotificationRecipient = {
         return result.rows[0];
     },
 
-    async markAsRead(id) {
+    // Scoped to the recipient's own employee: an id from someone else's inbox
+    // matches nothing.
+    async markAsRead(id, employee_id) {
         const result = await db.query(
             `UPDATE notification_recipients
              SET status = 'read', read_at = NOW()
-             WHERE id = $1 RETURNING *`,
-            [id]
+             WHERE id = $1 AND employee_id = $2 RETURNING *`,
+            [id, employee_id]
         );
         return result.rows[0];
     },

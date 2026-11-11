@@ -2,6 +2,8 @@ const AttendanceModel = require("../models/attendanceModel");
 const EmployeeModel = require("../models/employeeModel");
 const BranchModel = require("../models/branchModel");
 const ShiftModel = require("../models/shiftModel");
+const BranchLocationModel = require("../models/branchLocationModel");
+const { checkGeofence } = require("../utils/geofence");
 const HolidayModel = require("../models/holidayModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const { DAY_TYPE, buildDailyBreakdown, buildShift, getDateRange, monthBoundsOf } = require("./payrollEngineService");
@@ -26,33 +28,6 @@ const CALENDAR_CODE = Object.freeze({
     [DAY_TYPE.COMP_OFF]: "comp_off",
     [DAY_TYPE.NOT_EMPLOYED]: "not_employed",
 });
-
-/**
- * Haversine formula — returns distance in metres between two coordinates.
- */
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3;
-    const toRad = (deg) => (deg * Math.PI) / 180;
-    const φ1 = toRad(lat1);
-    const φ2 = toRad(lat2);
-    const Δφ = toRad(lat2 - lat1);
-    const Δλ = toRad(lon2 - lon1);
-
-    const a =
-        Math.sin(Δφ / 2) ** 2 +
-        Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-/**
- * Returns true when the employee's coordinates fall within the branch's
- * attendance_radius.
- */
-function isWithinRadius(empLat, empLon, branchLat, branchLon, radius) {
-    const distance = Math.round(calculateDistance(empLat, empLon, branchLat, branchLon));
-    return { withinRadius: distance <= radius, distance };
-}
 
 /**
  * Convert a Date or "HH:mm" string to total minutes since midnight,
@@ -246,23 +221,11 @@ const AttendanceService = {
 
             // 5. Geofence check (skip if remote job)
             if (!employee.is_remote_job) {
-                if (branch.latitude == null || branch.longitude == null) {
-                    return { success: false, message: "Branch location is not configured" };
-                }
-
-                const { withinRadius, distance } = isWithinRadius(
-                    latitude,
-                    longitude,
-                    branch.latitude,
-                    branch.longitude,
-                    branch.attendance_radius,
-                );
-
-                if (!withinRadius) {
-                    return {
-                        success: false,
-                        message: `You are outside the allowed radius. Your distance: ${distance}m, Allowed: ${branch.attendance_radius}m`,
-                    };
+                // The branch's own point or any of its active extra sites.
+                const sites = await BranchLocationModel.findActiveByBranch(branch.id);
+                const fence = checkGeofence(latitude, longitude, branch, sites);
+                if (!fence.allowed) {
+                    return { success: false, message: fence.message };
                 }
             }
 
@@ -391,23 +354,11 @@ const AttendanceService = {
 
             // 5. Geofence check (skip if remote job)
             if (!employee.is_remote_job) {
-                if (branch.latitude == null || branch.longitude == null) {
-                    return { success: false, message: "Branch location is not configured" };
-                }
-
-                const { withinRadius, distance } = isWithinRadius(
-                    latitude,
-                    longitude,
-                    branch.latitude,
-                    branch.longitude,
-                    branch.attendance_radius,
-                );
-
-                if (!withinRadius) {
-                    return {
-                        success: false,
-                        message: `You are outside the allowed radius. Your distance: ${distance}m, Allowed: ${branch.attendance_radius}m`,
-                    };
+                // The branch's own point or any of its active extra sites.
+                const sites = await BranchLocationModel.findActiveByBranch(branch.id);
+                const fence = checkGeofence(latitude, longitude, branch, sites);
+                if (!fence.allowed) {
+                    return { success: false, message: fence.message };
                 }
             }
 
