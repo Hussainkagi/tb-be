@@ -3,6 +3,7 @@ const router = express.Router({ mergeParams: true });
 const multer = require("multer");
 
 const AttendanceController = require("../controller/attendanceController");
+const AttendanceRequestController = require("../controller/attendanceRequestController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
@@ -77,6 +78,23 @@ router.get("/branch/:branch_id", verifyToken, validateTenant, isManager, Attenda
 // GET /api/companies/:company_id/attendance/employee/:employee_id?startDate=&endDate=
 // Employees: their own history only. Managers: anyone in this company.
 router.get("/employee/:employee_id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id"), AttendanceController.getByEmployee);
+
+// ─────────────────────────────────────────────
+// ATTENDANCE REQUESTS — check in/out from outside the allowed places,
+// approved by an admin. Declared before "/:id" so "requests" is not an id.
+// ─────────────────────────────────────────────
+router.post(
+    "/requests",
+    verifyToken,
+    validateTenant,
+    isEmployee,
+    upload.single("selfie"),
+    stripUnentitledUpload(Feature.ATTENDANCE_PHOTO),
+    AttendanceRequestController.create,
+);
+router.get("/requests/mine", verifyToken, validateTenant, isEmployee, AttendanceRequestController.listMine);
+router.get("/requests", verifyToken, validateTenant, isAdmin, AttendanceRequestController.list);
+router.post("/requests/review", verifyToken, validateTenant, isAdmin, AttendanceRequestController.review);
 
 // GET /api/companies/:company_id/attendance/me/calendar?month=YYYY-MM
 // The caller's own month, current by default. The employee is resolved from the token.

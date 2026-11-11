@@ -133,7 +133,7 @@ function getAttendanceCode(row, dateStr, emp) {
     // Present-like statuses
     switch (row.status) {
         case "checked-in":
-        case "checked-out": return "P";
+        case "checked-out": return row.is_half_day ? "HP" : "P";
         case "half-present": return "HP";
         case "absent":
         default: return "A";
@@ -247,7 +247,8 @@ async function fetchEmployeesAndAttendance(filters) {
             a.check_out,
             a.total_hours,
             a.status,
-            a.attendance_status
+            a.attendance_status,
+            a.is_half_day
          FROM attendance a
          WHERE a.employee_id = ANY($1) ${attFilter}
          ORDER BY a.attendance_date`,
