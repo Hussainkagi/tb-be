@@ -1,5 +1,6 @@
 const BranchModel = require("../models/branchModel");
 const CompanyModel = require("../models/companyModel");
+const BranchLocationModel = require("../models/branchLocationModel");
 
 const BranchService = {
     async createBranch(data) {
@@ -56,16 +57,23 @@ const BranchService = {
     },
 
     // Called by attendance service to get geofence data
-    async getBranchGeofence(branch_id) {
+    /**
+     * The places an employee of this branch may check in from: the branch's
+     * own point (latitude/longitude/attendance_radius, unchanged for older
+     * apps) plus `locations`, its active extra sites.
+     */
+    async getBranchGeofence(branch_id, company_id) {
         try {
             const result = await BranchModel.findGeofence(branch_id);
-            if (!result) {
+            if (!result || (company_id && String(result.company_id) !== String(company_id))) {
                 return { success: false, message: "Branch not found or inactive" };
             }
-            if (!result.latitude || !result.longitude) {
+            const locations = await BranchLocationModel.findActiveByBranch(branch_id);
+            if ((result.latitude == null || result.longitude == null) && locations.length === 0) {
                 return { success: false, message: "Branch location not configured. Cannot verify check-in." };
             }
-            return { success: true, data: result };
+            const { company_id: _companyId, ...geofence } = result;
+            return { success: true, data: { ...geofence, locations } };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

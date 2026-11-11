@@ -6,6 +6,7 @@ const AttendanceController = require("../controller/attendanceController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { requireEmployeeAccess } = require("../middleware/employeeAccess");
 const { requireFeature, stripUnentitledUpload } = require("../middleware/enforceEntitlement");
 const { Feature } = require("../enums/features");
 
@@ -74,7 +75,8 @@ router.get("/map", verifyToken, validateTenant, isManager, requireFeature(Featur
 router.get("/branch/:branch_id", verifyToken, validateTenant, isManager, AttendanceController.getByBranch);
 
 // GET /api/companies/:company_id/attendance/employee/:employee_id?startDate=&endDate=
-router.get("/employee/:employee_id", verifyToken, validateTenant, isEmployee, AttendanceController.getByEmployee);
+// Employees: their own history only. Managers: anyone in this company.
+router.get("/employee/:employee_id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id"), AttendanceController.getByEmployee);
 
 // GET /api/companies/:company_id/attendance/me/calendar?month=YYYY-MM
 // The caller's own month, current by default. The employee is resolved from the token.

@@ -7,6 +7,12 @@ const { isAdmin, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
+const { requireEmployeeAccess } = require("../middleware/employeeAccess");
+
+// Every route below acts for the :employee_id in the URL, so an employee may
+// only file, read, edit or cancel their own leave. Managers and admins may act
+// for anyone in their company; HOD approvals use the /hod routes instead.
+router.use(verifyToken, validateTenant, requireEmployeeAccess("employee_id"));
 
 
 

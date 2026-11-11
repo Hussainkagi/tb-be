@@ -1,4 +1,5 @@
 const NotificationService = require("../service/notificationService");
+const { ownEmployee } = require("../middleware/employeeAccess");
 
 // Employee inbox paging. The mobile app opens with 50 and appends 30 per
 // "Show more"; the ceiling keeps any client from turning that into a full
@@ -295,7 +296,9 @@ const NotificationController = {
     // PATCH /notifications/recipients/:id/read
     async markAsRead(req, res) {
         try {
-            const result = await NotificationService.markAsRead(req.params.id);
+            const own = await ownEmployee(req);
+            if (!own) return res.status(404).json({ success: false, message: "Notification not found" });
+            const result = await NotificationService.markAsRead(req.params.id, own.id);
             if (result.success) {
                 return res.status(200).json(result);
             } else {

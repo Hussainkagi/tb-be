@@ -5,6 +5,16 @@ const LeaveRequestModel = require("../models/leaveRequestModel");
 const DepartmentService = require("./departmentService");
 const { validateEmployeeAssignment } = require("../utils/employeeAssignment");
 
+// Fields the employee edit form may change. Status, salary, bank, separation
+// and identity columns have their own flows and are never taken from here.
+const EMPLOYEE_EDITABLE_FIELDS = [
+    "branch_id", "department_id", "shift_id", "manager_id",
+    "first_name", "last_name", "email", "phone", "gender", "date_of_birth",
+    "address", "joining_date", "employment_type", "employee_person_code",
+    "is_remote_job", "can_assign_tasks", "work_country", "salary_currency",
+    "is_department_head",
+];
+
 // Employment states a list may be filtered to. `all` is the default so that
 // adding the filter cannot change what an existing caller receives.
 const EMPLOYEE_STATES = ["active", "former", "all"];
@@ -120,6 +130,9 @@ const EmployeeService = {
 
     async updateEmployee(id, data) {
         try {
+            data = Object.fromEntries(
+                Object.entries(data ?? {}).filter(([key]) => EMPLOYEE_EDITABLE_FIELDS.includes(key))
+            );
             // Prevent these from being changed via a generic update
             delete data.company_id;
             delete data.user_id;

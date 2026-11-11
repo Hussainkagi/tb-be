@@ -5,6 +5,7 @@ const NotificationController = require("../controller/notificationController");
 const verifyToken = require("../middleware/verifyToken");
 const { isAdmin, isManager, isEmployee } = require("../middleware/authorizeRoles");
 const validateTenant = require("../middleware/validateTenant");
+const { requireEmployeeAccess } = require("../middleware/employeeAccess");
 const { requireFeature } = require("../middleware/enforceEntitlement");
 const { Feature } = require("../enums/features");
 
@@ -63,25 +64,25 @@ router.patch("/admin/inbox/:notification_id/read", verifyToken, validateTenant, 
 // ─────────────────────────────────────────────
 // INBOX (Employee — self-service)
 // ─────────────────────────────────────────────
-router.get("/inbox/:employee_id", verifyToken, validateTenant, isEmployee, NotificationController.getInbox);
-router.get("/inbox/:employee_id/unread-count", verifyToken, validateTenant, isEmployee, NotificationController.getUnreadCount);
+router.get("/inbox/:employee_id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { selfOnly: true }), NotificationController.getInbox);
+router.get("/inbox/:employee_id/unread-count", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { selfOnly: true }), NotificationController.getUnreadCount);
 router.patch("/recipients/:id/read", verifyToken, validateTenant, isEmployee, NotificationController.markAsRead);
-router.patch("/inbox/:employee_id/read-all", verifyToken, validateTenant, isEmployee, NotificationController.markAllAsRead);
+router.patch("/inbox/:employee_id/read-all", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { selfOnly: true }), NotificationController.markAllAsRead);
 
 
 // ─────────────────────────────────────────────
 // DEVICE TOKENS (Employee — self-service)
 // ─────────────────────────────────────────────
-router.post("/device-tokens", verifyToken, validateTenant, isEmployee, NotificationController.registerDeviceToken);
-router.get("/device-tokens/:employee_id/:device_id", verifyToken, validateTenant, isEmployee, NotificationController.getDeviceTokenStatus);
-router.delete("/device-tokens/:employee_id/:device_id", verifyToken, validateTenant, isEmployee, NotificationController.deactivateDeviceToken);
+router.post("/device-tokens", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { from: "body", selfOnly: true }), NotificationController.registerDeviceToken);
+router.get("/device-tokens/:employee_id/:device_id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { selfOnly: true }), NotificationController.getDeviceTokenStatus);
+router.delete("/device-tokens/:employee_id/:device_id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { selfOnly: true }), NotificationController.deactivateDeviceToken);
 
 
 // ─────────────────────────────────────────────
 // PREFERENCES (Employee — self-service)
 // ─────────────────────────────────────────────
-router.get("/preferences/:employee_id", verifyToken, validateTenant, isEmployee, NotificationController.getPreferencesByEmployee);
-router.put("/preferences", verifyToken, validateTenant, isEmployee, NotificationController.upsertPreference);
+router.get("/preferences/:employee_id", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { selfOnly: true }), NotificationController.getPreferencesByEmployee);
+router.put("/preferences", verifyToken, validateTenant, isEmployee, requireEmployeeAccess("employee_id", { from: "body", selfOnly: true }), NotificationController.upsertPreference);
 
 
 // ─────────────────────────────────────────────

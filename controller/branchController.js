@@ -57,7 +57,7 @@ const BranchController = {
 
     async getGeofence(req, res) {
         try {
-            const result = await BranchService.getBranchGeofence(req.params.id);
+            const result = await BranchService.getBranchGeofence(req.params.id, req.params.company_id);
             if (result.success) {
                 return res.status(200).json(result);
             } else {

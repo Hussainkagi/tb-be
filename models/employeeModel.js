@@ -269,6 +269,9 @@ const Employee = {
         let paramCount = 1;
 
         for (const [key, value] of Object.entries(data)) {
+            // Keys become column names in the SQL text, so only plain
+            // identifiers are accepted. Callers filter to an allow-list first.
+            if (!/^[a-z_]+$/.test(key)) throw new Error(`Invalid field: ${key}`);
             updates.push(`${key} = $${paramCount}`);
             values.push(value);
             paramCount++;
