@@ -5,6 +5,7 @@ const ShiftModel = require("../models/shiftModel");
 const BranchLocationModel = require("../models/branchLocationModel");
 const AttendanceRequestModel = require("../models/attendanceRequestModel");
 const { checkGeofence } = require("../utils/geofence");
+const { isWorkFromHomeDay } = require("../utils/workFromHome");
 const HolidayModel = require("../models/holidayModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const { DAY_TYPE, buildDailyBreakdown, buildShift, getDateRange, monthBoundsOf } = require("./payrollEngineService");
@@ -220,8 +221,9 @@ const AttendanceService = {
                 };
             }
 
-            // 5. Geofence check (skip if remote job)
-            if (!employee.is_remote_job) {
+            // 5. Geofence check — skipped for remote employees, and on the
+            // employee's fixed work-from-home weekdays (in the shift's timezone).
+            if (!employee.is_remote_job && !isWorkFromHomeDay(employee, weekday)) {
                 // The branch's own point or any of its active extra sites.
                 const sites = await BranchLocationModel.findActiveByBranch(branch.id);
                 const fence = checkGeofence(latitude, longitude, branch, sites);
@@ -357,8 +359,9 @@ const AttendanceService = {
                 };
             }
 
-            // 5. Geofence check (skip if remote job)
-            if (!employee.is_remote_job) {
+            // 5. Geofence check — skipped for remote employees, and on the
+            // employee's fixed work-from-home weekdays (in the shift's timezone).
+            if (!employee.is_remote_job && !isWorkFromHomeDay(employee, weekday)) {
                 // The branch's own point or any of its active extra sites.
                 const sites = await BranchLocationModel.findActiveByBranch(branch.id);
                 const fence = checkGeofence(latitude, longitude, branch, sites);
