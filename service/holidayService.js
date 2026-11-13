@@ -9,6 +9,11 @@ const HolidayService = {
 
     async createHoliday(data) {
         try {
+            if (!data?.holiday_start_date) {
+                return { success: false, message: "holiday_start_date is required (YYYY-MM-DD)" };
+            }
+            // A one-day holiday may leave the end date out.
+            data = { ...data, holiday_end_date: data.holiday_end_date || data.holiday_start_date };
             const { company_id, branch_id, is_company_wide = false, holiday_start_date, holiday_end_date } = data;
 
             // If branch-scoped, verify branch exists and belongs to this company
@@ -95,7 +100,9 @@ const HolidayService = {
                 ? holiday_start_date
                 : `${holiday_start_date} – ${holiday_end_date}`;
 
-            NotificationService.notifyHolidayCreated({
+            // `announce: false` creates the holiday quietly. Anything else
+            // (including leaving it out, as the web portal does) notifies.
+            if (data.announce !== false) NotificationService.notifyHolidayCreated({
                 company_id,
                 branch_id: is_company_wide ? null : branch_id,
                 holiday_id: result.id,
