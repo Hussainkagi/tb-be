@@ -4,6 +4,7 @@ const DepartmentModel = require("../models/departmentModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const DepartmentService = require("./departmentService");
 const { validateEmployeeAssignment } = require("../utils/employeeAssignment");
+const { normalizeWorkFromHomeDays } = require("../utils/workFromHome");
 
 // Fields the employee edit form may change. Status, salary, bank, separation
 // and identity columns have their own flows and are never taken from here.
@@ -12,7 +13,7 @@ const EMPLOYEE_EDITABLE_FIELDS = [
     "first_name", "last_name", "email", "phone", "gender", "date_of_birth",
     "address", "joining_date", "employment_type", "employee_person_code",
     "is_remote_job", "can_assign_tasks", "work_country", "salary_currency",
-    "is_department_head",
+    "is_department_head", "work_from_home_days",
 ];
 
 // Employment states a list may be filtered to. `all` is the default so that
@@ -138,6 +139,13 @@ const EmployeeService = {
             delete data.user_id;
             delete data.employee_code;
             delete data.gross_salary;
+
+            // Fixed work-from-home weekdays: validated and stored in week order.
+            if ("work_from_home_days" in data) {
+                const wfh = normalizeWorkFromHomeDays(data.work_from_home_days);
+                if (wfh.error) return { success: false, message: wfh.error };
+                data.work_from_home_days = wfh.days;
+            }
 
             // Handled separately below — it lives on the departments table
             const makeDepartmentHead = data.is_department_head === true;

@@ -96,9 +96,11 @@ const EmployeeController = {
             const result = await EmployeeService.updateEmployee(req.params.id, data);
             if (result.success) {
                 return res.status(200).json(result);
-            } else {
-                return res.status(404).json(result);
             }
+            // A missing employee is a 404; anything else (e.g. an invalid
+            // work-from-home day) is a bad request.
+            const status = result.message === "Employee not found" ? 404 : 400;
+            return res.status(status).json(result);
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }

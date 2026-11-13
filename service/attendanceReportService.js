@@ -6,6 +6,19 @@ const db = require("../config/database");
 // ---------------------------------------------------------------------------
 
 /**
+ * "YYYY-MM-DD" for a DATE column. node-pg turns a DATE into local midnight of
+ * the server process, so reading it back in UTC (toISOString) gives the day
+ * before on any server east of UTC. Read it in local time instead.
+ */
+function dateKey(value) {
+    if (!(value instanceof Date)) return String(value).slice(0, 10);
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+
+/**
  * Generate an array of "YYYY-MM-DD" strings for every day in [startDate, endDate].
  */
 function generateDateRange(startDate, endDate) {
@@ -58,6 +71,35 @@ function toLocalISOString(date, timezone) {
     } catch {
         return d.toISOString().slice(0, 19);
     }
+}
+
+/**
+ * The timezone an employee's times are shown in: their shift's, the same one
+ * check-in used to date the row and decide on-time/late. The request's
+ * timezone (the company's) is only the fallback for an employee without a
+ * shift. A company with branches in several countries would otherwise show
+ * every branch's times in the head office's clock.
+ */
+function tzOf(emp, fallback) {
+    return emp?.shift_timezone || fallback || "UTC";
+}
+
+/**
+ * A short name for where a clock is, for labels like "10:22 AM · India".
+ * Prefers the country (a stored name, or an ISO code turned into one); falls
+ * back to the timezone's city ("Asia/Kolkata" -> "Kolkata").
+ */
+function placeLabel(country, timezone) {
+    const c = country ? String(country).trim() : "";
+    if (/^[A-Za-z]{2}$/.test(c)) {
+        try {
+            const name = new Intl.DisplayNames(["en"], { type: "region" }).of(c.toUpperCase());
+            if (name) return name;
+        } catch { /* fall through */ }
+    }
+    if (c) return c;
+    const city = String(timezone || "UTC").split("/").pop();
+    return city.replace(/_/g, " ");
 }
 
 /**
@@ -202,6 +244,7 @@ async function fetchEmployeesAndAttendance(filters) {
             s.working_hours         AS shift_working_hours,   -- expected hrs per day e.g. 8.00
             s.half_day_hours,
             s.is_night_shift,
+            s.timezone              AS shift_timezone,
             s.monday, s.tuesday, s.wednesday, s.thursday, s.friday, s.saturday, s.sunday
 
          FROM employees e
@@ -261,14 +304,12 @@ async function fetchEmployeesAndAttendance(filters) {
     const attendanceMap = new Map();
     for (const row of attResult.rows) {
         // attendance_date comes back as a JS Date from pg — normalise to string
-        const dateKey = row.attendance_date instanceof Date
-            ? row.attendance_date.toISOString().slice(0, 10)
-            : String(row.attendance_date).slice(0, 10);
+        const day = dateKey(row.attendance_date);
 
         if (!attendanceMap.has(row.employee_id)) {
             attendanceMap.set(row.employee_id, new Map());
         }
-        attendanceMap.get(row.employee_id).set(dateKey, row);
+        attendanceMap.get(row.employee_id).set(day, row);
     }
 
 
@@ -312,10 +353,10 @@ const AttendanceReportService = {
                     const entry = { code };
 
                     if (row?.check_in) {
-                        entry.checkIn = toLocalISOString(row.check_in, timezone);
+                        entry.checkIn = toLocalISOString(row.check_in, tzOf(emp, timezone));
                     }
                     if (row?.check_out) {
-                        entry.checkOut = toLocalISOString(row.check_out, timezone);
+                        entry.checkOut = toLocalISOString(row.check_out, tzOf(emp, timezone));
                         const workedMinutes = row.total_hours != null
                             ? Math.round(Number(row.total_hours) * 60)
                             : 0;
@@ -494,7 +535,7 @@ const AttendanceReportService = {
                     if (!row?.check_in) continue;
 
                     totalCheckIns++;
-                    const checkInMins = dateToMinutesInTz(row.check_in, timezone);
+                    const checkInMins = dateToMinutesInTz(row.check_in, tzOf(emp, timezone));
 
                     if (checkInMins < startMinutes) {
                         earlyEntryCount++;
@@ -506,7 +547,7 @@ const AttendanceReportService = {
 
                     // Overtime: checked out after shift end time
                     if (row?.check_out && emp.end_time) {
-                        const checkOutMins = dateToMinutesInTz(row.check_out, timezone);
+                        const checkOutMins = dateToMinutesInTz(row.check_out, tzOf(emp, timezone));
                         // For night shifts, check-out can be < end_time numerically (crosses midnight)
                         // Simple approach: if total_hours > shift working_hours, count as overtime
                         if (emp.is_night_shift) {
@@ -657,22 +698,46 @@ const AttendanceReportService = {
 
             // Join with employees for department filter and employee info
             const query = `
-                SELECT a.*, e.employee_code, e.first_name, e.last_name, e.department_id, e.branch_id
+                SELECT a.*, e.employee_code, e.first_name, e.last_name, e.department_id, e.branch_id,
+                       s.timezone AS shift_timezone,
+                       b.branch_name,
+                       b.country  AS branch_country,
+                       c.country  AS company_country
                 FROM attendance a
                 JOIN employees e ON a.employee_id = e.id
+                LEFT JOIN shifts s ON s.id = e.shift_id
+                LEFT JOIN branches b ON b.id = e.branch_id
+                LEFT JOIN companies c ON c.id = a.company_id
                 WHERE ${conditions.join(" AND ")}
                 ORDER BY a.attendance_date, e.employee_code
             `;
             const result = await db.query(query, values);
 
-            const formattedRows = result.rows.map((row) => ({
-                ...row,
-                check_in: row.check_in ? toLocalISOString(row.check_in, timezone) : null,
-                check_out: row.check_out ? toLocalISOString(row.check_out, timezone) : null,
-                attendance_date: row.attendance_date instanceof Date
-                    ? row.attendance_date.toISOString().slice(0, 10)
-                    : row.attendance_date,
-            }));
+            const formattedRows = result.rows.map((row) => {
+                const { branch_country, company_country, ...rest } = row;
+                const localTz = tzOf(row, timezone);
+                const local = (d) => (d ? toLocalISOString(d, localTz) : null);
+                const company = (d) => (d ? toLocalISOString(d, timezone) : null);
+
+                // check_in / check_out: the employee's own clock (their shift's
+                // timezone). When the company keeps a different clock, the same
+                // moments in company time ride along, so a head office reads
+                // both without converting.
+                const differs =
+                    (row.check_in && local(row.check_in) !== company(row.check_in)) ||
+                    (row.check_out && local(row.check_out) !== company(row.check_out));
+
+                return {
+                    ...rest,
+                    check_in: local(row.check_in),
+                    check_out: local(row.check_out),
+                    local_time_label: differs ? placeLabel(branch_country, localTz) : null,
+                    company_time_label: differs ? placeLabel(company_country, timezone) : null,
+                    check_in_company: differs ? company(row.check_in) : null,
+                    check_out_company: differs ? company(row.check_out) : null,
+                    attendance_date: dateKey(row.attendance_date),
+                };
+            });
 
             return { success: true, data: formattedRows };
         } catch (error) {
