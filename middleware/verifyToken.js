@@ -15,6 +15,11 @@ const verifyToken = (req, res, next) => {
 
     try {
         const decoded = verifyAccessToken(token);
+        // A recruitment client's token is signed with the same secret but is
+        // only valid on /api/recruitment-client — never on a staff route.
+        if (decoded?.typ === "recruitment_client") {
+            return res.status(401).json({ success: false, message: "Invalid token." });
+        }
         req.user = decoded;
         next();
     } catch (err) {

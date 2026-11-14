@@ -81,6 +81,14 @@ app.get("/health", (req, res) => {
 const InternalRoutes = require("./routes/internalRoute");
 app.use("/internal", InternalRoutes);
 
+// Recruitment's no-auth surface: the public job portal and the agency's client
+// logins. Mounted before the company-active guard and the activity logger —
+// anonymous job applications are not staff activity, and a client token has
+// no company to check. See routes/Recruitment/publicRecruitmentRoute.js.
+const { publicRouter: PublicJobRoutes, clientRouter: RecruitmentClientRoutes } = require("./routes/Recruitment/publicRecruitmentRoute");
+app.use("/api/public/jobs", PublicJobRoutes);
+app.use("/api/recruitment-client", RecruitmentClientRoutes);
+
 const { enforceCompanyActive } = require("./middleware/enforceCompanyActive");
 app.use("/api", enforceCompanyActive);
 
@@ -314,6 +322,18 @@ app.use(
 );
 
 
+// ─────────────────────────────────────────────
+// RECRUITMENT (agency) — gated on recruitment.manage
+// ─────────────────────────────────────────────
+//
+// allowReads: a lapsed agency can still open its clients, jobs and candidates;
+// it just cannot create or change them.
+const recruitmentRoutes = require("./routes/Recruitment/recruitmentRoute");
+app.use(
+    "/api/companies/:company_id/recruitment",
+    requireFeature(Feature.RECRUITMENT, { allowReads: true }),
+    recruitmentRoutes
+);
 
 // 404 handler
 app.use("*", (req, res) => {
