@@ -81,6 +81,10 @@ app.get("/health", (req, res) => {
 const InternalRoutes = require("./routes/internalRoute");
 app.use("/internal", InternalRoutes);
 
+// Which mobile build is current — read by the app's "Update available" sheet.
+// Public, no tenant, so it sits ahead of the company and activity middlewares.
+app.use("/api/app-version", require("./routes/appVersionRoute"));
+
 const { enforceCompanyActive } = require("./middleware/enforceCompanyActive");
 app.use("/api", enforceCompanyActive);
 

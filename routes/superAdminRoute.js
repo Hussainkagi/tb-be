@@ -193,4 +193,29 @@ router.get("/tickets/:id", TicketAdminController.getById);
 router.patch("/tickets/:id/status", TicketAdminController.updateStatus);
 router.post("/tickets/:id/messages", TicketAdminController.reply);
 
+// ─────────────────────────────────────────────
+// MOBILE APP VERSIONS
+// ─────────────────────────────────────────────
+// What GET /api/app-version tells the app: latest store build ("Update
+// available") and the oldest still allowed ("Update required"). Live on save.
+const AppReleaseService = require("../service/appReleaseService");
+const appIp = (req) => (req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "").trim() || null;
+
+router.get("/app-versions", async (req, res) => {
+    try {
+        return res.json(await AppReleaseService.list());
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+router.put("/app-versions/:platform", async (req, res) => {
+    try {
+        const { status, ...result } = await AppReleaseService.update(req.params.platform, req.body || {}, req.user, appIp(req));
+        return res.status(status || (result.success ? 200 : 400)).json(result);
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;

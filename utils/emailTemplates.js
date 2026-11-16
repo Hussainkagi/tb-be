@@ -168,8 +168,8 @@ const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_lin
       ${button("Set My Password", invite_link)}
     </div>
     ${appDownloadBlock({
-      subtext: "Once your password is set, sign in on your phone to check in, apply for leave and track your tasks.",
-    })}
+  subtext: "Once your password is set, sign in on your phone to check in, apply for leave and track your tasks.",
+})}
     <p style="color:#888; font-size:13px; text-align:center;">
       This link expires in <strong>${expires_hours} hours</strong>.
       If you did not expect this invitation, please ignore this email.
@@ -241,8 +241,8 @@ const welcomeTemplate = ({ first_name, company_name, username, login_url }) => `
     </div>
 
     ${appDownloadBlock({
-      subtext: "Your team checks in, applies for leave and tracks tasks from the app. Share these links when you invite them.",
-    })}
+  subtext: "Your team checks in, applies for leave and tracks tasks from the app. Share these links when you invite them.",
+})}
   </div>
  
   <div style="background: #f0f0f0; padding: 16px 32px; text-align: center;">
@@ -475,21 +475,21 @@ const backupReadyEmail = ({
   const heading = isRestoreComplete
     ? "Data restore complete"
     : isPreRestoreSafety
-    ? "Safety backup before your restore"
-    : "Your data backup is ready";
+      ? "Safety backup before your restore"
+      : "Your data backup is ready";
 
   const intro = isRestoreComplete
     ? `The data restore you started for <strong>${company_name}</strong> has finished successfully.`
     : isPreRestoreSafety
-    ? `Before restoring data into <strong>${company_name}</strong>, we generated a full backup of everything as it stood just now — attached here, in case anything needs to be reversed.`
-    : is_scheduled
-    ? `This month's scheduled data backup for <strong>${company_name}</strong> is attached to this email.`
-    : `The data backup you requested for <strong>${company_name}</strong> is attached to this email.`;
+      ? `Before restoring data into <strong>${company_name}</strong>, we generated a full backup of everything as it stood just now — attached here, in case anything needs to be reversed.`
+      : is_scheduled
+        ? `This month's scheduled data backup for <strong>${company_name}</strong> is attached to this email.`
+        : `The data backup you requested for <strong>${company_name}</strong> is attached to this email.`;
 
   const summaryRows = isRestoreComplete && summary
     ? Object.entries(summary)
-        .map(([key, count]) => `<tr><td style="padding:4px 8px; color:#333;">${key}</td><td style="padding:4px 8px; color:#333; text-align:right;">${count}</td></tr>`)
-        .join("")
+      .map(([key, count]) => `<tr><td style="padding:4px 8px; color:#333;">${key}</td><td style="padding:4px 8px; color:#333; text-align:right;">${count}</td></tr>`)
+      .join("")
     : "";
 
   return `
