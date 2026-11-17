@@ -5,10 +5,10 @@
  * "Update available" sheet. Public and read-only — the app asks before (and
  * regardless of) sign-in.
  *
- * The values are set by Super Admins under Platform → App versions (table
- * app_release_settings), so a release needs no redeploy. Env vars
- * (APP_LATEST_VERSION, APP_MIN_VERSION, …) are only a fallback for a field
- * left empty there.
+ * The values are set by Super Admins under Platform → App versions (tables
+ * app_releases + app_release_settings), so a release needs no redeploy.
+ * Only the store link falls back to env (APP_ANDROID_STORE_URL /
+ * APP_IOS_STORE_URL).
  *
  * Over-the-air (EAS Update) changes need none of this — the app picks those up
  * itself and offers a Reload.

@@ -196,26 +196,28 @@ router.post("/tickets/:id/messages", TicketAdminController.reply);
 // ─────────────────────────────────────────────
 // MOBILE APP VERSIONS
 // ─────────────────────────────────────────────
-// What GET /api/app-version tells the app: latest store build ("Update
-// available") and the oldest still allowed ("Update required"). Live on save.
+// What GET /api/app-version tells the app. Each store build is a release row
+// (Live or Stopped); the highest live one is "Update available", the highest
+// live required one is "Update required". Every change is live at once.
 const AppReleaseService = require("../service/appReleaseService");
 const appIp = (req) => (req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "").trim() || null;
-
-router.get("/app-versions", async (req, res) => {
+const appRelease = (fn) => async (req, res) => {
     try {
-        return res.json(await AppReleaseService.list());
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-router.put("/app-versions/:platform", async (req, res) => {
-    try {
-        const { status, ...result } = await AppReleaseService.update(req.params.platform, req.body || {}, req.user, appIp(req));
+        const { status, ...result } = await fn(req);
         return res.status(status || (result.success ? 200 : 400)).json(result);
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
-});
+};
+
+router.get("/app-versions", appRelease(() => AppReleaseService.list()));
+router.put("/app-versions/:platform/store-link", appRelease((req) =>
+    AppReleaseService.setStoreUrl(req.params.platform, req.body || {}, req.user, appIp(req))));
+router.post("/app-versions/releases", appRelease((req) =>
+    AppReleaseService.create(req.body || {}, req.user, appIp(req))));
+router.patch("/app-versions/releases/:id", appRelease((req) =>
+    AppReleaseService.update(req.params.id, req.body || {}, req.user, appIp(req))));
+router.delete("/app-versions/releases/:id", appRelease((req) =>
+    AppReleaseService.remove(req.params.id, req.user, appIp(req))));
 
 module.exports = router;
