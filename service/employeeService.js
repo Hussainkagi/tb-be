@@ -216,6 +216,42 @@ const EmployeeService = {
         }
     },
 
+    /**
+     * Quick status change from the employee page (PATCH /:id/status).
+     *
+     * Resigned / terminated-with-settlement should go through the separation
+     * flow; this is the manual switch. Anyone moved off "active" stops being
+     * head of their department, same as a deactivation.
+     */
+    async updateEmployeeStatus(id, status, company_id = null) {
+        try {
+            const VALID_STATUSES = ["active", "inactive", "terminated", "on_leave"];
+            if (!VALID_STATUSES.includes(status)) {
+                return { success: false, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` };
+            }
+
+            const employee = await EmployeeModel.findById(id);
+            if (!employee || (company_id && employee.company_id !== company_id)) {
+                return { success: false, status: 404, message: "Employee not found" };
+            }
+
+            const result = await EmployeeModel.updateStatus(id, status);
+            if (!result) {
+                return { success: false, status: 404, message: "Employee not found" };
+            }
+
+            const vacated_department = status === "active" ? null : await releaseDepartmentHead(id);
+
+            return {
+                success: true,
+                message: "Employee status updated successfully",
+                data: { ...result, vacated_department },
+            };
+        } catch (error) {
+            return { success: false, message: error.message, error };
+        }
+    },
+
     async deactivateEmployee(id) {
         try {
             const result = await EmployeeModel.deactivate(id);
