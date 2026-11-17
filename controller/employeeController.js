@@ -108,12 +108,12 @@ const EmployeeController = {
 
     async updateStatus(req, res) {
         try {
-            const result = await EmployeeService.updateEmployeeStatus(req.params.id, req.body.status);
-            if (result.success) {
-                return res.status(200).json(result);
-            } else {
-                return res.status(400).json(result);
-            }
+            const { status, ...result } = await EmployeeService.updateEmployeeStatus(
+                req.params.id,
+                req.body?.status,
+                req.params.company_id,
+            );
+            return res.status(status || (result.success ? 200 : 400)).json(result);
         } catch (error) {
             return res.status(500).json({ success: false, message: "Server error", error: error.message });
         }
