@@ -88,6 +88,8 @@ app.use("/internal", InternalRoutes);
 const { publicRouter: PublicJobRoutes, clientRouter: RecruitmentClientRoutes } = require("./routes/Recruitment/publicRecruitmentRoute");
 app.use("/api/public/jobs", PublicJobRoutes);
 app.use("/api/recruitment-client", RecruitmentClientRoutes);
+// Agency sign-up / sign-in — public, before any company-scoped middleware.
+app.use("/api/auth/agency", require("./routes/agencyAuthRoute"));
 
 const { enforceCompanyActive } = require("./middleware/enforceCompanyActive");
 app.use("/api", enforceCompanyActive);

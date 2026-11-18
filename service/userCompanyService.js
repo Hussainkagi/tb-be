@@ -720,66 +720,74 @@ async bulkInviteEmployees(rows, company_id) {
         try {
             const check = await this.checkCredentials(username, password);
             if (!check.success) return { success: false, message: check.message };
-            const uc = check.uc;
-
-            // Success — issue tokens
-
-            const isSuperAdmin = uc.is_super_admin === true;
-
-            const payload = {
-                user_id: uc.user_id,
-                uc_id: uc.id,
-                company_id: uc.company_id,
-                branch_id: uc.branch_id,
-                role: uc.role,
-                username: uc.username,
-                is_super_admin: isSuperAdmin,
-            };
-
-            const accessToken = generateAccessToken(payload);
-            const refreshToken = generateRefreshToken(payload);
-
-            await UserModel.setRefreshToken(uc.user_id, refreshToken);
-
-            // A disabled company does NOT block login — the user must be able to
-            // reach the app to see WHY they are locked out. Every write request is
-            // rejected downstream by the enforceCompanyActive middleware.
-            const companyDisabled = uc.company_is_active === false;
-
-            return {
-                success: true,
-                message: companyDisabled
-                    ? "Login successful, but your company has been disabled by the platform administrator."
-                    : "Login successful",
-                data: {
-                    access_token: accessToken,
-                    refresh_token: refreshToken,
-                    user: {
-                        user_id: uc.user_id,
-                        username: uc.username,
-                        first_name: uc.first_name,
-                        last_name: uc.last_name,
-                        email: uc.email,
-                        role: uc.role,
-                        company_id: uc.company_id,
-                        branch_id: uc.branch_id,
-                        is_super_admin: isSuperAdmin,
-                    },
-                    company: {
-                        id: uc.company_id,
-                        company_name: uc.company_name,
-                        company_code: uc.company_code,
-                        logo_url: uc.company_logo_url,
-                        is_active: uc.company_is_active,
-                        is_disabled: companyDisabled,
-                        disabled_at: uc.company_disabled_at,
-                        disabled_reason: uc.company_disabled_reason,
-                    },
-                },
-            };
+            return await this.issueSession(check.uc);
         } catch (error) {
             return { success: false, message: error.message, error };
         }
+    },
+
+    /**
+     * Tokens + the login payload for one membership (a findByUsername row).
+     * Shared by username login and agency sign-in (email / Google), so every
+     * way in produces the same session.
+     */
+    async issueSession(uc) {
+        // Success — issue tokens
+
+        const isSuperAdmin = uc.is_super_admin === true;
+
+        const payload = {
+            user_id: uc.user_id,
+            uc_id: uc.id,
+            company_id: uc.company_id,
+            branch_id: uc.branch_id,
+            role: uc.role,
+            username: uc.username,
+            is_super_admin: isSuperAdmin,
+        };
+
+        const accessToken = generateAccessToken(payload);
+        const refreshToken = generateRefreshToken(payload);
+
+        await UserModel.setRefreshToken(uc.user_id, refreshToken);
+
+        // A disabled company does NOT block login — the user must be able to
+        // reach the app to see WHY they are locked out. Every write request is
+        // rejected downstream by the enforceCompanyActive middleware.
+        const companyDisabled = uc.company_is_active === false;
+
+        return {
+            success: true,
+            message: companyDisabled
+                ? "Login successful, but your company has been disabled by the platform administrator."
+                : "Login successful",
+            data: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                user: {
+                    user_id: uc.user_id,
+                    username: uc.username,
+                    first_name: uc.first_name,
+                    last_name: uc.last_name,
+                    email: uc.email,
+                    role: uc.role,
+                    company_id: uc.company_id,
+                    branch_id: uc.branch_id,
+                    is_super_admin: isSuperAdmin,
+                },
+                company: {
+                    id: uc.company_id,
+                    company_name: uc.company_name,
+                    company_code: uc.company_code,
+                    logo_url: uc.company_logo_url,
+                    is_active: uc.company_is_active,
+                    is_disabled: companyDisabled,
+                    disabled_at: uc.company_disabled_at,
+                    disabled_reason: uc.company_disabled_reason,
+                    account_type: uc.company_account_type || "hrms",
+                },
+            },
+        };
     },
 
     // ── FORGOT PASSWORD ───────────────────────────────────────────────────────
@@ -1003,6 +1011,9 @@ async bulkInviteEmployees(rows, company_id) {
         }
     },
 };
+
+// Agency onboarding creates memberships too and must draw from the same pool.
+UserCompanyService.nextUsername = generateUsername;
 
 module.exports = UserCompanyService;
 
