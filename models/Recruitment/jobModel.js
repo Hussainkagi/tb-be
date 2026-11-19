@@ -107,12 +107,13 @@ const JobModel = {
             `SELECT j.id, j.slug, j.title, j.status, j.source, j.sector, j.employment_type, j.work_mode,
                     j.location_city, j.location_country, j.openings, j.deadline, j.published_at,
                     j.list_on_portal, j.location_bound, j.created_at, j.updated_at,
-                    j.client_id, c.name AS client_name, ${COUNT_COLUMNS}
+                    j.client_id, c.name AS client_name, c.logo_url AS client_logo_url, COALESCE(j.skills, '{}') AS skills, ${COUNT_COLUMNS}
                FROM recruitment_jobs j
                LEFT JOIN recruitment_clients c ON c.id = j.client_id
                ${COUNTS_JOIN}
               WHERE ${where.join(" AND ")}
-              ORDER BY (j.status = 'requested') DESC, j.created_at DESC
+              -- Client requests first, then jobs that have any applications.
+              ORDER BY (j.status = 'requested') DESC, (COALESCE(ac.total, 0) > 0) DESC, j.created_at DESC
               LIMIT 500`,
             values,
         );
@@ -134,6 +135,42 @@ const JobModel = {
             [agency_company_id],
         );
         return rows[0];
+    },
+
+    /**
+     * Day-by-day jobs posted / applications received over the last `days`,
+     * plus the same totals for the period before (for "+x%" on the home cards).
+     */
+    async trends(agency_company_id, days) {
+        const { rows: series } = await db.query(
+            `WITH d AS (
+                SELECT generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day')::date AS day
+             )
+             SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+                    (SELECT COUNT(*) FROM recruitment_jobs j
+                      WHERE j.agency_company_id = $1 AND j.status <> 'requested'
+                        AND COALESCE(j.published_at, j.created_at)::date = d.day)::int AS jobs,
+                    (SELECT COUNT(*) FROM recruitment_jobs j
+                      WHERE j.agency_company_id = $1 AND j.published_at::date = d.day)::int AS opened,
+                    (SELECT COUNT(*) FROM recruitment_applications a
+                      WHERE a.agency_company_id = $1 AND a.created_at::date = d.day)::int AS applications
+               FROM d ORDER BY d.day`,
+            [agency_company_id, days],
+        );
+        const { rows } = await db.query(
+            `SELECT
+                (SELECT COUNT(*) FROM recruitment_jobs WHERE agency_company_id = $1 AND status <> 'requested'
+                    AND COALESCE(published_at, created_at) >= CURRENT_DATE - ($2::int * 2 - 1)
+                    AND COALESCE(published_at, created_at) <  CURRENT_DATE - ($2::int - 1))::int AS jobs,
+                (SELECT COUNT(*) FROM recruitment_jobs WHERE agency_company_id = $1
+                    AND published_at >= CURRENT_DATE - ($2::int * 2 - 1)
+                    AND published_at <  CURRENT_DATE - ($2::int - 1))::int AS opened,
+                (SELECT COUNT(*) FROM recruitment_applications WHERE agency_company_id = $1
+                    AND created_at >= CURRENT_DATE - ($2::int * 2 - 1)
+                    AND created_at <  CURRENT_DATE - ($2::int - 1))::int AS applications`,
+            [agency_company_id, days],
+        );
+        return { series, previous: rows[0] };
     },
 
     // ── Client portal ───────────────────────────────────────────────────────

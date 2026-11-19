@@ -29,6 +29,17 @@ const jdLimiter = rateLimit({
     message: { success: false, message: "Too many job descriptions read in a short time — try again in a few minutes" },
 });
 
+// Emails carry attachments — 30 per hour per agency.
+const reportLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 30,
+    keyGenerator: (req) => `report:${req.params.company_id}`,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    validate: false,
+    message: { success: false, message: "Too many reports emailed in a short time — try again later" },
+});
+
 router.use(verifyToken, validateTenant, isManager);
 
 router.get("/agency", C.getAgency);
@@ -36,6 +47,7 @@ router.put("/agency", C.saveAgency);
 router.post("/agency/logo", logoUpload.single("logo"), C.uploadLogo);
 router.delete("/agency/logo", C.removeLogo);
 router.get("/overview", C.overview);
+router.get("/trends", C.trends);
 
 // teamBook HRMS workspaces this person also belongs to, and a one-time link into one.
 router.get("/workspaces", C.listWorkspaces);
@@ -56,6 +68,9 @@ router.get("/jobs/:id", C.getJob);
 router.put("/jobs/:id", C.updateJob);
 router.get("/jobs/:id/applications", C.listApplications);
 router.get("/jobs/:id/top-matches", C.topMatches);
+router.get("/jobs/:id/report/recipients", C.reportRecipients);
+router.post("/jobs/:id/report/pdf", C.reportPdf);
+router.post("/jobs/:id/report/email", reportLimiter, C.reportEmail);
 
 router.post("/applications/share", C.shareApplications);
 router.patch("/applications/:appId", C.updateApplication);

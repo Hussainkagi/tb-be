@@ -126,6 +126,12 @@ const RecruitmentService = {
         return ok({ stats, recent });
     },
 
+    /** Daily jobs posted / applications for the home cards (7, 30 or 90 days). */
+    async trends(company_id, query = {}) {
+        const days = [7, 30, 90].includes(Number(query.days)) ? Number(query.days) : 30;
+        return ok({ days, ...(await JobModel.trends(company_id, days)) });
+    },
+
     // ── Clients ─────────────────────────────────────────────────────────────
     async listClients(company_id) {
         return ok(await AgencyModel.listClients(company_id));

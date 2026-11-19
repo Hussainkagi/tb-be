@@ -9,6 +9,7 @@ const JdParseService = require("../../service/Recruitment/jdParseService");
 const WorkspaceSwitchService = require("../../service/workspaceSwitchService");
 const PublicJobService = require("../../service/Recruitment/publicJobService");
 const ClientPortalService = require("../../service/Recruitment/clientPortalService");
+const CandidateReportService = require("../../service/Recruitment/candidateReportService");
 const storage = require("../../utils/storage");
 
 const handle = (fn) => async (req, res) => {
@@ -56,6 +57,7 @@ const AgencyController = {
     uploadLogo:       handle((req) => RecruitmentService.uploadLogo(cid(req), req.file)),
     removeLogo:       handle((req) => RecruitmentService.removeLogo(cid(req))),
     overview:         handle((req) => RecruitmentService.overview(cid(req))),
+    trends:           handle((req) => RecruitmentService.trends(cid(req), req.query)),
     listWorkspaces:   handle((req) => WorkspaceSwitchService.list(req.user?.user_id)),
     switchWorkspace:  handle((req) => WorkspaceSwitchService.createLink(req.user?.user_id, cid(req), req.params.targetId)),
     formCatalog:      handle(() => RecruitmentService.formCatalog()),
@@ -75,6 +77,21 @@ const AgencyController = {
 
     listApplications: handle((req) => RecruitmentService.listApplications(cid(req), req.params.id, req.query)),
     topMatches:       handle((req) => RecruitmentService.topMatches(cid(req), req.params.id)),
+    reportRecipients: handle((req) => CandidateReportService.recipients(cid(req), req.params.id)),
+    reportEmail:      handle((req) => CandidateReportService.email(cid(req), req.user?.user_id, req.params.id, req.body || {})),
+    reportPdf: async (req, res) => {
+        try {
+            const result = await CandidateReportService.pdf(cid(req), req.params.id, req.body?.application_ids);
+            if (!result.success) return res.status(result.status || 400).json({ success: false, message: result.message });
+            res.setHeader("Content-Type", "application/pdf");
+            res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(result.data.file_name)}"; filename*=UTF-8''${encodeURIComponent(result.data.file_name)}`);
+            res.setHeader("Cache-Control", "private, no-store");
+            res.send(result.data.buffer);
+        } catch (error) {
+            console.error("[recruitment] report pdf", error);
+            if (!res.headersSent) res.status(500).json({ success: false, message: "Could not build the report." });
+        }
+    },
     updateApplication:handle((req) => RecruitmentService.updateApplication(cid(req), req.params.appId, req.body)),
     shareApplications:handle((req) => RecruitmentService.shareApplications(cid(req), req.body)),
     downloadCv:       streamCv((req) => RecruitmentService.getCvFile(cid(req), req.params.appId)),
