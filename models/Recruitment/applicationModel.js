@@ -49,14 +49,14 @@ const ApplicationModel = {
         const { rows } = await client.query(
             `INSERT INTO recruitment_applications
                 (agency_company_id, job_id, candidate_id, answers, cv_url, cv_public_id, cv_file_name,
-                 applicant_latitude, applicant_longitude, distance_km, source, seeker_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                 applicant_latitude, applicant_longitude, distance_km, source, seeker_id, candidate_note)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              RETURNING id`,
             [
                 data.agency_company_id, data.job_id, data.candidate_id, data.answers,
                 data.cv_url, data.cv_public_id, data.cv_file_name,
                 data.applicant_latitude, data.applicant_longitude, data.distance_km, data.source,
-                data.seeker_id || null,
+                data.seeker_id || null, data.candidate_note || null,
             ],
         );
         return rows[0];
@@ -69,9 +69,11 @@ const ApplicationModel = {
         if (stage) { values.push(stage); where.push(`a.stage = $${values.length}`); }
         if (decision) { values.push(decision); where.push(`a.client_decision = $${values.length}`); }
         const { rows } = await db.query(
-            `SELECT ${LIST_COLUMNS}, a.agency_notes
+            `SELECT ${LIST_COLUMNS}, a.agency_notes, a.candidate_note, a.match_score, a.match_summary, a.match_details,
+                    COALESCE(sk.skills, '[]'::jsonb) AS skills, sk.total_experience_years AS profile_experience_years
                FROM recruitment_applications a
                JOIN recruitment_candidates cd ON cd.id = a.candidate_id
+               LEFT JOIN job_seekers sk ON sk.id = a.seeker_id
               WHERE ${where.join(" AND ")}
               ORDER BY a.created_at DESC`,
             values,
@@ -82,7 +84,7 @@ const ApplicationModel = {
     /** Latest applications across every job — the overview feed. */
     async recentForAgency(agency_company_id, limit = 8) {
         const { rows } = await db.query(
-            `SELECT a.id, a.job_id, a.stage, a.client_decision, a.created_at,
+            `SELECT a.id, a.job_id, a.stage, a.client_decision, a.created_at, a.match_score,
                     cd.full_name, cd.email, j.title AS job_title, c.name AS client_name
                FROM recruitment_applications a
                JOIN recruitment_candidates cd ON cd.id = a.candidate_id

@@ -55,6 +55,7 @@ router.post("/jobs/parse-description", jdLimiter, jdUpload.single("file"), C.par
 router.get("/jobs/:id", C.getJob);
 router.put("/jobs/:id", C.updateJob);
 router.get("/jobs/:id/applications", C.listApplications);
+router.get("/jobs/:id/top-matches", C.topMatches);
 
 router.post("/applications/share", C.shareApplications);
 router.patch("/applications/:appId", C.updateApplication);

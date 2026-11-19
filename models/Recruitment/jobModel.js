@@ -86,7 +86,7 @@ const JobModel = {
 
     async findForAgency(id, agency_company_id) {
         const { rows } = await db.query(
-            `SELECT j.*, c.name AS client_name, ${COUNT_COLUMNS}
+            `SELECT j.*, c.name AS client_name, c.logo_url AS client_logo_url, ${COUNT_COLUMNS}
                FROM recruitment_jobs j
                LEFT JOIN recruitment_clients c ON c.id = j.client_id
                ${COUNTS_JOIN}

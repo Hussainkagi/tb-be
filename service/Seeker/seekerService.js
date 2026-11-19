@@ -10,6 +10,7 @@ const db = require("../../config/database");
 const storage = require("../../utils/storage");
 const CvParseService = require("./cvParseService");
 const PublicJobService = require("../Recruitment/publicJobService");
+const MatchScoreService = require("../Recruitment/matchScoreService");
 const JobModel = require("../../models/Recruitment/jobModel");
 const SeekerAuthService = require("./seekerAuthService");
 
@@ -26,7 +27,7 @@ const CV_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 };
 const CV_MAX_BYTES = 5 * 1024 * 1024;
-const MAX_CVS = 5;
+const MAX_CVS = 4;
 
 const PROFILE_TEXT = {
     first_name: 100, last_name: 100, phone: 40, headline: 160, current_company: 160, country: 100,
@@ -123,7 +124,7 @@ function setClause(values, start = 2) {
 // A job row as the job board shows it (company hidden when the agency hides it).
 const JOB_CARD = `
     j.id AS job_id, j.slug, j.title, j.status, j.employment_type, j.work_mode, j.location_city, j.location_country,
-    j.published_at, j.deadline,
+    j.published_at, j.deadline, COALESCE(j.skills, '{}') AS skills, LEFT(j.description, 200) AS excerpt,
     CASE WHEN j.show_salary THEN j.salary_min END AS salary_min,
     CASE WHEN j.show_salary THEN j.salary_max END AS salary_max,
     CASE WHEN j.show_salary THEN j.salary_currency END AS salary_currency,
@@ -228,8 +229,11 @@ const SeekerService = {
             [seeker_id, upload.publicId, String(file.originalname || `cv.${ext}`).slice(0, 255), file.mimetype, file.size, first, parsed],
         );
 
-        // Fill whatever is still empty — never overwrite what they typed.
-        const found = fromCv(parsed);
+        // Only the first CV that's read sets the profile up (filling what's
+        // still empty — never overwriting what they typed). Later CVs just keep
+        // what was read from them; the person can choose to sync from one.
+        const setsUpProfile = !seeker.profile_filled_at;
+        const found = setsUpProfile ? fromCv(parsed) : {};
         const fill = {};
         for (const [k, v] of Object.entries(found)) if (isEmpty(seeker[k])) fill[k] = v;
         let filled = [];
@@ -245,11 +249,27 @@ const SeekerService = {
         }
 
         const profile = (await this.me(seeker_id)).data;
+        const can_sync = !setsUpProfile && Object.keys(fromCv(parsed)).length > 0;
         return ok(
-            { cv: rows[0], profile, filled, read: Boolean(parsed) },
+            { cv: rows[0], profile, filled, read: Boolean(parsed), can_sync },
             filled.length ? `CV saved — ${filled.length} profile details filled from it` : "CV saved",
             201,
         );
+    },
+
+    /** Replace profile details with what was read from one of their CVs (only fields the CV has). */
+    async syncFromCv(seeker_id, cv_id) {
+        const { rows } = await db.query(`SELECT parsed FROM job_seeker_cvs WHERE id = $1 AND seeker_id = $2`, [cv_id, seeker_id]);
+        if (!rows.length) return fail("CV not found", 404);
+        const found = fromCv(rows[0].parsed);
+        if (!Object.keys(found).length) return fail("We couldn't read any details from this CV", 422);
+        const { sets, params } = setClause(found);
+        await db.query(
+            `UPDATE job_seekers SET ${sets.join(", ")}, profile_filled_at = COALESCE(profile_filled_at, NOW()), updated_at = NOW() WHERE id = $1`,
+            [seeker_id, ...params],
+        );
+        const profile = (await this.me(seeker_id)).data;
+        return ok({ profile, updated: Object.keys(found) }, "Profile updated from your CV");
     },
 
     async setDefaultCv(seeker_id, cv_id) {
@@ -398,27 +418,110 @@ const SeekerService = {
         });
     },
 
-    async apply(seeker_id, slug, body = {}) {
+    /**
+     * Apply with a saved CV (body.cv_id) or a new file. A new file joins their
+     * profile as the default CV while they have fewer than MAX_CVS; past that
+     * it's used for this application only. The fit score is worked out after
+     * the response, from what's read from the CV.
+     */
+    async apply(seeker_id, slug, body = {}, file = null) {
         const seeker = await getSeeker(seeker_id);
         if (!seeker) return fail("Account not found", 404);
 
         let cv = null;
-        if (body.cv_id) {
-            const { rows } = await db.query(`SELECT file_ref, file_name FROM job_seeker_cvs WHERE id = $1 AND seeker_id = $2`, [body.cv_id, seeker_id]);
+        let savedParsed = null;
+        let newFile = null; // { ext, keep }
+        if (file) {
+            const ext = CV_TYPES[file.mimetype];
+            if (!ext) return fail("Upload your CV as a PDF or Word file", 422, { cv: "PDF, DOC or DOCX only" });
+            if (file.size > CV_MAX_BYTES) return fail("The CV is larger than 5 MB", 422, { cv: "Up to 5 MB" });
+            const { rows: count } = await db.query(`SELECT COUNT(*)::int n FROM job_seeker_cvs WHERE seeker_id = $1`, [seeker_id]);
+            const keep = count[0].n < MAX_CVS;
+            const who = `${storage.slug(`${seeker.first_name} ${seeker.last_name}`, 40) || "candidate"}-${storage.shortId(seeker.id)}`;
+            const name = String(file.originalname || `cv.${ext}`).slice(0, 255);
+            const upload = await storage.uploadFile(file.buffer, {
+                area: "candidates",
+                path: [who, keep ? "cvs" : "applications"],
+                name: `${storage.stamp()}-${storage.fileName(file.originalname, ext)}`,
+                contentType: file.mimetype,
+                cloudinary: { folder: `recruitment/candidates/${seeker.id}`, resourceType: "raw", publicId: `${Date.now()}_${storage.fileName(file.originalname, ext)}` },
+            });
+            cv = { url: upload.publicId, public_id: upload.publicId, name };
+            newFile = { keep, ref: upload.publicId, name };
+        } else if (body.cv_id) {
+            const { rows } = await db.query(`SELECT file_ref, file_name, parsed FROM job_seeker_cvs WHERE id = $1 AND seeker_id = $2`, [body.cv_id, seeker_id]);
             if (!rows.length) return fail("Choose one of your CVs", 422, { cv: "Choose a CV" });
             cv = { url: rows[0].file_ref, public_id: rows[0].file_ref, name: rows[0].file_name };
+            savedParsed = rows[0].parsed;
         }
 
         // The account's email is the application's email — it's who we'll reply to.
         const fields = { ...body, email: seeker.email };
         delete fields.cv_id;
+        delete fields.save_to_profile;
         const result = await PublicJobService.apply(slug, fields, null, { seekerId: seeker_id, cv });
-        if (result.success) {
-            const job = await JobModel.findPublicBySlug(String(slug).slice(0, 160));
-            if (job) await db.query(`DELETE FROM job_seeker_drafts WHERE seeker_id = $1 AND job_id = $2`, [seeker_id, job.id]);
-            // Keep the phone they applied with if the profile had none.
-            if (!seeker.phone && fields.phone) await db.query(`UPDATE job_seekers SET phone = $2 WHERE id = $1 AND phone IS NULL`, [seeker_id, str(fields.phone, 40)]);
+
+        if (!result.success) {
+            if (newFile) await storage.deleteFile(newFile.ref, "raw").catch(() => {});
+            return result;
         }
+
+        const job = await JobModel.findPublicBySlug(String(slug).slice(0, 160));
+        if (job) await db.query(`DELETE FROM job_seeker_drafts WHERE seeker_id = $1 AND job_id = $2`, [seeker_id, job.id]);
+        // Keep the phone they applied with if the profile had none.
+        if (!seeker.phone && fields.phone) await db.query(`UPDATE job_seekers SET phone = $2 WHERE id = $1 AND phone IS NULL`, [seeker_id, str(fields.phone, 40)]);
+        // "Also save these changes to my profile" — contact details they edited here.
+        if (body.save_to_profile === true || body.save_to_profile === "true") {
+            const upd = {};
+            if (str(fields.phone, 40)) upd.phone = str(fields.phone, 40);
+            if (str(fields.linkedin_url, 300)) upd.linkedin_url = str(fields.linkedin_url, 300);
+            if (Object.keys(upd).length) {
+                const { sets, params } = setClause(upd);
+                await db.query(`UPDATE job_seekers SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`, [seeker_id, ...params]);
+            }
+        }
+
+        // A new CV joins the profile as their default.
+        let newCvId = null;
+        if (newFile?.keep) {
+            const client = await db.getClient();
+            try {
+                await client.query("BEGIN");
+                await client.query(`UPDATE job_seeker_cvs SET is_default = FALSE WHERE seeker_id = $1 AND is_default`, [seeker_id]);
+                const { rows } = await client.query(
+                    `INSERT INTO job_seeker_cvs (seeker_id, file_ref, file_name, mime, size_bytes, is_default) VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING id`,
+                    [seeker_id, newFile.ref, newFile.name, file.mimetype, file.size],
+                );
+                await client.query("COMMIT");
+                newCvId = rows[0].id;
+            } catch (error) {
+                await client.query("ROLLBACK").catch(() => {});
+                console.warn("Couldn't save the applied CV to the profile:", error.message);
+            } finally {
+                client.release();
+            }
+        }
+
+        // Score in the background — reading a new CV takes a few seconds.
+        const applicationId = result.data?.id;
+        if (applicationId) {
+            setImmediate(async () => {
+                try {
+                    let parsed = savedParsed;
+                    if (newFile) {
+                        parsed = await CvParseService.read(file.buffer, file.mimetype, file.originalname);
+                        if (newCvId && parsed) await db.query(`UPDATE job_seeker_cvs SET parsed = $2 WHERE id = $1`, [newCvId, parsed]);
+                    }
+                    // Nothing read from the CV → judge on their saved profile.
+                    const candidate = parsed ? { ...seeker, ...fromCv(parsed) } : seeker;
+                    await MatchScoreService.scoreApplication(applicationId, candidate);
+                } catch (error) {
+                    console.warn("Post-apply scoring failed:", error.message);
+                }
+            });
+        }
+
+        result.data = { ...result.data, cv_saved: Boolean(newCvId), cv_one_off: Boolean(newFile && !newFile.keep) };
         return result;
     },
 };

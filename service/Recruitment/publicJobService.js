@@ -86,7 +86,7 @@ const PublicJobService = {
             modes: pick(query.mode, WORK_MODES),
             levels: pick(query.level, ["entry", "mid", "senior"]),
             postedDays: ["1", "3", "7", "30"].includes(query.posted) ? Number(query.posted) : undefined,
-            sort: ["relevant", "newest", "salary"].includes(query.sort) ? query.sort : "relevant",
+            sort: ["relevant", "newest", "salary"].includes(query.sort) ? query.sort : "newest",
             tag: str(query.tag, 40) || undefined,
             agency: str(query.agency, 80) || undefined,
             page,
@@ -203,6 +203,7 @@ const PublicJobService = {
                 distance_km,
                 source: body.source === "link" ? "link" : "portal",
                 seeker_id: opts.seekerId || null,
+                candidate_note: String(body.candidate_note || "").trim().slice(0, 500) || null,
             });
             await client.query("COMMIT");
             return ok({ id: created.id }, "Application received", 201);

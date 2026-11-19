@@ -55,7 +55,8 @@ router.put("/me", handle((req) => SeekerService.updateProfile(sid(req), req.body
 
 router.get("/cvs", handle((req) => SeekerService.listCvs(sid(req))));
 router.post("/cvs", cvLimiter, cvUpload.single("cv"), handle((req) => SeekerService.uploadCv(sid(req), req.file)));
-router.put("/cvs/:id/default", handle((req) => SeekerService.setDefaultCv(sid(req), req.params.id)));
+router.post("/cvs/:id/sync", handle((req) => SeekerService.syncFromCv(sid(req), req.params.id)));
+router.put("/cvs/:id/default",handle((req) => SeekerService.setDefaultCv(sid(req), req.params.id)));
 router.delete("/cvs/:id", handle((req) => SeekerService.deleteCv(sid(req), req.params.id)));
 
 router.get("/saved", handle((req) => SeekerService.listSaved(sid(req))));
@@ -70,6 +71,6 @@ router.put("/drafts/:slug", handle((req) => SeekerService.saveDraft(sid(req), re
 router.delete("/drafts/:slug", handle((req) => SeekerService.deleteDraft(sid(req), req.params.slug)));
 
 router.get("/jobs/:slug/apply", handle((req) => SeekerService.applyContext(sid(req), req.params.slug)));
-router.post("/jobs/:slug/apply", signIn, handle((req) => SeekerService.apply(sid(req), req.params.slug, req.body || {})));
+router.post("/jobs/:slug/apply", signIn, cvUpload.single("cv"), handle((req) => SeekerService.apply(sid(req), req.params.slug, req.body || {}, req.file || null)));
 
 module.exports = router;

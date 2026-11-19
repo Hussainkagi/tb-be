@@ -74,6 +74,7 @@ const AgencyController = {
     updateJob:        handle((req) => RecruitmentService.updateJob(cid(req), req.params.id, req.body)),
 
     listApplications: handle((req) => RecruitmentService.listApplications(cid(req), req.params.id, req.query)),
+    topMatches:       handle((req) => RecruitmentService.topMatches(cid(req), req.params.id)),
     updateApplication:handle((req) => RecruitmentService.updateApplication(cid(req), req.params.appId, req.body)),
     shareApplications:handle((req) => RecruitmentService.shareApplications(cid(req), req.body)),
     downloadCv:       streamCv((req) => RecruitmentService.getCvFile(cid(req), req.params.appId)),

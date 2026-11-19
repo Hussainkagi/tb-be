@@ -13,6 +13,7 @@ const CompanyModel = require("../../models/companyModel");
 const { hashPassword } = require("../../utils/password");
 const storage = require("../../utils/storage");
 const JdParseService = require("./jdParseService");
+const MatchScoreService = require("./matchScoreService");
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The hidden AI matching profile follows the job it was read for. */
@@ -355,6 +356,14 @@ const RecruitmentService = {
             decision: query.decision || undefined,
         });
         return ok(rows);
+    },
+
+    /** The three best-fitting applicants for a job, by their score out of 10. */
+    async topMatches(company_id, job_id) {
+        const job = await JobModel.findForAgency(job_id, company_id);
+        if (!job) return fail("Job not found", 404);
+        const rows = await MatchScoreService.topForJob(company_id, job_id, 3);
+        return ok(rows.map((r) => ({ ...r, match_score: r.match_score == null ? null : Number(r.match_score) })));
     },
 
     async updateApplication(company_id, id, body) {
