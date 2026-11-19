@@ -4,7 +4,7 @@ const CompanyModel = require("../models/companyModel");
 const SuperAdminModel = require("../models/superAdminModel");
 const NotificationService = require("./notificationService");
 const { parseDocx } = require("../utils/docxParser");
-const { uploadToCloudinary } = require("../utils/cloudinaryHelper");
+const storage = require("../utils/storage");
 const { validateCountryCode, resolveCountryCode } = require("../utils/countryCodes");
 const { sendEmail } = require("../utils/mailer");
 const { policyUpdateTemplate } = require("../utils/emailTemplates");
@@ -125,10 +125,16 @@ const PolicyService = {
         // it rejects a .docx outright.
         let upload = null;
         try {
-            upload = await uploadToCloudinary(file_buffer, {
-                folder: `policies/${policy_type}/${country_code || "global"}`,
-                publicId: `${policy_type}_${country_code || "global"}_${Date.now()}`,
-                resourceType: "raw",
+            // R2: teambook-platform/policies/<type>/<country>/<file> (platform-wide, not per company)
+            upload = await storage.uploadFile(file_buffer, {
+                area: "platform",
+                path: ["policies", policy_type, country_code || "global"],
+                name: `${policy_type}-${country_code || "global"}-${storage.stamp()}-${storage.fileName(file_name || "policy.docx", "docx")}`,
+                cloudinary: {
+                    folder: `policies/${policy_type}/${country_code || "global"}`,
+                    publicId: `${policy_type}_${country_code || "global"}_${Date.now()}`,
+                    resourceType: "raw",
+                },
             });
         } catch (error) {
             // The rendered text is what the app serves, so a storage hiccup is

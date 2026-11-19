@@ -52,6 +52,8 @@ app.use(cors(corsOptions));
 
 // Body parser
 app.use(express.json({ limit: "10mb" }));
+// Private R2 files: swap stored "r2://…" references for short-lived signed links in every JSON response.
+app.use(require("./middleware/signStorageUrls"));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Compression
@@ -90,6 +92,8 @@ app.use("/api/public/jobs", PublicJobRoutes);
 app.use("/api/recruitment-client", RecruitmentClientRoutes);
 // Agency sign-up / sign-in — public, before any company-scoped middleware.
 app.use("/api/auth/agency", require("./routes/agencyAuthRoute"));
+// Job seekers on the public job board — their own accounts and token type.
+app.use("/api/seeker", require("./routes/seekerRoute"));
 
 const { enforceCompanyActive } = require("./middleware/enforceCompanyActive");
 app.use("/api", enforceCompanyActive);

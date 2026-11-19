@@ -8,7 +8,7 @@
 const db = require("../../config/database");
 const JobModel = require("../../models/Recruitment/jobModel");
 const ApplicationModel = require("../../models/Recruitment/applicationModel");
-const { uploadToCloudinary } = require("../../utils/cloudinaryHelper");
+const storage = require("../../utils/storage");
 const { distanceInMeters } = require("../../utils/geofence");
 const { resolveForm, validateAnswers } = require("../../utils/recruitmentForm");
 const { EMPLOYMENT_TYPES, WORK_MODES, CV_TYPES, safeFileName, str } = require("./recruitmentShared");
@@ -71,6 +71,9 @@ function toPublic(row, { detail = false } = {}) {
     };
 }
 
+/** "full_time,contract" → only the allowed values, de-duplicated. */
+const pick = (raw, allowed) => [...new Set(String(raw || "").split(",").map((v) => v.trim()).filter((v) => allowed.includes(v)))];
+
 const PublicJobService = {
     async list(query = {}) {
         const page = Math.max(1, Math.min(500, parseInt(query.page, 10) || 1));
@@ -79,8 +82,11 @@ const PublicJobService = {
             q: str(query.q, 100) || undefined,
             sector: str(query.sector, 120) || undefined,
             location: str(query.location, 120) || undefined,
-            type: EMPLOYMENT_TYPES.includes(query.type) ? query.type : undefined,
-            mode: WORK_MODES.includes(query.mode) ? query.mode : undefined,
+            types: pick(query.type, EMPLOYMENT_TYPES),
+            modes: pick(query.mode, WORK_MODES),
+            levels: pick(query.level, ["entry", "mid", "senior"]),
+            postedDays: ["1", "3", "7", "30"].includes(query.posted) ? Number(query.posted) : undefined,
+            sort: ["relevant", "newest", "salary"].includes(query.sort) ? query.sort : "relevant",
             tag: str(query.tag, 40) || undefined,
             agency: str(query.agency, 80) || undefined,
             page,
@@ -114,8 +120,11 @@ const PublicJobService = {
      * Takes one application.
      * @param {object} body  multipart text fields
      * @param {object} file  multer file (the CV), optional
+     * @param {object} [opts]
+     * @param {string} [opts.seekerId]  signed-in job seeker sending it
+     * @param {object} [opts.cv]        their saved CV { url, public_id, name } — used instead of an upload
      */
-    async apply(slug, body = {}, file = null) {
+    async apply(slug, body = {}, file = null, opts = {}) {
         // Honeypot: a field real people never see. Bots fill it; pretend success.
         if (body.website_url) return ok({ id: null }, "Application received", 201);
 
@@ -123,7 +132,7 @@ const PublicJobService = {
         if (!job) return fail("This job is no longer available", 404);
         if (!isAccepting(job)) return fail("This job is not accepting applications any more", 409);
 
-        const { answers, errors } = validateAnswers(job.form_config, body, { hasFile: Boolean(file) });
+        const { answers, errors } = validateAnswers(job.form_config, body, { hasFile: Boolean(file || opts.cv) });
         if (Object.keys(errors).length) return fail("Please check the highlighted fields", 422, errors);
 
         // Location-bound: the browser's position must be inside the circle.
@@ -146,16 +155,24 @@ const PublicJobService = {
             return fail("You have already applied for this job with this email", 409);
         }
 
-        let cv = { url: null, public_id: null, name: null };
+        let cv = opts.cv || { url: null, public_id: null, name: null };
         if (file) {
             const ext = CV_TYPES[file.mimetype];
             if (!ext) return fail("CV must be a PDF or Word document", 422, { cv: "PDF, DOC or DOCX only" });
             const name = safeFileName(file.originalname, ext);
-            // "raw" keeps the file byte-for-byte; the extension must be in the public_id.
-            const upload = await uploadToCloudinary(file.buffer, {
-                folder: `recruitment/cv/${job.agency_company_id}`,
-                resourceType: "raw",
-                publicId: `${Date.now()}_${name}`,
+            // R2: teambook-sourcing/<agency>/jobs/<job-title>-<id>/cvs/<candidate>-<ts>.<ext>
+            const upload = await storage.uploadFile(file.buffer, {
+                area: "sourcing",
+                companyId: job.agency_company_id,
+                path: ["jobs", `${storage.slug(job.title, 50) || "job"}-${storage.shortId(job.id)}`, "cvs"],
+                name: `${storage.slug(answers.full_name, 40) || "candidate"}-${storage.stamp()}.${ext}`,
+                contentType: file.mimetype,
+                // "raw" keeps the file byte-for-byte; the extension must be in the public_id.
+                cloudinary: {
+                    folder: `recruitment/cv/${job.agency_company_id}`,
+                    resourceType: "raw",
+                    publicId: `${Date.now()}_${name}`,
+                },
             });
             cv = { url: upload.secureUrl, public_id: upload.publicId, name: String(file.originalname || name).slice(0, 255) };
         }
@@ -185,6 +202,7 @@ const PublicJobService = {
                 applicant_longitude,
                 distance_km,
                 source: body.source === "link" ? "link" : "portal",
+                seeker_id: opts.seekerId || null,
             });
             await client.query("COMMIT");
             return ok({ id: created.id }, "Application received", 201);

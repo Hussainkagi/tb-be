@@ -169,6 +169,34 @@ const agencySignupOtpTemplate = ({ first_name, otp, expires_minutes }) => `
 </div>
 `;
 
+// ── 1c. JOB SEEKER SIGN-IN / SIGN-UP CODE ─────────────────────────────────────
+const jobSeekerCodeTemplate = ({ first_name, otp, purpose, expires_minutes }) => `
+<div style="${baseStyle}">
+  ${header("teamBook Jobs")}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">${purpose === "signup" ? "Confirm your email" : "Your sign-in code"}</h2>
+    <p style="color:#333;">Hi ${first_name || "there"},</p>
+    <p style="color:#333;">
+      ${purpose === "signup"
+        ? "Enter this code to finish creating your teamBook Jobs account."
+        : "Enter this code to sign in to teamBook Jobs."}
+    </p>
+    <div style="text-align:center; margin: 32px 0;">
+      <div style="display:inline-block; background:#1a1a2e; color:#fff;
+                  font-size:36px; font-weight:bold; letter-spacing:12px;
+                  padding:16px 32px; border-radius:8px;">
+        ${otp}
+      </div>
+    </div>
+    <p style="color:#888; font-size:13px; text-align:center;">
+      This code expires in <strong>${expires_minutes} minutes</strong>.
+      If you didn't ask for it, you can ignore this email.
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
 // ── 2. EMPLOYEE INVITE (set password) ─────────────────────────────────────────
 const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_link, expires_hours }) => `
 <div style="${baseStyle}">
@@ -616,6 +644,7 @@ module.exports = {
   appDownloadBlock,
   registrationOtpTemplate,
   agencySignupOtpTemplate,
+  jobSeekerCodeTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
   welcomeTemplate,

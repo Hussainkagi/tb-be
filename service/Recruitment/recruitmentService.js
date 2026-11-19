@@ -11,7 +11,17 @@ const JobModel = require("../../models/Recruitment/jobModel");
 const ApplicationModel = require("../../models/Recruitment/applicationModel");
 const CompanyModel = require("../../models/companyModel");
 const { hashPassword } = require("../../utils/password");
-const { uploadToCloudinary } = require("../../utils/cloudinaryHelper");
+const storage = require("../../utils/storage");
+const JdParseService = require("./jdParseService");
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The hidden AI matching profile follows the job it was read for. */
+const attachJd = async (company_id, body, job_id) => {
+    if (!UUID_RE.test(String(body.jd_parse_id || ""))) return;
+    await JdParseService.attachToJob(company_id, body.jd_parse_id, job_id).catch((e) =>
+        console.error("[jd-parse] could not attach profile:", e.message),
+    );
+};
 const { sendEmail } = require("../../utils/mailer");
 const { FIELD_CATALOG, QUESTION_TYPES, normalizeFormConfig } = require("../../utils/recruitmentForm");
 const {
@@ -84,10 +94,19 @@ const RecruitmentService = {
         const agency = await AgencyModel.findByCompany(company_id);
         if (!agency) return fail("Set up the agency profile first");
 
-        const upload = await uploadToCloudinary(file.buffer, {
-            folder: `recruitment/agency/${company_id}`,
-            resourceType: "image",
-            transformation: { width: 400, height: 400, crop: "limit", quality: "auto", fetch_format: "auto" },
+        // R2: teambook-sourcing/<agency>/logo/logo-<ts>.<ext>
+        const ext = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" }[file.mimetype] || "png";
+        const upload = await storage.uploadFile(file.buffer, {
+            area: "sourcing",
+            companyId: company_id,
+            path: ["logo"],
+            name: `logo-${storage.stamp()}.${ext}`,
+            contentType: file.mimetype,
+            cloudinary: {
+                folder: `recruitment/agency/${company_id}`,
+                resourceType: "image",
+                transformation: { width: 400, height: 400, crop: "limit", quality: "auto", fetch_format: "auto" },
+            },
         });
         const saved = await AgencyModel.upsert(company_id, { logo_url: upload.secureUrl, logo_public_id: upload.publicId });
         return ok(saved, "Logo updated");
@@ -296,6 +315,7 @@ const RecruitmentService = {
             created_by: user_id || null,
             ...this.statusStamps(status),
         });
+        await attachJd(company_id, body, job.id);
         return ok({ ...job, ...jobLinks(job.slug) }, status === "open" ? "Job published" : "Job saved", 201);
     },
 
@@ -322,6 +342,7 @@ const RecruitmentService = {
         }
 
         const job = await JobModel.update(id, company_id, data);
+        await attachJd(company_id, body, id);
         return ok({ ...job, ...jobLinks(job.slug) }, "Job updated");
     },
 

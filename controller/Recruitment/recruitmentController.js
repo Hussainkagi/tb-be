@@ -5,9 +5,11 @@
  */
 const { Readable } = require("stream");
 const RecruitmentService = require("../../service/Recruitment/recruitmentService");
+const JdParseService = require("../../service/Recruitment/jdParseService");
+const WorkspaceSwitchService = require("../../service/workspaceSwitchService");
 const PublicJobService = require("../../service/Recruitment/publicJobService");
 const ClientPortalService = require("../../service/Recruitment/clientPortalService");
-const { privateDownloadUrl } = require("../../utils/cloudinaryHelper");
+const storage = require("../../utils/storage");
 
 const handle = (fn) => async (req, res) => {
     try {
@@ -28,7 +30,7 @@ const streamCv = (lookup) => async (req, res) => {
         const result = await lookup(req);
         if (!result.success) return res.status(result.status || 404).json({ success: false, message: result.message });
         const { public_id, file_name } = result.data;
-        const upstream = await fetch(privateDownloadUrl(public_id, { resourceType: "raw" }));
+        const upstream = await fetch(await storage.downloadUrl(public_id, { resourceType: "raw", name: file_name || undefined }));
         if (!upstream.ok || !upstream.body) return res.status(502).json({ success: false, message: "Could not fetch the CV. Please try again." });
 
         const name = String(file_name || public_id.split("/").pop()).replace(/[^\w.\- ]/g, "_");
@@ -54,6 +56,8 @@ const AgencyController = {
     uploadLogo:       handle((req) => RecruitmentService.uploadLogo(cid(req), req.file)),
     removeLogo:       handle((req) => RecruitmentService.removeLogo(cid(req))),
     overview:         handle((req) => RecruitmentService.overview(cid(req))),
+    listWorkspaces:   handle((req) => WorkspaceSwitchService.list(req.user?.user_id)),
+    switchWorkspace:  handle((req) => WorkspaceSwitchService.createLink(req.user?.user_id, cid(req), req.params.targetId)),
     formCatalog:      handle(() => RecruitmentService.formCatalog()),
 
     listClients:      handle((req) => RecruitmentService.listClients(cid(req))),
@@ -66,6 +70,7 @@ const AgencyController = {
     listJobs:         handle((req) => RecruitmentService.listJobs(cid(req), req.query)),
     getJob:           handle((req) => RecruitmentService.getJob(cid(req), req.params.id)),
     createJob:        handle((req) => RecruitmentService.createJob(cid(req), req.user?.user_id, req.body)),
+    parseJobDescription: handle((req) => JdParseService.parse(cid(req), req.user?.user_id, { file: req.file, text: req.body?.text })),
     updateJob:        handle((req) => RecruitmentService.updateJob(cid(req), req.params.id, req.body)),
 
     listApplications: handle((req) => RecruitmentService.listApplications(cid(req), req.params.id, req.query)),

@@ -49,13 +49,14 @@ const ApplicationModel = {
         const { rows } = await client.query(
             `INSERT INTO recruitment_applications
                 (agency_company_id, job_id, candidate_id, answers, cv_url, cv_public_id, cv_file_name,
-                 applicant_latitude, applicant_longitude, distance_km, source)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 applicant_latitude, applicant_longitude, distance_km, source, seeker_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              RETURNING id`,
             [
                 data.agency_company_id, data.job_id, data.candidate_id, data.answers,
                 data.cv_url, data.cv_public_id, data.cv_file_name,
                 data.applicant_latitude, data.applicant_longitude, data.distance_km, data.source,
+                data.seeker_id || null,
             ],
         );
         return rows[0];

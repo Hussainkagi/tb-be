@@ -925,7 +925,20 @@ async bulkInviteEmployees(rows, company_id) {
     async getUserCompanies(user_id) {
         try {
             const result = await UserCompanyModel.findAllByUserId(user_id);
-            return { success: true, data: result };
+            // Membership rows carry password_hash, lock state and invite data —
+            // none of it may leave the server. Return only what a picker needs.
+            const data = result.map((m) => ({
+                company_id: m.company_id,
+                company_name: m.company_name,
+                company_code: m.company_code,
+                logo_url: m.logo_url,
+                username: m.username,
+                role: m.role,
+                branch_id: m.branch_id ?? null,
+                is_active: m.is_active,
+                company_is_active: m.company_is_active,
+            }));
+            return { success: true, data };
         } catch (error) {
             return { success: false, message: error.message, error };
         }

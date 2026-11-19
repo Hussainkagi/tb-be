@@ -160,7 +160,7 @@ const JobModel = {
     },
 
     // ── Public portal ───────────────────────────────────────────────────────
-    async listPublic({ q, sector, location, type, mode, tag, agency, page = 1, limit = 20 }) {
+    async listPublic({ q, sector, location, types = [], modes = [], levels = [], postedDays, sort = "relevant", tag, agency, page = 1, limit = 20 }) {
         const where = [PUBLIC_WHERE, "j.list_on_portal = TRUE"];
         const values = [];
         const add = (sql, value) => { values.push(value); where.push(sql.replace("?", `$${values.length}`)); };
@@ -170,17 +170,36 @@ const JobModel = {
         if (q) add(`(j.title ILIKE ? OR j.sector ILIKE $${values.length + 1} OR array_to_string(j.tags, ' ') ILIKE $${values.length + 1} OR array_to_string(j.skills, ' ') ILIKE $${values.length + 1})`, `%${q}%`);
         if (sector) add(`LOWER(j.sector) = LOWER(?)`, sector);
         if (location) add(`(j.location_city ILIKE ? OR j.location_country ILIKE $${values.length + 1})`, `%${location}%`);
-        if (type) add(`j.employment_type = ?`, type);
-        if (mode) add(`j.work_mode = ?`, mode);
+        if (types.length) add(`j.employment_type = ANY(?::text[])`, types);
+        if (modes.length) add(`j.work_mode = ANY(?::text[])`, modes);
+        if (levels.length) {
+            // Seniority from the minimum experience asked for: entry < 2 yrs ≤ mid < 5 yrs ≤ senior.
+            const LEVEL_SQL = {
+                entry: "COALESCE(j.experience_min, 0) < 2",
+                mid: "(COALESCE(j.experience_min, 0) >= 2 AND COALESCE(j.experience_min, 0) < 5)",
+                senior: "COALESCE(j.experience_min, 0) >= 5",
+            };
+            where.push(`(${levels.map((l) => LEVEL_SQL[l]).join(" OR ")})`);
+        }
         if (tag) add(`LOWER(?) = ANY(SELECT LOWER(t) FROM unnest(j.tags) t)`, tag);
         if (agency) add(`a.slug = ?`, agency);
+        if (postedDays) add(`j.published_at >= NOW() - make_interval(days => ?::int)`, postedDays);
+
+        // "Relevant": a keyword in the title ranks above one only in skills/tags; ties go to the newest.
+        let orderBy = "j.published_at DESC NULLS LAST";
+        if (sort === "salary") {
+            orderBy = "(CASE WHEN j.show_salary THEN COALESCE(j.salary_max, j.salary_min) END) DESC NULLS LAST, j.published_at DESC NULLS LAST";
+        } else if (sort === "relevant" && q) {
+            values.push(`%${q}%`);
+            orderBy = `(j.title ILIKE $${values.length}) DESC, j.published_at DESC NULLS LAST`;
+        }
 
         values.push(limit, (page - 1) * limit);
         const { rows } = await db.query(
             `SELECT ${PUBLIC_COLUMNS}, LEFT(j.description, 260) AS excerpt, COUNT(*) OVER()::int AS total_count
                ${PUBLIC_FROM}
               WHERE ${where.join(" AND ")}
-              ORDER BY j.published_at DESC NULLS LAST
+              ORDER BY ${orderBy}
               LIMIT $${values.length - 1} OFFSET $${values.length}`,
             values,
         );

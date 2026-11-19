@@ -46,4 +46,8 @@ router.post("/google", signIn, handle((req) => AgencyOnboardingService.google(re
 router.post("/setup", signIn, handle((req) => AgencyOnboardingService.setup(req.body || {}, meta(req))));
 router.post("/login", signIn, handle((req) => AgencyOnboardingService.login(req.body || {})));
 
+// One-time workspace link (agency → teamBook HRMS) → a normal session.
+const WorkspaceSwitchService = require("../service/workspaceSwitchService");
+router.post("/switch/redeem", signIn, handle((req) => WorkspaceSwitchService.redeem(req.body?.token)));
+
 module.exports = router;

@@ -58,13 +58,17 @@ const LeaveRequestService = {
             let uploadedDocUrl = document_url;
             if (document_file) {
                 try {
-                    const { secureUrl } = await require("../utils/cloudinaryHelper").uploadToCloudinary(
-                        document_file.buffer,
-                        {
-                            folder: `leave/documents/${employee_id}`,
-                            resourceType: "auto",
-                        }
-                    );
+                    // R2: teambook-hr/<company>/leave/<EMP>/<from-date>-<file>
+                    const storage = require("../utils/storage");
+                    const owner = await EmployeeModel.findById(employee_id);
+                    const { secureUrl } = await storage.uploadFile(document_file.buffer, {
+                        area: "hr",
+                        companyId: owner?.company_id,
+                        path: ["leave", storage.slug(owner?.employee_code || employee_id, 30) || "employee"],
+                        name: `${String(from_date || "").slice(0, 10) || storage.stamp()}-${storage.stamp()}-${storage.fileName(document_file.originalname, "pdf")}`,
+                        contentType: document_file.mimetype || undefined,
+                        cloudinary: { folder: `leave/documents/${employee_id}`, resourceType: "auto" },
+                    });
                     uploadedDocUrl = secureUrl;
                 } catch (err) {
                     return {
