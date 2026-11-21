@@ -243,6 +243,36 @@ const JobModel = {
         return { rows, total: rows[0]?.total_count ?? 0 };
     },
 
+    /**
+     * Search suggestions as someone types: job titles, skills/tags and sectors
+     * from live portal jobs that contain the text, with how many jobs each
+     * matches. Words that start with it rank first.
+     */
+    async publicSuggest(q, limit = 8) {
+        const { rows } = await db.query(
+            `WITH live AS (
+                SELECT j.title, j.sector, j.skills, j.tags ${PUBLIC_FROM}
+                 WHERE ${PUBLIC_WHERE} AND j.list_on_portal = TRUE
+             ),
+             terms AS (
+                SELECT title AS value, 'title' AS kind FROM live
+                UNION ALL SELECT unnest(skills), 'skill' FROM live
+                UNION ALL SELECT unnest(tags), 'skill' FROM live
+                UNION ALL SELECT sector, 'sector' FROM live WHERE sector IS NOT NULL
+             )
+             SELECT MIN(value) AS value, MIN(kind) AS kind, COUNT(*)::int AS count
+               FROM terms
+              WHERE value ILIKE $1
+              GROUP BY LOWER(value)
+              ORDER BY (LOWER(MIN(value)) LIKE LOWER($2)) DESC,
+                       (MIN(value) ~* $3) DESC,
+                       COUNT(*) DESC, LENGTH(MIN(value))
+              LIMIT $4`,
+            [`%${q}%`, `${q}%`, `\\m${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, limit],
+        );
+        return rows;
+    },
+
     /** Filter options for the portal, with counts. */
     async publicFacets() {
         const { rows } = await db.query(

@@ -119,6 +119,44 @@ const ClientPortalService = {
         return ok({ id: job.id, title: job.title, status: job.status }, "Request sent to your agency", 201);
     },
 
+    /**
+     * What the agency did lately (last 30 days), for the alerts on the client's
+     * home: candidates shared with them (grouped by job), and shared candidates
+     * the agency moved to offered / hired. Only ever about shared candidates.
+     */
+    async updates(ctx) {
+        const db = require("../../config/database");
+        const { rows: shared } = await db.query(
+            `SELECT j.id AS job_id, j.title AS job_title,
+                    COUNT(*)::int AS count,
+                    COUNT(*) FILTER (WHERE a.client_decision = 'pending')::int AS pending,
+                    MAX(a.shared_at) AS latest_at,
+                    (ARRAY_AGG(cd.full_name ORDER BY a.shared_at DESC))[1:3] AS names
+               FROM recruitment_applications a
+               JOIN recruitment_jobs j ON j.id = a.job_id
+               JOIN recruitment_candidates cd ON cd.id = a.candidate_id
+              WHERE j.client_id = $1 AND a.shared_with_client = TRUE
+                AND a.shared_at >= NOW() - INTERVAL '30 days'
+              GROUP BY j.id, j.title
+              ORDER BY MAX(a.shared_at) DESC
+              LIMIT 10`,
+            [ctx.client_id],
+        );
+        const { rows: selected } = await db.query(
+            `SELECT a.id, a.stage, a.updated_at AS at, j.id AS job_id, j.title AS job_title, cd.full_name
+               FROM recruitment_applications a
+               JOIN recruitment_jobs j ON j.id = a.job_id
+               JOIN recruitment_candidates cd ON cd.id = a.candidate_id
+              WHERE j.client_id = $1 AND a.shared_with_client = TRUE
+                AND a.stage IN ('offered', 'hired')
+                AND a.updated_at >= NOW() - INTERVAL '30 days'
+              ORDER BY a.updated_at DESC
+              LIMIT 10`,
+            [ctx.client_id],
+        );
+        return ok({ shared, selected });
+    },
+
     async listCandidates(ctx, query) {
         const decision = CLIENT_DECISIONS.includes(query.decision) ? query.decision : undefined;
         const rows = await ApplicationModel.listForClient(ctx.client_id, { decision, job_id: query.job_id || undefined });

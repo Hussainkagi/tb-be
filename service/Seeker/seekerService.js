@@ -13,6 +13,9 @@ const PublicJobService = require("../Recruitment/publicJobService");
 const MatchScoreService = require("../Recruitment/matchScoreService");
 const JobModel = require("../../models/Recruitment/jobModel");
 const SeekerAuthService = require("./seekerAuthService");
+const { sendEmail } = require("../../utils/mailer");
+const { applicationReceivedTemplate } = require("../../utils/emailTemplates");
+const { jobsUrl } = require("../../utils/portalUrls");
 
 const ok = (data, message = "OK", status = 200) => ({ success: true, status, message, data });
 const fail = (message, status = 400, errors) => ({ success: false, status, message, ...(errors ? { errors } : {}) });
@@ -500,6 +503,22 @@ const SeekerService = {
             } finally {
                 client.release();
             }
+        }
+
+        // "We've received your application" — best effort, never blocks or fails the apply.
+        if (job) {
+            const site = jobsUrl();
+            sendEmail({
+                to: seeker.email,
+                subject: `Application received — ${job.title}`,
+                html: applicationReceivedTemplate({
+                    first_name: seeker.first_name,
+                    job_title: job.title,
+                    hiring_name: job.show_company ? job.client_name : null,
+                    agency_name: job.agency_name,
+                    applications_url: `${site}/jobs/my`,
+                }),
+            }).catch((error) => console.warn("Application-received email failed:", error.message));
         }
 
         // Score in the background — reading a new CV takes a few seconds.

@@ -35,7 +35,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const ok = (data, message = "Success", status = 200) => ({ success: true, status, message, data });
 const fail = (message, status = 400) => ({ success: false, status, message });
 
-const PORTAL_URL = () => (process.env.PUBLIC_SITE_URL || process.env.FRONTEND_URL || "https://teambook.ikration.com").replace(/\/$/, "");
+const { jobsUrl, clientUrl } = require("../../utils/portalUrls");
 
 /** A readable random password: 12 chars, always passes the usual rules. */
 function generatePassword() {
@@ -45,7 +45,7 @@ function generatePassword() {
 
 /** Public links for a job — the portal page and the direct apply form. */
 function jobLinks(slug) {
-    const base = `${PORTAL_URL()}/jobs/${slug}`;
+    const base = `${jobsUrl()}/jobs/${slug}`;
     return { public_url: base, apply_url: `${base}/apply` };
 }
 
@@ -215,7 +215,7 @@ const RecruitmentService = {
         let emailed = false;
         if (body.send_email !== false) emailed = await this.sendCredentials(company_id, client, user, password);
 
-        return ok({ user, password, emailed, login_url: `${PORTAL_URL()}/client/login` }, "Client login created", 201);
+        return ok({ user, password, emailed, login_url: `${clientUrl()}/client/login` }, "Client login created", 201);
     },
 
     async updateClientUser(company_id, user_id, body) {
@@ -245,7 +245,7 @@ const RecruitmentService = {
                 subject: `${agency?.display_name || "Your recruitment partner"} — your hiring portal login`,
                 html: `<p>Hi ${esc(user.full_name)},</p>
                        <p>${from} has set up a hiring portal for <b>${esc(client.name)}</b>. Track your job requests and review candidates here:</p>
-                       <p><a href="${PORTAL_URL()}/client/login">${PORTAL_URL()}/client/login</a></p>
+                       <p><a href="${clientUrl()}/client/login">${clientUrl()}/client/login</a></p>
                        <p>Email: <b>${esc(user.email)}</b><br/>Password: <b>${esc(password)}</b></p>
                        <p>Please change the password after your first sign-in.</p>`,
             });

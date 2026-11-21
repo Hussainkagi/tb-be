@@ -21,6 +21,7 @@ const EntitlementService = require("./entitlementService");
 const { PolicyService } = require("./policyService");
 const PlanModel = require("../models/planModel");
 const crypto = require("crypto");
+const { verifyGoogleIdToken } = require("../utils/googleIdToken");
 
 const MAX_FAILED_ATTEMPTS = 5;
 const OTP_EXPIRY_MINUTES = 10;
@@ -71,7 +72,24 @@ const UserCompanyService = {
                 // legal consent
                 accepted_terms, accepted_privacy,
                 ip_address = null, user_agent = null,
+                // "Continue with Google": proof the email is theirs, so no code is needed.
+                google_credential = null,
             } = data;
+
+            // 0. Google sign-up — the email must be the Google account's own.
+            let googleVerified = false;
+            if (google_credential) {
+                let claims;
+                try {
+                    claims = await verifyGoogleIdToken(google_credential);
+                } catch (e) {
+                    return { success: false, message: "Google sign-in expired or couldn't be checked — please continue with Google again" };
+                }
+                if (claims.email !== String(email || "").trim().toLowerCase()) {
+                    return { success: false, message: "The email must be the one on your Google account" };
+                }
+                googleVerified = true;
+            }
 
             // 1. Validate password strength
             if (!password || password.length < 8) {
@@ -189,6 +207,20 @@ const UserCompanyService = {
                     `[Registration] Could not record policy acceptance for company ${company.id}:`,
                     error.message
                 );
+            }
+
+            // Google already proved the email — skip the code and send the welcome email now.
+            if (googleVerified) {
+                sendEmail({
+                    to: email,
+                    subject: `Welcome to ${company_name} — Your login username`,
+                    html: welcomeTemplate({ first_name, company_name, username, login_url: `${process.env.FRONTEND_URL}/login` }),
+                }).catch((err) => console.error("[Mailer] Welcome email failed:", err.message));
+                return {
+                    success: true,
+                    message: "Company registered.",
+                    data: { user_id: user.id, company_id: company.id, username, was_existing_user: !created, policy_acceptance, verified: true },
+                };
             }
 
             // 10. Generate OTP + store

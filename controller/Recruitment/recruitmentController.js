@@ -101,6 +101,7 @@ const AgencyController = {
 const PublicController = {
     list:    handle((req) => PublicJobService.list(req.query)),
     facets:  handle(() => PublicJobService.facets()),
+    suggest: handle((req) => PublicJobService.suggest(req.query)),
     sitemap: handle(() => PublicJobService.sitemap()),
     get:     handle((req) => PublicJobService.get(req.params.slug)),
     apply:   handle((req) => PublicJobService.apply(req.params.slug, req.body, req.file)),
@@ -115,6 +116,7 @@ const ClientController = {
     getJob:         handle((req) => ClientPortalService.getJob(req.client, req.params.id)),
     requestJob:     handle((req) => ClientPortalService.requestJob(req.client, req.body)),
     listCandidates: handle((req) => ClientPortalService.listCandidates(req.client, req.query)),
+    updates:        handle((req) => ClientPortalService.updates(req.client)),
     decide:         handle((req) => ClientPortalService.decide(req.client, req.params.appId, req.body)),
     downloadCv:     streamCv((req) => ClientPortalService.getCvFile(req.client, req.params.appId)),
 };

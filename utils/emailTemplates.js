@@ -197,6 +197,33 @@ const jobSeekerCodeTemplate = ({ first_name, otp, purpose, expires_minutes }) =>
 </div>
 `;
 
+// ── Job board: application received ─────────────────────────────────────────
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const applicationReceivedTemplate = ({ first_name, job_title, hiring_name, agency_name, applications_url }) => `
+<div style="${baseStyle}">
+  ${header("teamBook Jobs")}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">We've received your application</h2>
+    <p style="color:#333;">Hi ${esc(first_name) || "there"},</p>
+    <p style="color:#333;">
+      Thanks for applying for <strong>${esc(job_title)}</strong>${hiring_name ? ` at <strong>${esc(hiring_name)}</strong>` : ""}.
+      Your application has been sent to ${esc(agency_name) || "the recruiting team"}.
+    </p>
+    <p style="color:#333;">
+      Our team will review it, and we'll update you as soon as there's news. You can follow its
+      status any time from your applications page.
+    </p>
+    <div style="text-align:center; margin: 28px 0;">
+      ${button("View my applications", applications_url)}
+    </div>
+    <p style="color:#888; font-size:13px; text-align:center;">
+      Or open this link: <a href="${applications_url}" style="color:#E64A19;">${applications_url}</a>
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
 // ── 2. EMPLOYEE INVITE (set password) ─────────────────────────────────────────
 const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_link, expires_hours }) => `
 <div style="${baseStyle}">
@@ -645,6 +672,7 @@ module.exports = {
   registrationOtpTemplate,
   agencySignupOtpTemplate,
   jobSeekerCodeTemplate,
+  applicationReceivedTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
   welcomeTemplate,

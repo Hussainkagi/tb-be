@@ -98,6 +98,13 @@ const PublicJobService = {
         });
     },
 
+    /** Typeahead for the job search box. */
+    async suggest(query = {}) {
+        const q = String(query.q || "").trim().slice(0, 60);
+        if (q.length < 1) return ok([]);
+        return ok(await JobModel.publicSuggest(q, 8));
+    },
+
     async facets() {
         const rows = await JobModel.publicFacets();
         return ok({
