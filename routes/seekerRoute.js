@@ -54,6 +54,23 @@ router.get("/me", handle((req) => SeekerService.me(sid(req))));
 router.put("/me", handle((req) => SeekerService.updateProfile(sid(req), req.body || {})));
 
 router.get("/cvs", handle((req) => SeekerService.listCvs(sid(req))));
+// The candidate's own CV, passed through so the browser can render it (storage has no CORS).
+router.get("/cvs/:id/file", async (req, res) => {
+    try {
+        const db = require("../config/database");
+        const storage = require("../utils/storage");
+        const { rows } = await db.query(`SELECT file_ref, file_name, mime FROM job_seeker_cvs WHERE id = $1 AND seeker_id = $2`, [req.params.id, sid(req)]);
+        if (!rows.length) return res.status(404).json({ success: false, message: "CV not found" });
+        const upstream = await fetch(await storage.downloadUrl(rows[0].file_ref, { resourceType: "raw" }));
+        if (!upstream.ok) return res.status(502).json({ success: false, message: "Could not fetch the CV" });
+        res.setHeader("Content-Type", rows[0].mime || "application/pdf");
+        res.setHeader("Cache-Control", "private, no-store");
+        res.send(Buffer.from(await upstream.arrayBuffer()));
+    } catch (error) {
+        console.error("[seeker] cv file", error);
+        if (!res.headersSent) res.status(500).json({ success: false, message: "Could not fetch the CV" });
+    }
+});
 router.post("/cvs", cvLimiter, cvUpload.single("cv"), handle((req) => SeekerService.uploadCv(sid(req), req.file)));
 router.post("/cvs/:id/sync", handle((req) => SeekerService.syncFromCv(sid(req), req.params.id)));
 router.put("/cvs/:id/default",handle((req) => SeekerService.setDefaultCv(sid(req), req.params.id)));

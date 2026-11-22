@@ -350,7 +350,7 @@ const SeekerService = {
     // ── Applications ───────────────────────────────────────────────────────
     async listApplications(seeker_id) {
         const { rows } = await db.query(
-            `SELECT ${JOB_CARD}, x.id AS application_id, x.stage, x.created_at AS applied_at, x.cv_file_name
+            `SELECT ${JOB_CARD}, x.id AS application_id, x.stage, x.client_decision, x.created_at AS applied_at, x.updated_at AS status_updated_at, x.cv_file_name
                FROM recruitment_applications x ${JOB_JOINS}
               WHERE x.seeker_id = $1 ORDER BY x.created_at DESC`,
             [seeker_id],
