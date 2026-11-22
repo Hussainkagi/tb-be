@@ -113,6 +113,27 @@ const RecruitmentService = {
         return ok(saved, "Logo updated");
     },
 
+    /** A client company's logo: stored, and its public URL handed back for the client form to save. */
+    async uploadClientLogo(company_id, file) {
+        if (!file) return fail("Choose an image");
+        if (!/^image\/(png|jpe?g|webp|svg\+xml)$/.test(file.mimetype)) return fail("Logo must be a PNG, JPG, WEBP or SVG");
+        const ext = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" }[file.mimetype] || "png";
+        // R2: teambook-sourcing/<agency>/client-logos/client-<ts>.<ext>
+        const upload = await storage.uploadFile(file.buffer, {
+            area: "sourcing",
+            companyId: company_id,
+            path: ["client-logos"],
+            name: `client-${storage.stamp()}.${ext}`,
+            contentType: file.mimetype,
+            cloudinary: {
+                folder: `recruitment/clients/${company_id}`,
+                resourceType: "image",
+                transformation: { width: 400, height: 400, crop: "limit", quality: "auto", fetch_format: "auto" },
+            },
+        });
+        return ok({ logo_url: upload.secureUrl }, "Logo uploaded");
+    },
+
     async removeLogo(company_id) {
         const saved = await AgencyModel.upsert(company_id, { logo_url: null, logo_public_id: null });
         return ok(saved, "Logo removed");
@@ -152,7 +173,7 @@ const RecruitmentService = {
             name: str(body.name, 200),
             industry: str(body.industry, 120),
             website: str(body.website, 255),
-            logo_url: str(body.logo_url, 1000),
+            logo_url: storage.toStoredRef(str(body.logo_url, 1000)),
             location: str(body.location, 200),
             contact_name: str(body.contact_name, 160),
             contact_email: str(body.contact_email, 255),

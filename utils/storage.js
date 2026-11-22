@@ -134,6 +134,27 @@ const extFor = (contentType) => EXT[contentType] || "bin";
 const isR2Ref = (v) => typeof v === "string" && v.startsWith(REF);
 const keyOf = (ref) => ref.slice(REF.length);
 
+/**
+ * A signed URL for one of our own R2 files (as handed out in API responses),
+ * turned back into its permanent "r2://<key>" ref. Anything else comes back
+ * unchanged — so a form can round-trip a value it was given without saving a
+ * link that expires.
+ */
+function toStoredRef(value) {
+    if (typeof value !== "string" || !value.startsWith("https://") || !r2Enabled()) return value;
+    try {
+        const u = new URL(value);
+        const { account, bucket } = env();
+        const host = `${account}.r2.cloudflarestorage.com`.toLowerCase();
+        let key = null;
+        if (u.hostname.toLowerCase() === `${bucket}.${host}`.toLowerCase()) key = u.pathname.slice(1);
+        else if (u.hostname.toLowerCase() === host && u.pathname.startsWith(`/${bucket}/`)) key = u.pathname.slice(bucket.length + 2);
+        return key ? REF + decodeURIComponent(key) : value;
+    } catch {
+        return value;
+    }
+}
+
 async function put(key, body, contentType) {
     await s3().send(
         new PutObjectCommand({ Bucket: env().bucket, Key: key, Body: body, ContentType: contentType }),
@@ -232,6 +253,7 @@ module.exports = {
     signAll,
     signedUrl,
     isR2Ref,
+    toStoredRef,
     // naming helpers for call sites
     slug,
     shortId,

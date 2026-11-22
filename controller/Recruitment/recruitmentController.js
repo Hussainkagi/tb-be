@@ -56,6 +56,7 @@ const AgencyController = {
     saveAgency:       handle((req) => RecruitmentService.saveAgency(cid(req), req.body)),
     uploadLogo:       handle((req) => RecruitmentService.uploadLogo(cid(req), req.file)),
     removeLogo:       handle((req) => RecruitmentService.removeLogo(cid(req))),
+    uploadClientLogo: handle((req) => RecruitmentService.uploadClientLogo(cid(req), req.file)),
     overview:         handle((req) => RecruitmentService.overview(cid(req))),
     trends:           handle((req) => RecruitmentService.trends(cid(req), req.query)),
     listWorkspaces:   handle((req) => WorkspaceSwitchService.list(req.user?.user_id)),

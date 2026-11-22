@@ -56,6 +56,7 @@ router.get("/form-catalog", C.formCatalog);
 
 router.get("/clients", C.listClients);
 router.post("/clients", C.createClient);
+router.post("/clients/logo", logoUpload.single("logo"), C.uploadClientLogo);
 router.get("/clients/:id", C.getClient);
 router.put("/clients/:id", C.updateClient);
 router.post("/clients/:id/users", C.createClientUser);
