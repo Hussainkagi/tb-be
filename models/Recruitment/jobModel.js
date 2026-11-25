@@ -311,7 +311,7 @@ const JobModel = {
 
     async sitemap() {
         const { rows } = await db.query(
-            `SELECT j.slug, j.updated_at ${PUBLIC_FROM}
+            `SELECT j.slug, j.updated_at, a.slug AS agency_slug ${PUBLIC_FROM}
               WHERE ${PUBLIC_WHERE} AND j.list_on_portal
               ORDER BY j.published_at DESC NULLS LAST LIMIT 5000`,
         );
