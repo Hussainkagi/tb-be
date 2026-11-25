@@ -21,6 +21,7 @@ const EntitlementService = require("./entitlementService");
 const { PolicyService } = require("./policyService");
 const PlanModel = require("../models/planModel");
 const crypto = require("crypto");
+const { verifyGoogleIdToken } = require("../utils/googleIdToken");
 
 const MAX_FAILED_ATTEMPTS = 5;
 const OTP_EXPIRY_MINUTES = 10;
@@ -71,7 +72,24 @@ const UserCompanyService = {
                 // legal consent
                 accepted_terms, accepted_privacy,
                 ip_address = null, user_agent = null,
+                // "Continue with Google": proof the email is theirs, so no code is needed.
+                google_credential = null,
             } = data;
+
+            // 0. Google sign-up — the email must be the Google account's own.
+            let googleVerified = false;
+            if (google_credential) {
+                let claims;
+                try {
+                    claims = await verifyGoogleIdToken(google_credential);
+                } catch (e) {
+                    return { success: false, message: "Google sign-in expired or couldn't be checked — please continue with Google again" };
+                }
+                if (claims.email !== String(email || "").trim().toLowerCase()) {
+                    return { success: false, message: "The email must be the one on your Google account" };
+                }
+                googleVerified = true;
+            }
 
             // 1. Validate password strength
             if (!password || password.length < 8) {
@@ -189,6 +207,20 @@ const UserCompanyService = {
                     `[Registration] Could not record policy acceptance for company ${company.id}:`,
                     error.message
                 );
+            }
+
+            // Google already proved the email — skip the code and send the welcome email now.
+            if (googleVerified) {
+                sendEmail({
+                    to: email,
+                    subject: `Welcome to ${company_name} — Your login username`,
+                    html: welcomeTemplate({ first_name, company_name, username, login_url: `${process.env.FRONTEND_URL}/login` }),
+                }).catch((err) => console.error("[Mailer] Welcome email failed:", err.message));
+                return {
+                    success: true,
+                    message: "Company registered.",
+                    data: { user_id: user.id, company_id: company.id, username, was_existing_user: !created, policy_acceptance, verified: true },
+                };
             }
 
             // 10. Generate OTP + store
@@ -720,66 +752,74 @@ async bulkInviteEmployees(rows, company_id) {
         try {
             const check = await this.checkCredentials(username, password);
             if (!check.success) return { success: false, message: check.message };
-            const uc = check.uc;
-
-            // Success — issue tokens
-
-            const isSuperAdmin = uc.is_super_admin === true;
-
-            const payload = {
-                user_id: uc.user_id,
-                uc_id: uc.id,
-                company_id: uc.company_id,
-                branch_id: uc.branch_id,
-                role: uc.role,
-                username: uc.username,
-                is_super_admin: isSuperAdmin,
-            };
-
-            const accessToken = generateAccessToken(payload);
-            const refreshToken = generateRefreshToken(payload);
-
-            await UserModel.setRefreshToken(uc.user_id, refreshToken);
-
-            // A disabled company does NOT block login — the user must be able to
-            // reach the app to see WHY they are locked out. Every write request is
-            // rejected downstream by the enforceCompanyActive middleware.
-            const companyDisabled = uc.company_is_active === false;
-
-            return {
-                success: true,
-                message: companyDisabled
-                    ? "Login successful, but your company has been disabled by the platform administrator."
-                    : "Login successful",
-                data: {
-                    access_token: accessToken,
-                    refresh_token: refreshToken,
-                    user: {
-                        user_id: uc.user_id,
-                        username: uc.username,
-                        first_name: uc.first_name,
-                        last_name: uc.last_name,
-                        email: uc.email,
-                        role: uc.role,
-                        company_id: uc.company_id,
-                        branch_id: uc.branch_id,
-                        is_super_admin: isSuperAdmin,
-                    },
-                    company: {
-                        id: uc.company_id,
-                        company_name: uc.company_name,
-                        company_code: uc.company_code,
-                        logo_url: uc.company_logo_url,
-                        is_active: uc.company_is_active,
-                        is_disabled: companyDisabled,
-                        disabled_at: uc.company_disabled_at,
-                        disabled_reason: uc.company_disabled_reason,
-                    },
-                },
-            };
+            return await this.issueSession(check.uc);
         } catch (error) {
             return { success: false, message: error.message, error };
         }
+    },
+
+    /**
+     * Tokens + the login payload for one membership (a findByUsername row).
+     * Shared by username login and agency sign-in (email / Google), so every
+     * way in produces the same session.
+     */
+    async issueSession(uc) {
+        // Success — issue tokens
+
+        const isSuperAdmin = uc.is_super_admin === true;
+
+        const payload = {
+            user_id: uc.user_id,
+            uc_id: uc.id,
+            company_id: uc.company_id,
+            branch_id: uc.branch_id,
+            role: uc.role,
+            username: uc.username,
+            is_super_admin: isSuperAdmin,
+        };
+
+        const accessToken = generateAccessToken(payload);
+        const refreshToken = generateRefreshToken(payload);
+
+        await UserModel.setRefreshToken(uc.user_id, refreshToken);
+
+        // A disabled company does NOT block login — the user must be able to
+        // reach the app to see WHY they are locked out. Every write request is
+        // rejected downstream by the enforceCompanyActive middleware.
+        const companyDisabled = uc.company_is_active === false;
+
+        return {
+            success: true,
+            message: companyDisabled
+                ? "Login successful, but your company has been disabled by the platform administrator."
+                : "Login successful",
+            data: {
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                user: {
+                    user_id: uc.user_id,
+                    username: uc.username,
+                    first_name: uc.first_name,
+                    last_name: uc.last_name,
+                    email: uc.email,
+                    role: uc.role,
+                    company_id: uc.company_id,
+                    branch_id: uc.branch_id,
+                    is_super_admin: isSuperAdmin,
+                },
+                company: {
+                    id: uc.company_id,
+                    company_name: uc.company_name,
+                    company_code: uc.company_code,
+                    logo_url: uc.company_logo_url,
+                    is_active: uc.company_is_active,
+                    is_disabled: companyDisabled,
+                    disabled_at: uc.company_disabled_at,
+                    disabled_reason: uc.company_disabled_reason,
+                    account_type: uc.company_account_type || "hrms",
+                },
+            },
+        };
     },
 
     // ── FORGOT PASSWORD ───────────────────────────────────────────────────────
@@ -917,7 +957,20 @@ async bulkInviteEmployees(rows, company_id) {
     async getUserCompanies(user_id) {
         try {
             const result = await UserCompanyModel.findAllByUserId(user_id);
-            return { success: true, data: result };
+            // Membership rows carry password_hash, lock state and invite data —
+            // none of it may leave the server. Return only what a picker needs.
+            const data = result.map((m) => ({
+                company_id: m.company_id,
+                company_name: m.company_name,
+                company_code: m.company_code,
+                logo_url: m.logo_url,
+                username: m.username,
+                role: m.role,
+                branch_id: m.branch_id ?? null,
+                is_active: m.is_active,
+                company_is_active: m.company_is_active,
+            }));
+            return { success: true, data };
         } catch (error) {
             return { success: false, message: error.message, error };
         }
@@ -1003,6 +1056,9 @@ async bulkInviteEmployees(rows, company_id) {
         }
     },
 };
+
+// Agency onboarding creates memberships too and must draw from the same pool.
+UserCompanyService.nextUsername = generateUsername;
 
 module.exports = UserCompanyService;
 

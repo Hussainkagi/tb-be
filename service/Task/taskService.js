@@ -16,7 +16,8 @@ const TaskAccessService = require("./taskAccessService");
 const TaskNotificationService = require("./taskNotificationService");
 const EntitlementService = require("../entitlementService");
 const { Feature } = require("../../enums/features");
-const { uploadToCloudinary, deleteFromCloudinary, privateDownloadUrl } = require("../../utils/cloudinaryHelper");
+const { uploadToCloudinary } = require("../../utils/cloudinaryHelper");
+const storage = require("../../utils/storage");
 
 const {
     TaskStatus,
@@ -610,7 +611,7 @@ const TaskService = {
             // new upload has already succeeded and passed the duration check,
             // so a failed re-record never leaves the task with no voice note.
             if (task.voice_note_public_id) {
-                await deleteFromCloudinary(task.voice_note_public_id, "video").catch((err) =>
+                await storage.deleteFile(task.voice_note_public_id, "video").catch((err) =>
                     console.error("[Tasks] Failed to delete replaced voice note:", err.message)
                 );
             }
@@ -778,21 +779,35 @@ const TaskService = {
                 return { success: false, status: permission.status, message: permission.message };
             }
 
+            // R2: teambook-hr/<company>/tasks/<task-title>-<id>/images|files/<file>
+            const taskFolder = `${storage.slug(task?.title, 50) || "task"}-${storage.shortId(task_id)}`;
             let upload = null;
             let file = null;
             if (imageBuffer) {
-                upload = await uploadToCloudinary(imageBuffer, {
-                    folder: `tasks/chat/${task_id}`,
-                    resourceType: "image",
+                const type = storage.sniff(imageBuffer);
+                upload = await storage.uploadFile(imageBuffer, {
+                    area: "hr",
+                    companyId: company_id,
+                    path: ["tasks", taskFolder, "images"],
+                    name: `image-${storage.stamp()}.${storage.extFor(type) === "bin" ? "jpg" : storage.extFor(type)}`,
+                    contentType: type === "application/octet-stream" ? "image/jpeg" : type,
+                    cloudinary: { folder: `tasks/chat/${task_id}`, resourceType: "image" },
                 });
             } else if (document) {
                 file = chatDocumentMeta(document);
-                // "raw" keeps the file byte-for-byte; the extension has to be
-                // part of a raw public_id or the URL loses it.
-                upload = await uploadToCloudinary(document.buffer, {
-                    folder: `tasks/chat/${task_id}`,
-                    resourceType: "raw",
-                    publicId: `${Date.now()}_${file.safeName}`,
+                upload = await storage.uploadFile(document.buffer, {
+                    area: "hr",
+                    companyId: company_id,
+                    path: ["tasks", taskFolder, "files"],
+                    name: `${storage.stamp()}-${storage.fileName(file.safeName)}`,
+                    contentType: file.mime || undefined,
+                    // "raw" keeps the file byte-for-byte; the extension has to be
+                    // part of a raw public_id or the URL loses it.
+                    cloudinary: {
+                        folder: `tasks/chat/${task_id}`,
+                        resourceType: "raw",
+                        publicId: `${Date.now()}_${file.safeName}`,
+                    },
                 });
             }
 
@@ -884,9 +899,10 @@ const TaskService = {
             return {
                 success: true,
                 data: {
-                    url: privateDownloadUrl(existing.attachment_public_id, {
+                    url: await storage.downloadUrl(existing.attachment_public_id, {
                         resourceType: isDocument ? "raw" : "image",
                         format: isDocument ? "" : "jpg",
+                        name: existing.attachment_name || undefined,
                     }),
                     name: existing.attachment_name || (isDocument ? "document" : "photo.jpg"),
                     mime: existing.attachment_mime || (isDocument ? "application/octet-stream" : "image/jpeg"),
@@ -1005,7 +1021,7 @@ const TaskService = {
                 await client.query(`SELECT id FROM tasks WHERE id = $1 FOR UPDATE`, [task_id]);
                 if ((await TaskVoiceNote.countByTask(task_id, client)) >= limit) {
                     await client.query("ROLLBACK");
-                    await deleteFromCloudinary(upload.publicId, "video").catch(() => {});
+                    await storage.deleteFile(upload.publicId, "video").catch(() => {});
                     return limitReached;
                 }
                 created = await TaskVoiceNote.create({
@@ -1119,7 +1135,7 @@ const TaskService = {
 
         const duration = Math.ceil(upload.duration ?? 0);
         if (maxSeconds !== null && duration > maxSeconds) {
-            await deleteFromCloudinary(upload.publicId, "video").catch((err) =>
+            await storage.deleteFile(upload.publicId, "video").catch((err) =>
                 console.error("[Tasks] Failed to clean up over-limit voice note:", err.message)
             );
             return {

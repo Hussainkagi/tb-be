@@ -143,6 +143,87 @@ const registrationOtpTemplate = ({ first_name, otp, company_name, expires_minute
 </div>
 `;
 
+// ── 1b. AGENCY SIGNUP OTP ─────────────────────────────────────────────────────
+const agencySignupOtpTemplate = ({ first_name, otp, expires_minutes }) => `
+<div style="${baseStyle}">
+  ${header("teamBook")}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">Confirm your email</h2>
+    <p style="color:#333;">Hi ${first_name},</p>
+    <p style="color:#333;">
+      Enter this code to finish creating your recruitment agency on teamBook.
+    </p>
+    <div style="text-align:center; margin: 32px 0;">
+      <div style="display:inline-block; background:#1a1a2e; color:#fff;
+                  font-size:36px; font-weight:bold; letter-spacing:12px;
+                  padding:16px 32px; border-radius:8px;">
+        ${otp}
+      </div>
+    </div>
+    <p style="color:#888; font-size:13px; text-align:center;">
+      This code expires in <strong>${expires_minutes} minutes</strong>.
+      If you didn't ask for it, you can ignore this email.
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
+// ── 1c. JOB SEEKER SIGN-IN / SIGN-UP CODE ─────────────────────────────────────
+const jobSeekerCodeTemplate = ({ first_name, otp, purpose, expires_minutes }) => `
+<div style="${baseStyle}">
+  ${header("teamBook Jobs")}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">${purpose === "signup" ? "Confirm your email" : "Your sign-in code"}</h2>
+    <p style="color:#333;">Hi ${first_name || "there"},</p>
+    <p style="color:#333;">
+      ${purpose === "signup"
+        ? "Enter this code to finish creating your teamBook Jobs account."
+        : "Enter this code to sign in to teamBook Jobs."}
+    </p>
+    <div style="text-align:center; margin: 32px 0;">
+      <div style="display:inline-block; background:#1a1a2e; color:#fff;
+                  font-size:36px; font-weight:bold; letter-spacing:12px;
+                  padding:16px 32px; border-radius:8px;">
+        ${otp}
+      </div>
+    </div>
+    <p style="color:#888; font-size:13px; text-align:center;">
+      This code expires in <strong>${expires_minutes} minutes</strong>.
+      If you didn't ask for it, you can ignore this email.
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
+// ── Job board: application received ─────────────────────────────────────────
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const applicationReceivedTemplate = ({ first_name, job_title, hiring_name, agency_name, applications_url }) => `
+<div style="${baseStyle}">
+  ${header("teamBook Jobs")}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">We've received your application</h2>
+    <p style="color:#333;">Hi ${esc(first_name) || "there"},</p>
+    <p style="color:#333;">
+      Thanks for applying for <strong>${esc(job_title)}</strong>${hiring_name ? ` at <strong>${esc(hiring_name)}</strong>` : ""}.
+      Your application has been sent to ${esc(agency_name) || "the recruiting team"}.
+    </p>
+    <p style="color:#333;">
+      Our team will review it, and we'll update you as soon as there's news. You can follow its
+      status any time from your applications page.
+    </p>
+    <div style="text-align:center; margin: 28px 0;">
+      ${button("View my applications", applications_url)}
+    </div>
+    <p style="color:#888; font-size:13px; text-align:center;">
+      Or open this link: <a href="${applications_url}" style="color:#E64A19;">${applications_url}</a>
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
 // ── 2. EMPLOYEE INVITE (set password) ─────────────────────────────────────────
 const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_link, expires_hours }) => `
 <div style="${baseStyle}">
@@ -589,6 +670,9 @@ const ticketStatusUpdatedEmail = ({ company_name, ticket, new_status_label, port
 module.exports = {
   appDownloadBlock,
   registrationOtpTemplate,
+  agencySignupOtpTemplate,
+  jobSeekerCodeTemplate,
+  applicationReceivedTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
   welcomeTemplate,

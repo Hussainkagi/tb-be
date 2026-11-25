@@ -40,7 +40,8 @@ const UserCompany = {
                     c.logo_url        AS company_logo_url,
                     c.is_active       AS company_is_active,
                     c.disabled_at     AS company_disabled_at,
-                    c.disabled_reason AS company_disabled_reason
+                    c.disabled_reason AS company_disabled_reason,
+                    c.account_type    AS company_account_type
              FROM user_companies uc
              JOIN users u ON u.id = uc.user_id
              JOIN companies c ON c.id = uc.company_id

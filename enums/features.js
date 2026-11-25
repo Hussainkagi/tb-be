@@ -70,8 +70,11 @@ const Feature = Object.freeze({
     // Tasker ⇄ Taskee chain may hold. Clamped to 15 in taskService.
     TASK_VOICE_NOTE_CHAIN_LIMIT: "tasks.voice_note_chain_limit",
 
+    // ── Recruitment (HR sourcing) ────────────────────────────────────────────
+    RECRUITMENT:             "recruitment.manage",
+
     // ── Reporting ────────────────────────────────────────────────────────────
-    DASHBOARD:               "reporting.dashboard",
+    DASHBOARD:             "reporting.dashboard",
     DASHBOARD_ALERTS:        "reporting.dashboard_alerts",
     REPORTS:                 "reporting.reports",          // enum — see ReportKey
     ACTIVITY_LOG:            "reporting.activity_log",

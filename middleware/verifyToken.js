@@ -15,6 +15,13 @@ const verifyToken = (req, res, next) => {
 
     try {
         const decoded = verifyAccessToken(token);
+        // Staff sessions carry no `typ`. Anything typed — a recruitment
+        // client's token (only valid on /api/recruitment-client) or an agency
+        // signup's setup token — is signed with the same secret but must
+        // never open a staff route.
+        if (decoded?.typ) {
+            return res.status(401).json({ success: false, message: "Invalid token." });
+        }
         req.user = decoded;
         next();
     } catch (err) {

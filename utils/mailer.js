@@ -12,11 +12,13 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * @param {string}  [options.text]    - Optional plain-text fallback
  * @param {Array<{filename: string, content: Buffer|string}>} [options.attachments]
  */
-const sendEmail = async ({ to, subject, html, text = "", attachments }) => {
+const sendEmail = async ({ to, subject, html, text = "", attachments, cc, replyTo, fromName }) => {
     try {
         const { data, error } = await resend.emails.send({
-            from: `${process.env.MAIL_FROM_NAME || "HRMS Platform"} <${process.env.MAIL_FROM_ADDRESS}>`,
-            to: [to],
+            from: `${fromName || process.env.MAIL_FROM_NAME || "HRMS Platform"} <${process.env.MAIL_FROM_ADDRESS}>`,
+            to: Array.isArray(to) ? to : [to],
+            ...(cc && cc.length ? { cc } : {}),
+            ...(replyTo ? { replyTo } : {}),
             subject,
             html,
             text: text || stripHtml(html),
