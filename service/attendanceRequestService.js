@@ -72,7 +72,9 @@ const AttendanceRequestService = {
             let selfie_url = null;
             if (selfie_file) {
                 try {
-                    const uploaded = await uploadSelfie(selfie_file, employee.id, request_type);
+                    const uploaded = await uploadSelfie(selfie_file, employee.id, request_type, {
+                        companyId: company_id, employeeCode: employee.employee_code, date: attendance_date, timezone,
+                    });
                     selfie = uploaded.path;
                     selfie_url = uploaded.url;
                 } catch (err) {

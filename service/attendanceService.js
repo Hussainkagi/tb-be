@@ -9,7 +9,7 @@ const { isWorkFromHomeDay } = require("../utils/workFromHome");
 const HolidayModel = require("../models/holidayModel");
 const LeaveRequestModel = require("../models/leaveRequestModel");
 const { DAY_TYPE, buildDailyBreakdown, buildShift, getDateRange, monthBoundsOf } = require("./payrollEngineService");
-const { uploadCheckInSelfie, uploadCheckOutSelfie } = require("../utils/cloudinaryHelper");
+const storage = require("../utils/storage");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -141,20 +141,42 @@ function formatTime(date, timezone) {
 }
 
 // ---------------------------------------------------------------------------
-// Internal — upload a selfie file to Cloudinary, return { path, url }.
+// Internal — store a check-in / check-out selfie, return { path, url }.
 // Returns { path: null, url: null } when no file is provided so callers
 // never have to null-check.
+//
+// R2:         teambook-hr/<company>/attendance/<date>/<EMP>-check-in-<HHmmss>.jpg
+// Cloudinary: attendance/<check-in|check-out>/<employeeId>/…   (until R2 is set)
+//
+// ctx: { companyId, employeeCode, date: "YYYY-MM-DD", timezone }
 // ---------------------------------------------------------------------------
-async function _uploadSelfie(fileBuffer, employeeId, type = "check-in") {
+async function _uploadSelfie(fileBuffer, employeeId, type = "check-in", ctx = {}) {
     if (!fileBuffer) return { path: null, url: null };
 
-    const upload =
-        type === "check-out"
-            ? await uploadCheckOutSelfie(fileBuffer, employeeId)
-            : await uploadCheckInSelfie(fileBuffer, employeeId);
+    const kind = type === "check-out" ? "check-out" : "check-in";
+    const timezone = ctx.timezone || "UTC";
+    const date = ctx.date || getTodayInTimezone(timezone);
+    const hhmmss = new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).format(new Date()).replace(/:/g, "");
+    const type_ = storage.sniff(fileBuffer);
+    const who = storage.slug(ctx.employeeCode || employeeId, 30) || "employee";
 
-    // publicId works as the "path" stored in the DB for later reference /
-    // deletion. secureUrl is the CDN URL shown to clients.
+    const upload = await storage.uploadFile(fileBuffer, {
+        area: "hr",
+        companyId: ctx.companyId,
+        path: ["attendance", date],
+        name: `${who}-${kind}-${hhmmss}.${storage.extFor(type_) === "bin" ? "jpg" : storage.extFor(type_)}`,
+        contentType: type_ === "application/octet-stream" ? "image/jpeg" : type_,
+        cloudinary: {
+            folder: `attendance/${kind}/${employeeId}`,
+            publicId: `${kind.replace("-", "")}_${employeeId}_${Date.now()}`,
+            transformation: { quality: "auto", fetch_format: "auto" },
+        },
+    });
+
+    // publicId is the "path" stored for later reference / deletion; secureUrl
+    // (an r2:// reference for R2 files) is what clients are shown.
     return { path: upload.publicId, url: upload.secureUrl };
 }
 
@@ -247,7 +269,9 @@ const AttendanceService = {
             let selfie_url = null;
             if (selfie_file) {
                 try {
-                    const uploaded = await _uploadSelfie(selfie_file, employee_id, "check-in");
+                    const uploaded = await _uploadSelfie(selfie_file, employee_id, "check-in", {
+                        companyId: employee.company_id, employeeCode: employee.employee_code, date: attendanceDate, timezone,
+                    });
                     selfie_path = uploaded.path;
                     selfie_url = uploaded.url;
                 } catch (uploadErr) {
@@ -389,7 +413,9 @@ const AttendanceService = {
             let selfie_url = null;
             if (selfie_file) {
                 try {
-                    const uploaded = await _uploadSelfie(selfie_file, employee_id, "check-out");
+                    const uploaded = await _uploadSelfie(selfie_file, employee_id, "check-out", {
+                        companyId: employee.company_id, employeeCode: employee.employee_code, date: attendanceDate, timezone,
+                    });
                     selfie_path = uploaded.path;
                     selfie_url = uploaded.url;
                 } catch (uploadErr) {

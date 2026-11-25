@@ -1,7 +1,7 @@
 const TicketModel = require("../models/ticketModel");
 const CompanyModel = require("../models/companyModel");
 const UserCompanyModel = require("../models/userCompanyModel");
-const { uploadToCloudinary } = require("../utils/cloudinaryHelper");
+const storage = require("../utils/storage");
 const { sendEmail } = require("../utils/mailer");
 const {
   ticketCreatedEmail,
@@ -60,13 +60,23 @@ const TicketService = {
     // ticket behind rather than blocking creation on Cloudinary being up.
     if (imageBuffers.length > 0) {
       const uploads = await Promise.allSettled(
-        imageBuffers.slice(0, MAX_IMAGES).map((buffer, i) =>
-          uploadToCloudinary(buffer, {
-            folder: `support-tickets/${company_id}/${ticket.id}`,
-            publicId: `image-${i + 1}`,
-            resourceType: "image",
-          }),
-        ),
+        imageBuffers.slice(0, MAX_IMAGES).map((buffer, i) => {
+          // R2: teambook-hr/<company>/support-tickets/<ticket-id>/image-<n>.<ext>
+          const type = storage.sniff(buffer);
+          const ext = storage.extFor(type) === "bin" ? "jpg" : storage.extFor(type);
+          return storage.uploadFile(buffer, {
+            area: "hr",
+            companyId: company_id,
+            path: ["support-tickets", ticket.id],
+            name: `image-${i + 1}.${ext}`,
+            contentType: type === "application/octet-stream" ? "image/jpeg" : type,
+            cloudinary: {
+              folder: `support-tickets/${company_id}/${ticket.id}`,
+              publicId: `image-${i + 1}`,
+              resourceType: "image",
+            },
+          });
+        }),
       );
       const urls = uploads
         .filter((r) => r.status === "fulfilled")
