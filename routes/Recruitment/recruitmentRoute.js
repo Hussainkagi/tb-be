@@ -40,6 +40,17 @@ const reportLimiter = rateLimit({
     message: { success: false, message: "Too many reports emailed in a short time — try again later" },
 });
 
+// Invites send email — generous for real use, but not a mailing cannon.
+const inviteLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 100,
+    keyGenerator: (req) => `invite:${req.params.company_id}`,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    validate: false,
+    message: { success: false, message: "Too many invites in an hour — try again later" },
+});
+
 router.use(verifyToken, validateTenant, isManager);
 
 router.get("/agency", C.getAgency);
@@ -69,6 +80,8 @@ router.get("/jobs/:id", C.getJob);
 router.put("/jobs/:id", C.updateJob);
 router.get("/jobs/:id/applications", C.listApplications);
 router.get("/jobs/:id/top-matches", C.topMatches);
+router.get("/jobs/:id/talent-matches", C.talentMatches);
+router.post("/jobs/:id/invites", inviteLimiter, C.inviteToApply);
 router.get("/jobs/:id/report/recipients", C.reportRecipients);
 router.post("/jobs/:id/report/pdf", C.reportPdf);
 router.post("/jobs/:id/report/email", reportLimiter, C.reportEmail);

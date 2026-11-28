@@ -224,6 +224,33 @@ const applicationReceivedTemplate = ({ first_name, job_title, hiring_name, agenc
 </div>
 `;
 
+// An agency invites a job seeker (matched from their profile) to apply.
+const jobInviteTemplate = ({ first_name, agency_name, job_title, hiring_name, location, message, job_url }) => `
+<div style="${baseStyle}">
+  ${header("teamBook Jobs")}
+  <div style="padding: 32px;">
+    <h2 style="color:#1a1a2e; margin-top:0;">You've been invited to apply</h2>
+    <p style="color:#333;">Hi ${esc(first_name) || "there"},</p>
+    <p style="color:#333;">
+      <strong>${esc(agency_name) || "A recruiter"}</strong> came across your teamBook profile and thinks you'd be a
+      great fit for <strong>${esc(job_title)}</strong>${hiring_name ? ` at <strong>${esc(hiring_name)}</strong>` : ""}${location ? ` in ${esc(location)}` : ""}.
+    </p>
+    ${message ? `<div style="margin:20px 0; padding:14px 16px; background:#FFF6F2; border-left:3px solid #E64A19; border-radius:6px; color:#333; white-space:pre-line;">${esc(message)}</div>` : ""}
+    <p style="color:#333;">Have a look at the role — if it interests you, you can apply in a minute with the profile you already have.</p>
+    <div style="text-align:center; margin: 28px 0;">
+      ${button("View the job & apply", job_url)}
+    </div>
+    <p style="color:#888; font-size:13px; text-align:center;">
+      Or open this link: <a href="${job_url}" style="color:#E64A19;">${job_url}</a>
+    </p>
+    <p style="color:#888; font-size:12px; text-align:center;">
+      You're getting this because your profile is open to recruiter invites. You can turn this off any time in your profile.
+    </p>
+  </div>
+  ${footer()}
+</div>
+`;
+
 // ── 2. EMPLOYEE INVITE (set password) ─────────────────────────────────────────
 const inviteEmployeeTemplate = ({ first_name, company_name, username, invite_link, expires_hours }) => `
 <div style="${baseStyle}">
@@ -673,6 +700,7 @@ module.exports = {
   agencySignupOtpTemplate,
   jobSeekerCodeTemplate,
   applicationReceivedTemplate,
+  jobInviteTemplate,
   inviteEmployeeTemplate,
   passwordResetTemplate,
   welcomeTemplate,
