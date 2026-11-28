@@ -4,6 +4,7 @@
  * so every endpoint here is one line.
  */
 const { Readable } = require("stream");
+const TalentMatchService = require("../../service/Recruitment/talentMatchService");
 const RecruitmentService = require("../../service/Recruitment/recruitmentService");
 const JdParseService = require("../../service/Recruitment/jdParseService");
 const WorkspaceSwitchService = require("../../service/workspaceSwitchService");
@@ -78,6 +79,8 @@ const AgencyController = {
 
     listApplications: handle((req) => RecruitmentService.listApplications(cid(req), req.params.id, req.query)),
     topMatches:       handle((req) => RecruitmentService.topMatches(cid(req), req.params.id)),
+    talentMatches:    handle((req) => TalentMatchService.forJob(cid(req), req.params.id)),
+    inviteToApply:    handle((req) => TalentMatchService.invite(cid(req), req.user?.user_id, req.params.id, req.body || {})),
     reportRecipients: handle((req) => CandidateReportService.recipients(cid(req), req.params.id)),
     reportEmail:      handle((req) => CandidateReportService.email(cid(req), req.user?.user_id, req.params.id, req.body || {})),
     reportPdf: async (req, res) => {

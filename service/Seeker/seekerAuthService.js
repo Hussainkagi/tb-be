@@ -37,6 +37,9 @@ function publicSeeker(row) {
         first_name: row.first_name,
         last_name: row.last_name,
         has_profile: Boolean(row.profile_filled_at),
+        // Onboarding (CV → details → experience → photo) must be finished before using the board.
+        onboarded: Boolean(row.onboarded_at),
+        photo_url: row.photo_ref || null, // r2:// → signed by the signStorageUrls middleware
     };
 }
 

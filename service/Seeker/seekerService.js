@@ -11,6 +11,7 @@ const storage = require("../../utils/storage");
 const CvParseService = require("./cvParseService");
 const PublicJobService = require("../Recruitment/publicJobService");
 const MatchScoreService = require("../Recruitment/matchScoreService");
+const ProfileMetaService = require("./profileMetaService");
 const JobModel = require("../../models/Recruitment/jobModel");
 const SeekerAuthService = require("./seekerAuthService");
 const { sendEmail } = require("../../utils/mailer");
@@ -31,6 +32,8 @@ const CV_TYPES = {
 };
 const CV_MAX_BYTES = 5 * 1024 * 1024;
 const MAX_CVS = 4;
+const PHOTO_TYPES = { "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp" };
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 const PROFILE_TEXT = {
     first_name: 100, last_name: 100, phone: 40, headline: 160, current_company: 160, country: 100,
@@ -75,7 +78,13 @@ function profileOut(row) {
         certifications: row.certifications || [],
         experience: row.experience || [],
         education: row.education || [],
+        open_to_invites: row.open_to_invites !== false,
     };
+}
+
+/** Rebuild the matching summary after a change — only for finished profiles, never blocks. */
+function refreshMeta(row) {
+    if (row?.onboarded_at) ProfileMetaService.refresh(row.id);
 }
 
 const cleanList = (v, max = 40, len = 80) =>
@@ -182,14 +191,73 @@ const SeekerService = {
         }
         for (const k of PROFILE_LISTS) if (body[k] !== undefined) values[k] = cleanList(body[k]);
         if (body.experience !== undefined) values.experience = cleanObjects(body.experience, EXP_KEYS);
+        if (body.open_to_invites !== undefined) values.open_to_invites = Boolean(body.open_to_invites);
         if (body.education !== undefined) values.education = cleanObjects(body.education, EDU_KEYS);
         if (!Object.keys(values).length) return this.me(seeker_id);
 
         const { sets, params } = setClause(values);
         await db.query(`UPDATE job_seekers SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`, [seeker_id, ...params]);
+        refreshMeta(await getSeeker(seeker_id));
         const res = await this.me(seeker_id);
         res.message = "Profile saved";
         return res;
+    },
+
+    // ── Onboarding ─────────────────────────────────────────────────────────
+    /** Their profile photo (required to finish onboarding). Replaces any previous one. */
+    async uploadPhoto(seeker_id, file) {
+        if (!file) return fail("Choose a photo");
+        const ext = PHOTO_TYPES[file.mimetype];
+        if (!ext) return fail("Use a JPG, PNG or WEBP photo", 422);
+        if (file.size > PHOTO_MAX_BYTES) return fail("The photo is larger than 5 MB", 422);
+        const seeker = await getSeeker(seeker_id);
+        if (!seeker) return fail("Account not found", 404);
+
+        const who = `${storage.slug(`${seeker.first_name} ${seeker.last_name}`, 40) || "candidate"}-${storage.shortId(seeker.id)}`;
+        const upload = await storage.uploadFile(file.buffer, {
+            area: "candidates",
+            path: [who, "photo"],
+            name: `photo-${storage.stamp()}.${ext}`,
+            contentType: file.mimetype,
+            cloudinary: {
+                folder: `recruitment/candidates/${seeker.id}`,
+                resourceType: "image",
+                transformation: { width: 600, height: 600, crop: "fill", gravity: "face", quality: "auto", fetch_format: "auto" },
+            },
+        });
+        await db.query(`UPDATE job_seekers SET photo_ref = $2, updated_at = NOW() WHERE id = $1`, [seeker_id, upload.publicId]);
+        // The old photo isn't needed any more.
+        if (seeker.photo_ref && seeker.photo_ref !== upload.publicId) storage.deleteFile(seeker.photo_ref, "image").catch(() => undefined);
+        const res = await this.me(seeker_id);
+        res.message = "Photo saved";
+        return res;
+    },
+
+    /**
+     * Finish onboarding. Everything the steps asked for must be there — a
+     * photo included — then the profile joins the pool agencies match against.
+     */
+    async completeOnboarding(seeker_id, body = {}) {
+        const s = await getSeeker(seeker_id);
+        if (!s) return fail("Account not found", 404);
+        const missing = {};
+        if (!s.first_name) missing.first_name = "Add your first name";
+        if (!s.phone) missing.phone = "Add your mobile number";
+        if (s.total_experience_years == null) missing.total_experience_years = "Add your years of experience";
+        if (!s.headline) missing.headline = "Add your current or target job title";
+        if (!s.photo_ref) missing.photo = "Add a profile photo to continue";
+        if (Object.keys(missing).length) return fail(Object.values(missing)[0], 422, missing);
+
+        const open = body.open_to_invites === undefined ? true : Boolean(body.open_to_invites);
+        await db.query(
+            `UPDATE job_seekers SET onboarded_at = COALESCE(onboarded_at, NOW()), open_to_invites = $2, updated_at = NOW() WHERE id = $1`,
+            [seeker_id, open],
+        );
+        // The matching summary takes a few seconds (Gemini) — build it in the
+        // background; they join agencies' matches as soon as it's saved.
+        ProfileMetaService.refresh(seeker_id);
+        const fresh = await getSeeker(seeker_id);
+        return ok({ seeker: SeekerAuthService.publicSeeker(fresh), profile: profileOut(fresh) }, "You're all set");
     },
 
     // ── CVs ────────────────────────────────────────────────────────────────
@@ -271,6 +339,7 @@ const SeekerService = {
             `UPDATE job_seekers SET ${sets.join(", ")}, profile_filled_at = COALESCE(profile_filled_at, NOW()), updated_at = NOW() WHERE id = $1`,
             [seeker_id, ...params],
         );
+        refreshMeta(await getSeeker(seeker_id));
         const profile = (await this.me(seeker_id)).data;
         return ok({ profile, updated: Object.keys(found) }, "Profile updated from your CV");
     },

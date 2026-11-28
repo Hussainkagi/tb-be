@@ -30,6 +30,8 @@ const signIn = limiter(15, 30, "Too many attempts — try again in a few minutes
 const cvLimiter = limiter(60, 20, "Too many CV uploads — try again later", (req) => `cv:${req.seeker_id}`);
 
 const cvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
+const photoLimiter = limiter(60, 20, "Too many photo uploads — try again later", (req) => `photo:${req.seeker_id}`);
 
 const handle = (fn) => async (req, res) => {
     try {
@@ -52,6 +54,8 @@ router.use(verifySeekerToken);
 
 router.get("/me", handle((req) => SeekerService.me(sid(req))));
 router.put("/me", handle((req) => SeekerService.updateProfile(sid(req), req.body || {})));
+router.post("/me/photo", photoLimiter, photoUpload.single("photo"), handle((req) => SeekerService.uploadPhoto(sid(req), req.file)));
+router.post("/onboarding/complete", handle((req) => SeekerService.completeOnboarding(sid(req), req.body || {})));
 
 router.get("/cvs", handle((req) => SeekerService.listCvs(sid(req))));
 // The candidate's own CV, passed through so the browser can render it (storage has no CORS).
